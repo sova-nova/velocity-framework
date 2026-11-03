@@ -1,0 +1,29 @@
+[project]
+name = "tutor-harness"
+version = "0.1.0"
+authors = [
+    { name = "sova-nova", email = "damiandalic@gmail.com" }
+]
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "pymupdf>=2.1",
+]
+
+[build-system]
+requires = ["uv_build>=0.12.24,<0.13.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.2.0",
+    "ruff>=0.17.3",
+]
+
+[tool.uv.sources]
+torch = { index = "pytorch-cpu" }
+torchvision = { index = "pytorch-cpu" }
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
