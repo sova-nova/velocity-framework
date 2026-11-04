@@ -56,3 +56,17 @@ CLAUDE.md
 - Do not commit textbooks, copyrighted source material, or personal notes and logs. Keep them gitignored.
 - Do not commit API keys; read them from environment variables.
 - Ask before making a decision that appears under "Open Questions" in `DESIGN.md`, then record the answer there.
+
+## Agent skills
+
+### Issue tracker
+
+Issues are tracked in GitHub Issues on `sova-nova/velocity-framework` (via `gh`). See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Default vocabulary: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: `GLOSSARY.md` and `docs/adr/` at the repo root. See `docs/agents/domain.md`.
