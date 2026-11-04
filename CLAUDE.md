@@ -10,30 +10,29 @@ Read `DESIGN.md` before making architectural decisions. It is the source of trut
 
 ## Current Status
 
-M1 done; M2 (tutor in Claude Code) is next. See `DESIGN.md` section 4.
+M1 and M2 done (M2 lands via stacked PRs #1-#5); M3 (learner state) is next. See `DESIGN.md` section 4.
 
 **Where we left off (2026-11-04):**
-- Design interview done; `DESIGN.md` v0.2 records the result (subject tutor, MCP core, Claude Code front end, Obsidian logs).
-- M1 done: `outline.py` (`get_outline`, stable IDs like `2.4`, `ch2`, `2.review`, `app-f`), `ocr.py` (`MarkerOcr`, which loads models once), and `pdf_source.py` (`PdfSource.read_section`, with a per-page OCR cache in `~/.local/share/velocity/sources/<book>/pages/`). Verified on the real book for 2.4 and 2.review.
-- OCR needs the `ocr` group (`uv run --group ocr ...`; plain `uv sync` removes it) and `LLAMA_CPP_BINARY=$HOME/.local/opt/llama.cpp/b12118/llama-b12118/llama-server` (llama.cpp Vulkan build on the AMD GPU). The slow real-OCR test runs only with `VELOCITY_OCR_TESTS=1`.
+- `velocity new "<name>"` creates a subject. `velocity tutor <subject> [--resume]` regenerates the workspace in `~/.local/share/velocity/workspaces/<subject>/` and launches Claude Code there. Hooks (`velocity hook ...`) log the dialogue, and `velocity mcp --subject <id>` serves the tools.
+- Modules: `config`, `outline`, `ocr`, `pdf_source`, `session` (record + markdown log), `tools` (TutorTools), `mcp_server`, `workspace` (template, settings, notes protection), `hooks`, `cli`. Tutor prompt template: `src/velocity/template/CLAUDE.md`.
+- OCR needs the `ocr` group (`uv run --group ocr ...`) and `LLAMA_CPP_BINARY=$HOME/.local/opt/llama.cpp/b12118/llama-b12118/llama-server`. The slow real-OCR test runs only with `VELOCITY_OCR_TESTS=1`.
 - Test book: `sources/mathematics/James Stewart - Calculus - Early transcendentals (8th Edition).pdf`.
-- Next: M2. Rename the package to `velocity`, add CI, then config, the MCP server, the workspace template and launcher, hooks, and notes protection.
+- Next: M3 (per-subject learner state; format still open). Ask the user first, since the format is an open question.
 
 ## Stack and Commands
 
 Python 3.12 (pinned in `.python-version`), managed with `uv`. PyMuPDF for PDFs; `marker-pdf` (CPU `torch`, optional `ocr` group) for math OCR. `mcp` 2.x (`MCPServer`, formerly FastMCP) for the tool server; `anthropic` is decided for M6 but not yet added. Ask before introducing any other dependency.
 
 - Install: `uv sync` (add `--group ocr` for OCR)
-- Run the MCP server: `uv run velocity mcp --subject <id>` (needs `~/.config/velocity/config.toml`)
+- Run: `uv run velocity new "<name>"`, `uv run velocity tutor <subject>` (needs `~/.config/velocity/config.toml` with `vault_path`)
 - Test: `uv run pytest` (real OCR: `VELOCITY_OCR_TESTS=1 uv run --group ocr pytest`)
 - Lint/format: `uv run ruff check .` and `uv run ruff format .`
 
 ## Repository Layout (planned)
 
 ```
-src/        package code (tools, MCP server, launcher)
+src/        package code (tools, MCP server, launcher); src/velocity/template/ holds the tutor CLAUDE.md and skills
 tests/      tests
-template/   tutor workspace template: tutor CLAUDE.md, skills/, settings, hooks (M2)
 docs/       agent docs, ADRs
 sources/    local test books (gitignored)
 DESIGN.md
