@@ -2,52 +2,56 @@
 
 ## Project
 
-An LLM harness that makes an LLM act as a tutor or professor, grounded in a user-supplied textbook or resource. It maintains a session log and structured learner state, supports learner-owned note-taking, and exposes teaching behaviors as skills.
+`velocity`: a local, open-source subject tutor built on an LLM. A learner picks a subject; the tutor teaches, questions, and quizzes, optionally grounded in learner-supplied sources (e.g. a textbook PDF). It keeps per-subject session logs (rendered in Obsidian) and learner state, supports learner-owned note-taking, and exposes teaching behaviors as skills. It is also a public portfolio project aimed at entry-level AI roles.
 
-Read `DESIGN.md` before making architectural decisions. It is the source of truth for goals, architecture, milestones, and open questions. If a task conflicts with it, flag the conflict instead of silently deviating, and update `DESIGN.md` when a decision changes.
+Architecture: tools are plain typed Python functions behind an MCP server (FastMCP). Front end A is Claude Code, run by `velocity tutor <subject>` in a tutor workspace regenerated from a template; front end B (M6) is an own agent loop on the `anthropic` SDK.
+
+Read `DESIGN.md` before making architectural decisions. It is the source of truth for goals, architecture, file locations, milestones, and open questions. If a task conflicts with it, flag the conflict instead of silently deviating, and update `DESIGN.md` when a decision changes.
 
 ## Current Status
 
-M1 (source ingestion) in progress. Work proceeds by milestone (see `DESIGN.md` section 4). Extraction findings so far are in `DESIGN.md` under "M1 findings".
+M1 (minimum source ingestion) in progress; M2 (tutor in Claude Code) is next. See `DESIGN.md` section 4.
 
 **Where we left off (2026-11-04):**
-- Python 3.12 environment works; `marker-pdf` is installed in the `ocr` group with CPU `torch` (run with `uv run --group ocr ...`; plain `uv sync` removes the group).
-- OCR needs `LLAMA_CPP_BINARY=$HOME/.local/opt/llama.cpp/b12118/llama-b12118/llama-server` (llama.cpp Vulkan build, runs on the AMD GPU) and `--force_ocr`.
-- Test book is at `sources/mathematics/James Stewart - Calculus - Early transcendentals (8th Edition).pdf`. Section 2.4 = PDF pp. 136–145.
-- Evaluation done and approach decided (see `DESIGN.md`, "M1 findings: marker-pdf evaluation"). A prototype spatial dropped-text check worked on Section 2.4, but it is not in the repo yet.
-- Next: implement ingestion in `src/` (marker JSON + markdown per section, the dropped-text check, cleanup of cosmetic issues), then `get_outline()` and `read_section(id)` with tests. Decided: repair flagged blocks by re-OCRing the crop, then text-layer fallback; ingest lazily per section with a cache.
+- Design interview done; `DESIGN.md` v0.2 records the result (subject tutor, MCP core, Claude Code front end, Obsidian logs).
+- Done: `get_outline()` in `src/tutor_harness/outline.py`, with tests (stable section IDs like `2.4`, `ch2`, `2.review`, `app-f`).
+- OCR works: `marker-pdf` in the `ocr` group with CPU `torch` (run with `uv run --group ocr ...`; plain `uv sync` removes the group). It needs `LLAMA_CPP_BINARY=$HOME/.local/opt/llama.cpp/b12118/llama-b12118/llama-server` (llama.cpp Vulkan build, runs on the AMD GPU) and `--force_ocr`.
+- Test book: `sources/mathematics/James Stewart - Calculus - Early transcendentals (8th Edition).pdf`. Section 2.4 = PDF pp. 136-146.
+- Next (rest of M1): a marker wrapper and a lazy, cached `read_section(id)` that cuts at the section heading. Drop-check repair is deferred to M7.
+- Then M2: rename the package to `velocity`, add CI, an MIT license, and make the repo public, then config, the MCP server, the workspace template and launcher, hooks, and notes protection.
 
 ## Stack and Commands
 
-Python 3.12 (pinned in `.python-version`), managed with `uv`. Extraction uses PyMuPDF, with `marker-pdf` (CPU `torch`, optional `ocr` group) being evaluated for math. LLM SDK is still undecided; ask before introducing a new dependency.
+Python 3.12 (pinned in `.python-version`), managed with `uv`. PyMuPDF for PDFs; `marker-pdf` (CPU `torch`, optional `ocr` group) for math OCR. Decided but not yet added: `mcp` (FastMCP) in M2, `anthropic` in M6. Ask before introducing any other dependency.
 
-- Install: `uv sync`
-- Run: `uv run python -m tutor_harness` (no entry point yet)
+- Install: `uv sync` (add `--group ocr` for OCR)
+- Run: no entry point yet (`velocity` CLI planned in M2)
 - Test: `uv run pytest`
 - Lint/format: `uv run ruff check .` and `uv run ruff format .`
 
 ## Repository Layout (planned)
 
 ```
-sources/    ingested textbooks (outline + section text, keyed by stable IDs)
-sessions/   narrative session logs, one markdown file per session
-state/      structured learner state
-notes/      learner-owned notes
-skills/     one folder per skill, each with a SKILL.md
-src/        harness code
+src/        package code (tools, MCP server, launcher); package rename to velocity in M2
 tests/      tests
+template/   tutor workspace template: tutor CLAUDE.md, skills/, settings, hooks (M2)
+docs/       agent docs, ADRs
+sources/    local test books (gitignored)
 DESIGN.md
 CLAUDE.md
 ```
 
+Runtime data lives outside the repo: config in `~/.config/velocity/`; subject config, session logs, and state in `<vault>/Tutor/<subject>/`; generated workspaces, the OCR cache, and session records in `~/.local/share/velocity/`.
+
 ## Conventions
 
-- **Learner notes are read-only to the agent.** Never write to or modify `notes/` from agent or tool code. The agent may read notes for critique only.
-- **The agent owns the session log and state.** Logs are append-only during a session.
-- Source material is referenced by stable section IDs; tutor responses should cite them.
-- Tools start as plain functions in a single process. Keep their interfaces simple and well-typed so they can later be wrapped as MCP servers without rewrites.
-- Skills follow the `SKILL.md` format: YAML header with `name` and `description`, then instructions. Only names and descriptions go into the system prompt up front; full text loads on demand.
-- Keep the tutor system prompt and each skill in plain text files, not buried in code, so they are easy to edit and compare.
+- **Learner notes are read-only to the tutor.** Tool and agent code never writes outside `<vault>/Tutor/`. This must be enforced (Claude Code permission deny rules, a hook, and a test), not only stated in prompts.
+- **Session logs are append-only.** Hooks capture the dialogue verbatim; the tutor only appends and never rewrites. The append-only session record outside the vault is the source of truth; learner edits in the markdown count as annotations.
+- Sources are optional. When present, tutor responses cite them by stable section ID; without them, the tutor says once per session that it teaches from general knowledge.
+- Tools are plain typed functions, unit-testable without a server; the MCP layer stays thin.
+- Skills follow the `SKILL.md` format: YAML header with `name` and `description`, then instructions. Only names and descriptions load up front; full text loads on demand.
+- Keep the tutor prompt and each skill in plain text files in the template, not buried in code.
+- Generated workspace files are never hand-edited; customization goes through `subject.toml`.
 
 ## Working Agreements
 
