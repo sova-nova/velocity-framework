@@ -10,12 +10,12 @@ Read `DESIGN.md` before making architectural decisions. It is the source of trut
 
 M1 (source ingestion) in progress. Work proceeds by milestone (see `DESIGN.md` section 4). Extraction findings so far are in `DESIGN.md` under "M1 findings".
 
-**Where we left off (2026-11-02):**
-- Project skeleton exists (`pyproject.toml`, `src/tutor_harness/`, `tests/`, `.gitignore`). Nothing is committed yet.
-- Test book is at `sources/mathematics/James Stewart - Calculus - Early transcendentals (8th Edition).pdf`.
-- Outline extraction via `pymupdf` `get_toc()` works. Equation extraction via plain text does not (broken font encoding).
-- Next step: install `marker-pdf` (optional `ocr` dependency group, CPU `torch`) and test it on Section 2.4. This needs Python 3.12; the user must run `uv python install 3.12` because their `uv` blocks automatic Python downloads. `pyproject.toml` and `.python-version` were already edited for 3.12, and `.venv` was deleted, so run `uv sync` and then `uv add --group ocr marker-pdf` once 3.12 is installed.
-- After that: show the OCR output next to the page image for the user to judge, then implement `get_outline()` and `read_section(id)`.
+**Where we left off (2026-11-04):**
+- Python 3.12 environment works; `marker-pdf` is installed in the `ocr` group with CPU `torch` (run with `uv run --group ocr ...`; plain `uv sync` removes the group).
+- OCR needs `LLAMA_CPP_BINARY=$HOME/.local/opt/llama.cpp/b12118/llama-b12118/llama-server` (llama.cpp Vulkan build, runs on the AMD GPU) and `--force_ocr`.
+- Test book is at `sources/mathematics/James Stewart - Calculus - Early transcendentals (8th Edition).pdf`. Section 2.4 = PDF pp. 136–145.
+- Evaluation done and approach decided (see `DESIGN.md`, "M1 findings: marker-pdf evaluation"). A prototype spatial dropped-text check worked on Section 2.4, but it is not in the repo yet.
+- Next: implement ingestion in `src/` (marker JSON + markdown per section, the dropped-text check, cleanup of cosmetic issues), then `get_outline()` and `read_section(id)` with tests. Decided: repair flagged blocks by re-OCRing the crop, then text-layer fallback; ingest lazily per section with a cache.
 
 ## Stack and Commands
 

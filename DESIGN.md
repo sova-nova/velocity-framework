@@ -138,11 +138,22 @@ Test book: Stewart, *Calculus: Early Transcendentals*, 8th ed. (1,397 PDF pages)
 - **Chosen next step: local math OCR with `marker-pdf`**, tested first on one section (2.4, the epsilon-delta definition) and compared against the page image. Fallback if quality or speed is poor: render pages to images and transcribe with a Claude vision model (needs an API key in an env var, costs per page).
 - **Environment constraints:** the machine has an AMD GPU (RX 7700/7800 XT), so `torch` is pinned to the CPU build to avoid downloading CUDA libraries. `marker-pdf` pins an old `pillow` with no Python 3.14 wheel, so the project is pinned to Python 3.12.
 
+### M1 findings: marker-pdf evaluation (2026-11-04)
+
+Tested on all of Section 2.4 (PDF pp. 136–145, plus neighbouring 2.3 exercises and the start of 2.5).
+
+- **Setup:** `torch`/`torchvision` must be listed directly in the `ocr` group, because `tool.uv.sources` only applies to direct dependencies (transitively they resolved to CUDA builds). Without an NVIDIA GPU, `surya` (marker's OCR engine) runs its recognition model through llama.cpp's `llama-server`. It uses the official Vulkan release build, unpacked to `~/.local/opt/llama.cpp/b12118/` and pointed to by the `LLAMA_CPP_BINARY` env var. This runs on the AMD GPU.
+- **`--force_ocr` is required.** By default marker keeps the PDF text layer for prose and only OCRs equation regions, so inline math stays garbled (`fsxd`). With `--force_ocr`, both inline and display math come out as clean LaTeX, ligatures are restored, and reading order (two-column exercises, sidebars, `##` section headings) is correct.
+- **Speed:** about 7.3 s/page on the GPU once models are loaded (11 pages in 81 s), or roughly 3 h for the whole book.
+- **Failure mode: silently dropped text.** In 11 pages, 5 prose passages were missing. Usually marker detected the block but produced empty output; once (a margin note) it never detected the block. One of them is the key clause of Definition 7. Text-based comparisons against the PDF text layer can't catch these reliably: order-sensitive diffs flag reordered columns, and order-insensitive n-gram checks miss drops whose wording repeats nearby (Definitions 6 and 7 are near-identical).
+- **Cosmetic:** figure captions run into the next paragraph (`FIGURE 1Note that`), consecutive exercises sometimes lose their line breaks, end-of-proof ■ is sometimes lost, and ε appears as both `\epsilon` and `\varepsilon`. Figures are saved as separate images; text inside them is not transcribed.
+- **Decision (2026-11-04): marker with `--force_ocr`, plus a spatial dropped-text check.** Every prose-font line in the PDF text layer (fonts `TimesLTStd-*` / `MyriadPro-*`, excluding the header strip) must fall inside a marker JSON block with non-empty output. On Section 2.4 this flagged all 5 drops with 0 false positives. Blind spot: partial drops inside a block that has some output. Repair and timing decisions are under Open Questions.
+
 ## 5. Open Questions
 
 - ~~Implementation language~~ **Decided: Python 3.12** (2026-11-02), chosen mainly for PDF/math extraction tooling; pinned to 3.12 because ML dependencies lack 3.14 wheels. Package manager **decided: `uv`**; test runner **`pytest`**; lint **`ruff`**. Still open: LLM provider/SDK (likely the Anthropic SDK if the vision fallback is used).
 - Structured state format: sheet vs. CSV vs. JSON vs. SQLite. **Deferred to M3** (2026-11-02).
-- Textbook extraction tooling and the math/equation strategy. **In progress:** try `marker-pdf` locally first, vision-model fallback (see M1 findings).
+- ~~Textbook extraction tooling and the math/equation strategy.~~ **Decided (2026-11-04):** `marker-pdf` with `--force_ocr` plus a spatial dropped-text check (see M1 findings). **Repair (decided 2026-11-04):** re-OCR the flagged block's cropped region; if still empty, fall back to the PDF text-layer text with a "[math may be garbled]" marker. A vision model can come later once the LLM SDK is chosen. **Timing (decided 2026-11-04):** ingest lazily per section on first `read_section`, caching the result, while the pipeline is still changing; a whole-book batch run can come later.
 - Interface: CLI only, or a lightweight local web UI.
 - How to evaluate teaching quality (even informally) so changes to the prompt and skills can be compared.
 - Privacy boundaries: which learner files, if any, must be off-limits to the agent.
