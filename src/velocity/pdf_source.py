@@ -5,8 +5,8 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from tutor_harness.ocr import PageOcr
-from tutor_harness.outline import Section, get_outline
+from velocity.ocr import PageOcr
+from velocity.outline import Section, get_outline
 
 _HEADING = re.compile(r"^#{1,6}\s+(.+)$", re.MULTILINE)
 _TITLE_PREFIX = re.compile(r"^(Ch \d+|\d+\.\d+|Appendix [A-Z]):\s*")

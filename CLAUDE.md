@@ -31,7 +31,7 @@ Python 3.12 (pinned in `.python-version`), managed with `uv`. PyMuPDF for PDFs; 
 ## Repository Layout (planned)
 
 ```
-src/        package code (tools, MCP server, launcher); package rename to velocity in M2
+src/        package code (tools, MCP server, launcher)
 tests/      tests
 template/   tutor workspace template: tutor CLAUDE.md, skills/, settings, hooks (M2)
 docs/       agent docs, ADRs

@@ -3,9 +3,9 @@ from pathlib import Path
 
 import pytest
 
-from tutor_harness.ocr import split_paginated
-from tutor_harness.outline import Section
-from tutor_harness.pdf_source import PdfSource
+from velocity.ocr import split_paginated
+from velocity.outline import Section
+from velocity.pdf_source import PdfSource
 
 OUTLINE = [
     Section("ch2", "Ch 2: Limits and Derivatives", 1, None, 10, 13),
@@ -107,7 +107,7 @@ STEWART = next(Path("sources/mathematics").glob("*.pdf"), None)
     reason="slow: needs the test book, the ocr group, and VELOCITY_OCR_TESTS=1",
 )
 def test_real_ocr_of_section_2_4(tmp_path):
-    from tutor_harness.ocr import MarkerOcr
+    from velocity.ocr import MarkerOcr
 
     text = PdfSource(STEWART, MarkerOcr(), cache_dir=tmp_path).read_section("2.4")
     assert text.warnings == []
