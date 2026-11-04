@@ -190,11 +190,14 @@ Tested on all of Section 2.4 (PDF pp. 136–145, plus neighbouring 2.3 exercises
   - The interface is a CLI (Claude Code) with session logs rendered in Obsidian.
   - Notes: per-subject folder lists, `private: true` opt-out, read-only enforced by permissions, a hook and a test, and a third-party reminder at every session start.
   - The name is `velocity`.
+- **2026-11-04 (M2):**
+  - Session record: one JSONL file per session at `~/.local/share/velocity/records/<subject>/<session-id>.jsonl`, one event per line (timestamp, role `learner`/`tutor`/`block`/`event`, text).
+  - Session ids are `YYYY-MM-DD-N`.
+  - Markdown log: a properties block, an H1, then `**You:**` / `**Tutor:**` turns, with tutor-added blocks as Obsidian callouts (`> [!example] Problem 1`) and a footer saying how the session ended. It is rendered once per turn, sorted by timestamp, so blocks the tutor adds mid-turn land in the right place.
 
 ## 6. Open Questions
 
 - Structured state format and location (sheet vs. CSV vs. JSON vs. SQLite). **Deferred to M3.**
-- Exact format of the session record and the markdown log. **To decide in M2.**
 - Teaching-quality evaluation design. **Deferred to M7**; session records from M2 on are its raw material.
 
 ## 7. Future Directions
