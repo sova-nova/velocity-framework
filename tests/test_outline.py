@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from tutor_harness.outline import Section, build_outline, get_outline
+from velocity.outline import Section, build_outline, get_outline
 
 TOC = [
     (1, "Preface", 13),

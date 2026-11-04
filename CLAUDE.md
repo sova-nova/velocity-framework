@@ -17,7 +17,7 @@ M1 done; M2 (tutor in Claude Code) is next. See `DESIGN.md` section 4.
 - M1 done: `outline.py` (`get_outline`, stable IDs like `2.4`, `ch2`, `2.review`, `app-f`), `ocr.py` (`MarkerOcr`, which loads models once), and `pdf_source.py` (`PdfSource.read_section`, with a per-page OCR cache in `~/.local/share/velocity/sources/<book>/pages/`). Verified on the real book for 2.4 and 2.review.
 - OCR needs the `ocr` group (`uv run --group ocr ...`; plain `uv sync` removes it) and `LLAMA_CPP_BINARY=$HOME/.local/opt/llama.cpp/b12118/llama-b12118/llama-server` (llama.cpp Vulkan build on the AMD GPU). The slow real-OCR test runs only with `VELOCITY_OCR_TESTS=1`.
 - Test book: `sources/mathematics/James Stewart - Calculus - Early transcendentals (8th Edition).pdf`.
-- Next: M2. Rename the package to `velocity`, add CI, an MIT license, and make the repo public, then config, the MCP server, the workspace template and launcher, hooks, and notes protection.
+- Next: M2. Rename the package to `velocity`, add CI, then config, the MCP server, the workspace template and launcher, hooks, and notes protection.
 
 ## Stack and Commands
 
@@ -31,7 +31,7 @@ Python 3.12 (pinned in `.python-version`), managed with `uv`. PyMuPDF for PDFs; 
 ## Repository Layout (planned)
 
 ```
-src/        package code (tools, MCP server, launcher); package rename to velocity in M2
+src/        package code (tools, MCP server, launcher)
 tests/      tests
 template/   tutor workspace template: tutor CLAUDE.md, skills/, settings, hooks (M2)
 docs/       agent docs, ADRs
