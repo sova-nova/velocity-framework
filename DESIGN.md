@@ -149,7 +149,7 @@ Linux is the primary platform (the developer's). macOS is supported. Windows is 
 
 ## 4. Milestones
 
-1. **M1: Source ingestion (minimum).** `get_outline` (done) and a lazy, cached `read_section` for the test book using marker. No drop-check repair yet.
+1. **M1: Source ingestion (minimum). Done 2026-11-04.** `get_outline` and a lazy `read_section` for the test book using marker, with a per-page cache shared between sections. A section runs from its heading to the next outline entry's heading, and warns if either is not found. No drop-check repair yet.
 2. **M2: Tutor in Claude Code.** Rename the package to `velocity`; CI (pytest, ruff), MIT license, public repo. Config files, the MCP server with source and log tools, the workspace template and `velocity tutor <subject>`, logging hooks and the session record, notes write protection, the third-party reminder.
 3. **M3: Learner state.** Per-subject state, session-start summary, spaced-review scheduling.
 4. **M4: Skills.** `/quiz` and `/end-session`, then the rest.

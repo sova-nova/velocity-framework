@@ -10,15 +10,14 @@ Read `DESIGN.md` before making architectural decisions. It is the source of trut
 
 ## Current Status
 
-M1 (minimum source ingestion) in progress; M2 (tutor in Claude Code) is next. See `DESIGN.md` section 4.
+M1 done; M2 (tutor in Claude Code) is next. See `DESIGN.md` section 4.
 
 **Where we left off (2026-11-04):**
 - Design interview done; `DESIGN.md` v0.2 records the result (subject tutor, MCP core, Claude Code front end, Obsidian logs).
-- Done: `get_outline()` in `src/tutor_harness/outline.py`, with tests (stable section IDs like `2.4`, `ch2`, `2.review`, `app-f`).
-- OCR works: `marker-pdf` in the `ocr` group with CPU `torch` (run with `uv run --group ocr ...`; plain `uv sync` removes the group). It needs `LLAMA_CPP_BINARY=$HOME/.local/opt/llama.cpp/b12118/llama-b12118/llama-server` (llama.cpp Vulkan build, runs on the AMD GPU) and `--force_ocr`.
-- Test book: `sources/mathematics/James Stewart - Calculus - Early transcendentals (8th Edition).pdf`. Section 2.4 = PDF pp. 136-146.
-- Next (rest of M1): a marker wrapper and a lazy, cached `read_section(id)` that cuts at the section heading. Drop-check repair is deferred to M7.
-- Then M2: rename the package to `velocity`, add CI, an MIT license, and make the repo public, then config, the MCP server, the workspace template and launcher, hooks, and notes protection.
+- M1 done: `outline.py` (`get_outline`, stable IDs like `2.4`, `ch2`, `2.review`, `app-f`), `ocr.py` (`MarkerOcr`, which loads models once), and `pdf_source.py` (`PdfSource.read_section`, with a per-page OCR cache in `~/.local/share/velocity/sources/<book>/pages/`). Verified on the real book for 2.4 and 2.review.
+- OCR needs the `ocr` group (`uv run --group ocr ...`; plain `uv sync` removes it) and `LLAMA_CPP_BINARY=$HOME/.local/opt/llama.cpp/b12118/llama-b12118/llama-server` (llama.cpp Vulkan build on the AMD GPU). The slow real-OCR test runs only with `VELOCITY_OCR_TESTS=1`.
+- Test book: `sources/mathematics/James Stewart - Calculus - Early transcendentals (8th Edition).pdf`.
+- Next: M2. Rename the package to `velocity`, add CI, an MIT license, and make the repo public, then config, the MCP server, the workspace template and launcher, hooks, and notes protection.
 
 ## Stack and Commands
 
@@ -26,7 +25,7 @@ Python 3.12 (pinned in `.python-version`), managed with `uv`. PyMuPDF for PDFs; 
 
 - Install: `uv sync` (add `--group ocr` for OCR)
 - Run: no entry point yet (`velocity` CLI planned in M2)
-- Test: `uv run pytest`
+- Test: `uv run pytest` (real OCR: `VELOCITY_OCR_TESTS=1 uv run --group ocr pytest`)
 - Lint/format: `uv run ruff check .` and `uv run ruff format .`
 
 ## Repository Layout (planned)
