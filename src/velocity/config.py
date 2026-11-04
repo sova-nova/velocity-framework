@@ -44,6 +44,7 @@ class Config:
 @dataclass(frozen=True)
 class SourceRef:
     path: Path
+    name: str  # short label used in citations, e.g. "Stewart"
 
 
 @dataclass(frozen=True)
@@ -115,7 +116,8 @@ def load_subject(config: Config, slug: str) -> Subject:
     for entry in data.get("sources", []):
         if "path" not in entry:
             raise ConfigError(f"{path}: every [[sources]] entry needs a 'path'")
-        sources.append(SourceRef(Path(entry["path"]).expanduser()))
+        source_path = Path(entry["path"]).expanduser()
+        sources.append(SourceRef(source_path, entry.get("name") or source_path.stem))
     return Subject(
         slug=slug,
         name=data.get("name", slug),
@@ -148,6 +150,7 @@ note_folders = []
 
 # Optional sources to ground teaching in, e.g.:
 # [[sources]]
+# name = "Stewart"   # short label used in citations
 # path = "~/books/textbook.pdf"
 '''
 

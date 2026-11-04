@@ -63,12 +63,14 @@ def test_load_subject(config, vault):
         "calculus",
         'name = "Calculus"\npersona = "Be terse."\n'
         'note_folders = ["Math/Calculus"]\n'
-        '[[sources]]\npath = "~/books/stewart.pdf"\n',
+        '[[sources]]\nname = "Stewart"\npath = "~/books/stewart.pdf"\n'
+        '[[sources]]\npath = "~/books/Spivak Calculus.pdf"\n',
     )
     s = load_subject(config, "calculus")
     assert (s.name, s.persona) == ("Calculus", "Be terse.")
     assert s.note_folders == (vault.resolve() / "Math/Calculus",)
     assert s.sources[0].path == Path("~/books/stewart.pdf").expanduser()
+    assert [src.name for src in s.sources] == ["Stewart", "Spivak Calculus"]
     assert s.sessions_dir == config.tutor_dir / "calculus" / "sessions"
 
 

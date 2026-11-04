@@ -13,6 +13,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Literal
 
+from velocity.config import data_dir
+
 Role = Literal["learner", "tutor", "block", "event"]
 
 ENDED_WITH_WRAP_UP = "end-session"
@@ -230,3 +232,24 @@ class Session:
 
     def _set_rendered(self, n: int) -> None:
         self._rendered_path.write_text(str(n))
+
+
+def record_dir(subject_slug: str) -> Path:
+    return data_dir() / "records" / subject_slug
+
+
+def set_active(subject_slug: str, session_id: str | None) -> None:
+    """Mark the session the tutor's tools should write to (None clears it)."""
+    pointer = record_dir(subject_slug) / "ACTIVE"
+    if session_id is None:
+        pointer.unlink(missing_ok=True)
+        return
+    pointer.parent.mkdir(parents=True, exist_ok=True)
+    pointer.write_text(session_id)
+
+
+def active_session_id(subject_slug: str) -> str | None:
+    try:
+        return (record_dir(subject_slug) / "ACTIVE").read_text().strip() or None
+    except FileNotFoundError:
+        return None

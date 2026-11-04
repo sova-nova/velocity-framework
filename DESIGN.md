@@ -126,7 +126,7 @@ One core, two front ends.
            notes:   read_notes (read-only)
 ```
 
-- **Core:** tools are plain typed Python functions, exposed through a thin MCP server built on the official `mcp` SDK (FastMCP).
+- **Core:** tools are plain typed Python functions, exposed through a thin MCP server built on the official `mcp` SDK (`MCPServer`, called FastMCP before mcp 2.0).
 - **Front end A, Claude Code:** works with the learner's Claude plan or an API key. `velocity tutor <subject>` regenerates the **tutor workspace** from a template in this repo **on every launch**, then opens Claude Code in it. The workspace contains the tutor `CLAUDE.md` (persona and rules), `.claude/skills/`, `.mcp.json`, permission settings, and hooks. Customizations come from `subject.toml`, never from hand edits; generated files carry a header saying they are regenerated. The tutor never runs from this code repo, which keeps tutoring separate from Claude Code's coding behavior.
 - **Front end B, own loop:** a thin agent loop on the `anthropic` SDK with `ANTHROPIC_API_KEY`, using the same MCP server and skills.
 - **Authentication:** software distributed to others must not route requests through someone else's claude.ai login. Front end A is Claude Code itself, used with each learner's own login or key. Front end B uses API keys only.

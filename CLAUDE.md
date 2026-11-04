@@ -21,10 +21,10 @@ M1 done; M2 (tutor in Claude Code) is next. See `DESIGN.md` section 4.
 
 ## Stack and Commands
 
-Python 3.12 (pinned in `.python-version`), managed with `uv`. PyMuPDF for PDFs; `marker-pdf` (CPU `torch`, optional `ocr` group) for math OCR. Decided but not yet added: `mcp` (FastMCP) in M2, `anthropic` in M6. Ask before introducing any other dependency.
+Python 3.12 (pinned in `.python-version`), managed with `uv`. PyMuPDF for PDFs; `marker-pdf` (CPU `torch`, optional `ocr` group) for math OCR. `mcp` 2.x (`MCPServer`, formerly FastMCP) for the tool server; `anthropic` is decided for M6 but not yet added. Ask before introducing any other dependency.
 
 - Install: `uv sync` (add `--group ocr` for OCR)
-- Run: no entry point yet (`velocity` CLI planned in M2)
+- Run the MCP server: `uv run velocity mcp --subject <id>` (needs `~/.config/velocity/config.toml`)
 - Test: `uv run pytest` (real OCR: `VELOCITY_OCR_TESTS=1 uv run --group ocr pytest`)
 - Lint/format: `uv run ruff check .` and `uv run ruff format .`
 
