@@ -77,3 +77,9 @@ def get_outline(pdf_path: str | Path) -> list[Section]:
     """Outline of the book at pdf_path."""
     with pymupdf.open(pdf_path) as doc:
         return build_outline(doc.get_toc(), doc.page_count)
+
+
+def toc_size(pdf_path: str | Path) -> int:
+    """Number of entries in the PDF's built-in table of contents (0 if it has none)."""
+    with pymupdf.open(pdf_path) as doc:
+        return len(doc.get_toc())

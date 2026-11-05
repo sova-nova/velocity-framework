@@ -1698,6 +1698,7 @@ wheels = [
 name = "velocity"
 version = "0.1.0"
 source = { editable = "." }
+default-groups = ["dev", "ocr"]
 dependencies = [
     { name = "mcp" },
     { name = "pymupdf" },
