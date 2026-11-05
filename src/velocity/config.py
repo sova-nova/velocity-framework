@@ -35,9 +35,11 @@ def data_dir() -> Path:
 @dataclass(frozen=True)
 class Config:
     vault_path: Path
-    llama_cpp_binary: Path | None = (
-        None  # llama.cpp `llama-server`, for OCR without an NVIDIA GPU
-    )
+    # llama.cpp `llama-server`, for OCR without an NVIDIA GPU
+    llama_cpp_binary: Path | None = None
+    # [api] table: model and effort for `velocity chat`
+    api_model: str | None = None
+    api_effort: str | None = None
 
     @property
     def tutor_dir(self) -> Path:
@@ -84,7 +86,15 @@ def load_config(path: Path | None = None) -> Config:
     if not vault.is_dir():
         raise ConfigError(f"{path}: vault_path {vault} is not a directory")
     llama = data.get("llama_cpp_binary")
-    return Config(vault.resolve(), Path(llama).expanduser() if llama else None)
+    api = data.get("api", {})
+    if not isinstance(api, dict):
+        raise ConfigError(f"{path}: [api] must be a table")
+    return Config(
+        vault.resolve(),
+        Path(llama).expanduser() if llama else None,
+        api.get("model"),
+        api.get("effort"),
+    )
 
 
 def slugify(name: str) -> str:
