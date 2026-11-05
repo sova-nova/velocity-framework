@@ -1700,6 +1700,7 @@ version = "0.1.0"
 source = { editable = "." }
 default-groups = ["dev", "ocr"]
 dependencies = [
+    { name = "anthropic" },
     { name = "mcp" },
     { name = "pymupdf" },
 ]
@@ -1719,6 +1720,7 @@ ocr = [
 
 [package.metadata]
 requires-dist = [
+    { name = "anthropic", specifier = ">=0.125,<1" },
     { name = "mcp", specifier = ">=2.3" },
     { name = "pymupdf", specifier = ">=2.1" },
 ]

@@ -10,11 +10,11 @@ Read `DESIGN.md` before making architectural decisions. It is the source of trut
 
 ## Current Status
 
-M1–M5 done; M6 (own agent loop on the `anthropic` SDK) is next. See `DESIGN.md` section 4.
+M1–M6 built (M6 awaiting a live API test with the user's key); M7 (polish and portfolio) is next. See `DESIGN.md` section 4.
 
 **Where we left off (2026-11-04):**
 - `velocity new "<name>"` creates a subject. `velocity tutor <subject> [--resume]` regenerates the workspace in `~/.local/share/velocity/workspaces/<subject>/` and launches Claude Code there. Hooks (`velocity hook ...`) log the dialogue, and `velocity mcp --subject <id>` serves the tools.
-- Modules: `config`, `outline`, `ocr`, `pdf_source`, `session` (record + markdown log), `state` (learner state), `tools` (TutorTools), `mcp_server`, `workspace` (template, settings, notes protection), `hooks`, `cli`. Tutor prompt template: `src/velocity/template/CLAUDE.md`.
+- Modules: `config`, `outline`, `ocr`, `pdf_source`, `session` (record + markdown log), `state` (learner state), `skills`, `agent` (own loop, front end B), `notes`, `tools` (TutorTools), `mcp_server`, `workspace` (template, settings, notes protection), `hooks`, `cli`. Tutor prompt template: `src/velocity/template/CLAUDE.md`.
 - OCR packages install by default (`[tool.uv] default-groups`); the llama.cpp server path comes from `llama_cpp_binary` in `config.toml` (or the `LLAMA_CPP_BINARY` env var). The slow real-OCR test runs only with `VELOCITY_OCR_TESTS=1`.
 - Test book: `sources/mathematics/James Stewart - Calculus - Early transcendentals (8th Edition).pdf`.
 - M3: `state.py` (topics, question log, threads, review scheduling); state tools in `tools.py`; summary injected at session start; `progress.md` generated in the vault. The launcher isolates the tutor with `--strict-mcp-config` and pre-approves `mcp__velocity` (see `workspace.claude_args`).
@@ -24,10 +24,10 @@ M1–M5 done; M6 (own agent loop on the `anthropic` SDK) is next. See `DESIGN.md
 
 ## Stack and Commands
 
-Python 3.12 (pinned in `.python-version`), managed with `uv`. PyMuPDF for PDFs; `marker-pdf` (CPU `torch`, optional `ocr` group) for math OCR. `mcp` 2.x (`MCPServer`, formerly FastMCP) for the tool server; `anthropic` is decided for M6 but not yet added. Ask before introducing any other dependency.
+Python 3.12 (pinned in `.python-version`), managed with `uv`. PyMuPDF for PDFs; `marker-pdf` (CPU `torch`, optional `ocr` group) for math OCR. `mcp` 2.x (`MCPServer`, formerly FastMCP) for the tool server; `anthropic` 0.x (pinned `<1` by `marker-pdf`) for `velocity chat`. Ask before introducing any other dependency.
 
 - Install: `uv sync` (the `ocr` group is a default group locally; CI uses `--no-group ocr`)
-- Run: `uv run velocity new "<name>"`, `uv run velocity source add <subject> <file.pdf> --name <Name>`, `uv run velocity tutor <subject>` (needs `~/.config/velocity/config.toml` with `vault_path`, and `llama_cpp_binary` for OCR without an NVIDIA GPU)
+- Run: `uv run velocity chat <subject>` (own loop, needs `ANTHROPIC_API_KEY`), `uv run velocity new "<name>"`, `uv run velocity source add <subject> <file.pdf> --name <Name>`, `uv run velocity tutor <subject>` (needs `~/.config/velocity/config.toml` with `vault_path`, and `llama_cpp_binary` for OCR without an NVIDIA GPU)
 - Test: `uv run pytest` (real OCR: `VELOCITY_OCR_TESTS=1 uv run --group ocr pytest`)
 - Lint/format: `uv run ruff check .` and `uv run ruff format .`
 
