@@ -8,6 +8,7 @@ learner adds there is treated as annotation, and text missing from it can be det
 """
 
 import json
+import re
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
@@ -70,6 +71,8 @@ def render_header(
     session_id: str,
     started: str,
     sources: list[str],
+    continues: str | None = None,
+    title: str | None = None,
 ) -> str:
     date, n = session_id.rsplit("-", 1)
     props = [
@@ -78,9 +81,35 @@ def render_header(
         f"session: {session_id}",
         f"started: {started[:16]}",
         f"sources: [{', '.join(sources)}]",
-        "---",
     ]
+    if continues:
+        props.append(f'continues: "[[{continues}]]"')  # an Obsidian link to that log
+    if title:
+        props.append(title_property(title))
+    props.append("---")
     return "\n".join(props) + f"\n# {subject_name} — {date} ({n})\n\n"
+
+
+MAX_TITLE = 100
+
+
+def title_property(title: str) -> str:
+    """The log's `title:` property line (a quoted YAML string)."""
+    return f"title: {json.dumps(title, ensure_ascii=False)}"
+
+
+def with_title_property(text: str, title: str) -> str:
+    """The log text with its properties block's `title:` line set. Unchanged if the log
+    has no properties block (e.g. the learner removed it)."""
+    if not text.startswith("---\n"):
+        return text
+    end = text.find("\n---\n", 4)
+    if end < 0:
+        return text
+    lines = text[4:end].split("\n")
+    lines = [line for line in lines if not line.startswith("title:")]
+    lines.append(title_property(title))
+    return "---\n" + "\n".join(lines) + text[end:]
 
 
 @dataclass(frozen=True)
@@ -110,7 +139,9 @@ class Session:
         log_dir: Path,
         sources: list[str],
         now: datetime | None = None,
+        continues: str | None = None,
     ) -> "Session":
+        """A new session. `continues` names a finished session this one picks up from."""
         now = now or datetime.now().astimezone()
         date = now.date().isoformat()
         record_dir.mkdir(parents=True, exist_ok=True)
@@ -126,11 +157,21 @@ class Session:
             "event",
             subject_name,
             kind="start",
-            meta={"sources": sources},
+            meta={
+                "sources": sources,
+                **({"continues": continues} if continues else {}),
+            },
         )
         session._write_record(started)
         session.log_path.write_text(
-            render_header(subject_slug, subject_name, session.id, started.ts, sources),
+            render_header(
+                subject_slug,
+                subject_name,
+                session.id,
+                started.ts,
+                sources,
+                continues,
+            ),
             encoding="utf-8",
         )
         session._set_rendered(1)
@@ -211,6 +252,37 @@ class Session:
         self.render()
 
     @property
+    def title(self) -> str | None:
+        """The latest title the tutor gave this session, if any."""
+        titles = [e.text for e in self.events() if e.kind == "title"]
+        return titles[-1] if titles else None
+
+    @property
+    def continues(self) -> str | None:
+        """The finished session this one picks up from, if any."""
+        start = next((e for e in self.events() if e.kind == "start"), None)
+        return (start.meta or {}).get("continues") if start else None
+
+    def set_title(self, title: str, now: datetime | None = None) -> str:
+        """Record the session's title and show it as the log's `title:` property.
+
+        The only change velocity makes to existing log text: one line of the properties
+        block, which is metadata (Obsidian edits it too). The dialogue is never rewritten.
+        """
+        title = " ".join(title.split())
+        if not title:
+            raise ValueError("the title is empty")
+        if len(title) > MAX_TITLE:
+            raise ValueError(f"the title is longer than {MAX_TITLE} characters")
+        self.append("event", title, kind="title", now=now)
+        if self.log_path.exists():
+            text = self.log_path.read_text(encoding="utf-8")
+            updated = with_title_property(text, title)
+            if updated != text:
+                self.log_path.write_text(updated, encoding="utf-8")
+        return title
+
+    @property
     def wrap_up_requested(self) -> bool:
         return any(e.kind == "wrap-up" for e in self.events()) and not self.wrapped_up
 
@@ -264,9 +336,15 @@ class Session:
         """The markdown log as the record says it was rendered (without learner edits)."""
         events = self.events()[: self._rendered()]
         start = next(e for e in events if e.kind == "start")
-        sources = (start.meta or {}).get("sources", [])
+        meta = start.meta or {}
         header = render_header(
-            self.subject_slug, start.text, self.id, start.ts, sources
+            self.subject_slug,
+            start.text,
+            self.id,
+            start.ts,
+            meta.get("sources", []),
+            meta.get("continues"),
+            self.title,
         )
         body = "".join(
             render_event(e)
@@ -307,6 +385,57 @@ def _separator(path: Path) -> str:
 
 def record_dir(subject_slug: str) -> Path:
     return data_dir() / "records" / subject_slug
+
+
+SESSION_ID = re.compile(r"^\d{4}-\d{2}-\d{2}-\d+$")
+
+
+def session_order(session_id: str) -> tuple[str, int]:
+    day, n = session_id.rsplit("-", 1)
+    return day, int(n)
+
+
+@dataclass(frozen=True)
+class SessionSummary:
+    id: str
+    title: str | None
+    started: str | None
+    turns: int  # learner messages
+    first_message: str
+    ended: str | None  # "wrapped-up", "no-wrap-up", or None while open
+    has_recap: bool
+    continues: str | None
+
+
+def session_summaries(subject_slug: str, log_dir: Path) -> list[SessionSummary]:
+    """A subject's sessions, newest first, with a short summary of each."""
+    records = record_dir(subject_slug)
+    ids = [p.stem for p in records.glob("*.jsonl") if SESSION_ID.match(p.stem)]
+    out = []
+    for session_id in sorted(ids, key=session_order, reverse=True):
+        session = Session(subject_slug, session_id, records, log_dir)
+        events = session.events()
+        start = next((e for e in events if e.kind == "start"), None)
+        learner = [e.text for e in events if e.role == "learner"]
+        if session.wrapped_up:
+            ended = "wrapped-up"
+        elif session.ended:
+            ended = "no-wrap-up"
+        else:
+            ended = None  # still open, or the record ends without an end event
+        out.append(
+            SessionSummary(
+                id=session_id,
+                title=session.title,
+                started=start.ts if start else None,
+                turns=len(learner),
+                first_message=learner[0][:120] if learner else "",
+                ended=ended,
+                has_recap=session.recap() is not None,
+                continues=session.continues,
+            )
+        )
+    return out
 
 
 def set_active(subject_slug: str, session_id: str | None) -> None:

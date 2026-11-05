@@ -25,7 +25,13 @@ M1–M6 done and merged. M7 (polish and portfolio) is in progress; M8 (web front
 - Optional later: resuming `velocity chat`, compaction for long chats, a `search` source tool.
 - M7 is done except the postponed eval full run.
 
-*M8, web front end (planned 2026-11-06; decisions in `DESIGN.md` section 5):* both engines selectable, chat + session history, Starlette + plain JS, for daily use and as a demo. PRs: (1) server + history (branch `web-history`); (2) chat on the own loop; (3) chat on Claude Code headless; (4) polish + README demo. Ask about the MIT license after M8.
+*M8, web front end (planned 2026-11-06; decisions in `DESIGN.md` section 5):* both engines selectable, chat + session history, Starlette + plain JS, for daily use and as a demo. PRs, reordered after a design review (grilling) on 2026-11-06:
+1. Server + history: done (#24).
+2. PR A, session titles + resume/continue (core, all front ends; branch `session-titles-continue`).
+3. PR B, web chat on Claude Code headless. The experiment confirmed: one JSON line per message (`{"type":"user","message":{"role":"user","content":...}}`); the UserPromptSubmit/Stop hooks log stdin messages; `/quiz` works; closing stdin exits 0 and runs SessionEnd; `--resume <claude id>` reattaches to the same velocity session. Decisions: one process per chat; one open session per subject; End session (prominent) + Pause buttons with a "?" help popup; 30-minute idle timeout = pause; reopening the page continues a running chat; model picked at start (default Sonnet, last choice remembered); tool calls as grey lines; no dollar amounts; `--permission-prompts none`; resuming a `velocity chat` session attaches a new Claude Code conversation that reads the log first.
+4. PR C, web chat on the own loop.
+5. PR D, polish + README demo (incl. a stop button for long replies).
+Ask about the MIT license after M8.
 
 *How the user works (see also memory):*
 - One branch and PR per change, based on `main`. The user reviews and merges on GitHub with a merge commit and deletes the branch.
@@ -42,7 +48,7 @@ M1–M6 done and merged. M7 (polish and portfolio) is in progress; M8 (web front
 - Modules: `config`, `outline`, `ocr`, `dropcheck`, `pdf_source`, `text_source` (Markdown, HTML, EPUB), `web` (Starlette app; page in `web_static/`), `session` (record + markdown log), `state` (learner state), `notes`, `skills`, `tools` (TutorTools), `mcp_server`, `workspace` (template, settings, notes protection, `claude_args`), `hooks`, `agent` (front end B), `cli`.
 - The tutor prompt is `src/velocity/template/CLAUDE.md`; skills are in `src/velocity/template/skills/<name>/SKILL.md`. The same files back both front ends.
 - Evals: `evals/` (cases, replay, checks, judge, label, run); `uv run python -m evals.run --list`. See `DESIGN.md` "M7 notes: evals".
-- Tests: about 201, `uv run pytest`. The slow real-OCR test runs only with `VELOCITY_OCR_TESTS=1`.
+- Tests: about 218, `uv run pytest`. The slow real-OCR test runs only with `VELOCITY_OCR_TESTS=1`.
 
 *How to test with real Claude Code without touching the user's vault:*
 - Use a throwaway `XDG_CONFIG_HOME`/`XDG_DATA_HOME` with a scratch vault, then `velocity new`. For OCR'd sections, copy `~/.local/share/velocity/sources/*` into the throwaway data dir.
@@ -74,7 +80,7 @@ Runtime data lives outside the repo: config in `~/.config/velocity/`; subject co
 ## Conventions
 
 - **Learner notes are read-only to the tutor.** Tool and agent code never writes outside `<vault>/Tutor/`. This must be enforced (Claude Code permission deny rules, a hook, and a test), not only stated in prompts.
-- **Session logs are append-only.** Hooks capture the dialogue verbatim; the tutor only appends and never rewrites. The append-only session record outside the vault is the source of truth; learner edits in the markdown count as annotations.
+- **Session logs are append-only.** Hooks capture the dialogue verbatim; the tutor only appends and never rewrites. The append-only session record outside the vault is the source of truth; learner edits in the markdown count as annotations. One exception (decided 2026-11-06): velocity updates the `title:` line of a log's properties block when the tutor sets the session's title. The dialogue itself is never rewritten.
 - Sources are optional. When present, tutor responses cite them by stable section ID; without them, the tutor says once per session that it teaches from general knowledge.
 - Tools are plain typed functions, unit-testable without a server; the MCP layer stays thin.
 - Skills follow the `SKILL.md` format: YAML header with `name` and `description`, then instructions. Only names and descriptions load up front; full text loads on demand.
