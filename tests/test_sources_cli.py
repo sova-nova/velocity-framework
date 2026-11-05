@@ -119,11 +119,38 @@ def test_cli_source_add_and_list(config, tmp_path, capsys):
 
 
 def test_ocr_uses_configured_llama_binary(config, monkeypatch):
-    from velocity.tools import ToolError, _default_ocr
+    from velocity.tools import ToolError, default_ocr
 
     monkeypatch.delenv("LLAMA_CPP_BINARY", raising=False)
     try:
-        _default_ocr(config)
+        default_ocr(config)
     except ToolError:
         pass  # OCR packages not installed (as in CI); the variable is set before importing
     assert os.environ.pop("LLAMA_CPP_BINARY") == config.llama_cpp_binary.as_posix()
+
+
+def test_cli_source_recheck(config, tmp_path, monkeypatch, capsys):
+    from velocity.ocr import OcrPage
+    from velocity.pdf_source import default_cache_dir
+
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "data"))
+    pdf = make_pdf(tmp_path / "book.pdf", toc=True)
+    add_source(config, "calculus", pdf, "Book")
+    assert main(["source", "recheck", "calculus"]) == 0
+    assert "Book: all cached pages are checked." in capsys.readouterr().out
+
+    pages = default_cache_dir(pdf) / "pages"
+    pages.mkdir(parents=True)
+    (pages / "1.md").write_text("old")
+
+    def fake_ocr(pdf_path, first, last, image_dir):
+        return {1: OcrPage("new", [])}
+
+    monkeypatch.setattr("velocity.tools.default_ocr", lambda cfg: fake_ocr)
+    assert main(["source", "recheck", "calculus"]) == 0
+    out = capsys.readouterr().out
+    assert (
+        "OCR'ing 1 cached pages again" in out and "0 dropped passages restored." in out
+    )
+    assert (pages / "1.md").read_text() == "new"
+    assert (pages / "1.check.json").read_text() == "[]"
