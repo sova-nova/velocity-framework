@@ -79,7 +79,8 @@ The tutor updates state **during** the session with small typed tools (`record_q
 
 Learning benefits from effortful retrieval and from restating ideas in one's own words, so the tutor must not write the learner's notes for them.
 
-- Notes live wherever the learner keeps them, typically an Obsidian vault. Each subject lists the **note folders** the tutor may read (e.g. `Math/Calculus/`), not the whole vault.
+- Notes live wherever the learner keeps them, typically an Obsidian vault. Each subject lists the **note folders** the tutor may read (e.g. `Math/Calculus/`), not the whole vault. `velocity notes add <subject> <folder>` adds one.
+- The tutor reads notes only through `list_notes` and `read_note`. These see only markdown files inside the subject's note folders, skip hidden folders (`.trash`), refuse paths that escape a folder (`../`, symlinks), and never return private notes.
 - The tutor has **read-only** access to notes. It writes only in `<vault>/Tutor/`. This is **enforced**, not just requested in the prompt: Claude Code permission rules deny Write/Edit on the vault outside `Tutor/`, a hook blocks writes to note paths as a second layer, and a test checks the generated settings.
 - Notes with `private: true` in their front matter are never read.
 - Every session starts with a reminder that notes and logs the tutor reads are sent to a third-party API.
@@ -162,7 +163,7 @@ Linux is the primary platform (the developer's). macOS is supported. Windows is 
 2. **M2: Tutor in Claude Code. Done 2026-11-04 (PRs #1-#5).** Rename the package to `velocity`; CI (pytest, ruff). Config files, the MCP server with source and log tools, the workspace template and `velocity tutor <subject>`, logging hooks and the session record, notes write protection, the third-party reminder.
 3. **M3: Learner state. Done 2026-11-04.** Per-subject state, session-start summary, spaced-review scheduling.
 4. **M4: Skills. Done 2026-11-04** except `/review-notes`, which moves to M5 because it needs `read_notes`. `/quiz` and `/end-session`, then the rest.
-5. **M5: Notes.** `read_notes` with per-subject folder lists and `private: true`; `/review-notes`; note-taking prompts.
+5. **M5: Notes. Done 2026-11-04.** `read_notes` with per-subject folder lists and `private: true`; `/review-notes`; note-taking prompts.
 6. **M6: Own agent loop.** Front end B on the `anthropic` SDK, with the same MCP server and skills.
 7. **M7: Polish and portfolio.** MIT license (added once the project is finished, decided 2026-11-04), README with a demo, teaching-quality evals (replaying session records), drop-check repair, non-PDF sources.
 

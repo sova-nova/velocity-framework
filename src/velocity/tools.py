@@ -10,6 +10,9 @@ from datetime import date
 from typing import Literal
 
 from velocity.config import Config, Subject
+from velocity.notes import NotesError
+from velocity.notes import list_notes as _list_notes
+from velocity.notes import read_note as _read_note
 from velocity.ocr import PageOcr
 from velocity.pdf_source import PdfSource
 from velocity.session import RECAP_TITLE, Session, active_session_id, record_dir
@@ -303,3 +306,29 @@ class TutorTools:
             for t in state.topics.values()
         )
         return summary + ("\n\nAll topics:\n" + topics if topics else "")
+
+    # -- learner notes (read-only) ---------------------------------------------------
+
+    def list_notes(self) -> str:
+        """The learner's notes for this subject that you may read: path, title, last modified.
+
+        Notes are the learner's own; you can read them but never change them.
+        """
+        if not self.subject.note_folders:
+            return (
+                "No note folders are configured for this subject. The learner can add one with: "
+                f"velocity notes add {self.subject.slug} <folder in their vault>"
+            )
+        notes = _list_notes(self.config, self.subject)
+        if not notes:
+            return "No (non-private) notes in this subject's note folders yet."
+        return "\n".join(
+            f"- {n.path}: {n.title} (modified {n.modified})" for n in notes[:200]
+        )
+
+    def read_note(self, path: str) -> str:
+        """Read one of the learner's notes (path as shown by list_notes). Read-only."""
+        try:
+            return f"Note {path}:\n\n" + _read_note(self.config, self.subject, path)
+        except NotesError as e:
+            raise ToolError(str(e)) from None

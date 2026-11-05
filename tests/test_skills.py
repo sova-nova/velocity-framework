@@ -13,13 +13,14 @@ def frontmatter(text: str) -> dict[str, str]:
     return dict(line.split(": ", 1) for line in m[1].splitlines() if ": " in line)
 
 
-def test_planned_first_skills_exist():
+def test_all_planned_skills_exist():
     assert {
         "quiz",
         "end-session",
         "socratic",
         "explain-differently",
         "assign-problems",
+        "review-notes",
     } <= set(SKILLS)
 
 

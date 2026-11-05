@@ -203,3 +203,39 @@ def add_source(
     added = load_subject(config, slug).sources[-1]
     assert added.path == path
     return added
+
+
+def add_note_folder(config: Config, slug: str, folder: str) -> Path:
+    """Let the tutor read notes in a vault folder (relative to the vault) for this subject."""
+    subject = load_subject(config, slug)
+    toml = subject.dir / "subject.toml"
+    resolved = _note_folder(config, folder, toml)
+    if not resolved.is_dir():
+        raise ConfigError(
+            f"{folder!r} is not a folder in the vault ({config.vault_path})"
+        )
+    if resolved in subject.note_folders:
+        raise ConfigError(f"{folder!r} is already a note folder of {slug!r}")
+    rel = resolved.relative_to(config.vault_path).as_posix()
+    text = toml.read_text(encoding="utf-8")
+    data = tomllib.loads(text)
+    if "note_folders" in data:
+        # Rewrite just the note_folders line(s), keeping the rest of the file.
+        new = "note_folders = " + json.dumps(
+            [*data["note_folders"], rel], ensure_ascii=False
+        )
+        text, n = re.subn(
+            r"^note_folders\s*=\s*\[[^\]]*\]",
+            lambda _: new,
+            text,
+            count=1,
+            flags=re.MULTILINE,
+        )
+        if n != 1:
+            raise ConfigError(f"{toml}: could not update note_folders; edit it by hand")
+    else:
+        text = f"note_folders = {json.dumps([rel], ensure_ascii=False)}\n" + text
+    toml.write_text(text, encoding="utf-8")
+    if resolved not in load_subject(config, slug).note_folders:
+        raise ConfigError(f"{toml}: note folder was not saved; edit it by hand")
+    return resolved
