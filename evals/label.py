@@ -61,8 +61,13 @@ def render_item(index: int, total: int, outcome: dict, cases: dict) -> str:
             "tutor": "**Tutor:**",
             "annotation": "**Learner (typed into the log):**",
             "block": "**Tutor (added to the log):**",
+            "tool": "**Tutor (called a tool):**",
         }[t.role]
-        turns.append(f"{who} {block_note(t) if t.role == 'block' else t.text}")
+        if t.role == "tool":
+            args = ", ".join(f"{k}={v!r}" for k, v in (t.args or {}).items())
+            turns.append(f"{who} `{t.text}({args})`")
+        else:
+            turns.append(f"{who} {block_note(t) if t.role == 'block' else t.text}")
     history = "\n\n".join(turns) or "(This is the first message of the session.)"
     annotations = "".join(
         f"**Learner (typed into the log just before):** {a}\n\n"

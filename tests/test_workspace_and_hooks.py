@@ -6,7 +6,7 @@ import pytest
 
 from velocity.config import Config, SourceRef, Subject
 from velocity.hooks import run
-from velocity.session import active_session_id
+from velocity.session import Session, active_session_id, record_dir
 from velocity.workspace import build_workspace
 
 
@@ -90,6 +90,9 @@ def test_notes_protection_is_in_generated_settings(config, subject):
         "calculus",
     ]
     assert settings["claudeMdExcludes"][0].endswith("/.claude/CLAUDE.md")
+    recorder = settings["hooks"]["PostToolUse"][0]
+    assert recorder["matcher"] == "mcp__velocity__.*|Skill"
+    assert recorder["hooks"][0]["command"].split()[-3] == "tool-use"
 
 
 def test_workspace_is_regenerated(config, subject):
@@ -319,3 +322,36 @@ def test_resume_after_wrap_up_starts_a_new_log(config, subject):
     hook("stop", config, subject, session_id="c1", last_assistant_message="bye")
     hook("session-start", config, subject, session_id="c1", source="resume")
     assert active_session_id("calculus") not in (None, first)
+
+
+def test_tool_calls_are_recorded_but_not_logged(config, subject):
+    assert (
+        hook("tool-use", config, subject, tool_name="mcp__velocity__read_state") == {}
+    )
+    hook("session-start", config, subject, session_id="c1", source="startup")
+    session_id = active_session_id("calculus")
+    hook("user-prompt", config, subject, session_id="c1", prompt="Quiz me")
+    hook(
+        "tool-use",
+        config,
+        subject,
+        tool_name="mcp__velocity__record_question",
+        tool_input={"topic": "limits", "outcome": "correct"},
+        tool_response="Recorded (correct).",
+    )
+    hook("tool-use", config, subject, tool_name="Skill", tool_input={"skill": "quiz"})
+    hook("stop", config, subject, session_id="c1", last_assistant_message="Next!")
+
+    session = Session(
+        "calculus", session_id, record_dir("calculus"), subject.sessions_dir
+    )
+    tools = [(e.text, e.meta) for e in session.events() if e.kind == "tool"]
+    assert tools == [
+        ("record_question", {"input": {"topic": "limits", "outcome": "correct"}}),
+        ("load_skill", {"input": {"name": "quiz"}}),
+    ]
+    assert "Recorded" not in session.record_path.read_text()  # results aren't kept
+    log = session.log_path.read_text()
+    assert (
+        "record_question" not in log and "**You:** Quiz me\n\n**Tutor:** Next!" in log
+    )

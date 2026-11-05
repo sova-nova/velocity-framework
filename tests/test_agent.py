@@ -153,6 +153,13 @@ def test_turn_with_a_tool_call_is_logged_and_recorded(config, subject):
     assert "**You:** The limit is 3." in log and "**Tutor:** Let me note that." in log
     assert (subject.dir / "progress.md").exists()
     assert agent.usage.requests == 2
+    tools = [e for e in _session_events(subject) if e.kind == "tool"]
+    assert [(e.text, e.meta) for e in tools] == [
+        (
+            "record_question",
+            {"input": {"topic": "Limits", "question": "q", "outcome": "correct"}},
+        )
+    ]
 
 
 def test_request_parameters(config, subject):
@@ -363,3 +370,25 @@ def test_unknown_commands_are_answered_locally():
         assert unknown_command(known, skills) is None
     for text in ["what is /quiz", "/usr/bin/env", "/ 2", "hello"]:
         assert unknown_command(text, skills) is None
+
+
+def _session_events(subject):
+    from velocity.session import Session, active_session_id, record_dir
+
+    return Session(
+        subject.slug,
+        active_session_id(subject.slug),
+        record_dir(subject.slug),
+        subject.sessions_dir,
+    ).events()
+
+
+def test_failed_tool_calls_are_recorded_as_errors(config, subject):
+    api = FakeAPI(
+        response(tool_use("t1", "load_skill", {"name": "nope"}), stop="tool_use"),
+        response(text("ok")),
+    )
+    agent = make_agent(config, subject, api)
+    asyncio.run(agent.turn("hi"))
+    tools = [e for e in _session_events(subject) if e.kind == "tool"]
+    assert tools[0].meta == {"input": {"name": "nope"}, "error": True}

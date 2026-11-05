@@ -68,6 +68,9 @@ def build_settings(config: Config, subject: Subject) -> dict:
             "PreToolUse": [
                 hook("guard", 10, matcher="Edit|Write|MultiEdit|NotebookEdit")
             ],
+            "PostToolUse": [
+                hook("tool-use", 10, matcher=f"mcp__{MCP_SERVER_NAME}__.*|Skill")
+            ],
         },
     }
 

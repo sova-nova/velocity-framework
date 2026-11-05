@@ -23,9 +23,12 @@ DATA_DIR = EVALS_DIR / "data"
 class Turn:
     """One step of the history before the message under test."""
 
-    role: str  # "learner", "tutor", "block" (added to the log with append_log), "annotation"
+    # "learner", "tutor", "block" (added to the log with append_log), "annotation", or
+    # "tool" (a tool call: text is the tool's name, args its input)
+    role: str
     text: str
     title: str | None = None  # blocks only
+    args: dict | None = None  # tool calls only
 
 
 @dataclass(frozen=True)
@@ -135,6 +138,8 @@ def _from_record(raw: dict, data_dir: Path) -> ReplayInput:
             history.append(Turn("tutor", e.text))
         elif e.role == "block":
             history.append(Turn("block", e.text, e.title))
+        elif e.role == "event" and e.kind == "tool":
+            history.append(Turn("tool", e.text, args=(e.meta or {}).get("input", {})))
     if message is None:
         raise ValueError(
             f"{raw['id']}: session {session_id} has no learner turn {turn}"
@@ -156,6 +161,8 @@ def _from_record(raw: dict, data_dir: Path) -> ReplayInput:
         message=message,
         previous_sessions=tuple(earlier),
         session_id=session_id,
+        # Older records don't contain tool calls, so their cases say what this session had
+        # recorded so far. Newer records replay their calls instead (see replay.py).
         session_questions=raw.get("session_state", {}).get("questions", 0),
         session_threads=raw.get("session_state", {}).get("threads", 0),
     )

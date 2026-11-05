@@ -130,7 +130,7 @@ async def replay(
             effort=effort,
         )
         agent.start()
-        _seed_history(agent, slug, subject, inp.history)
+        _seed_history(agent, slug, subject, inp.history, tools)
         if inp.annotations:
             # The learner typed these into the log; the user-prompt hook finds them.
             session = _active_session(slug, subject)
@@ -148,16 +148,25 @@ def _active_session(slug: str, subject: Subject) -> Session:
     )
 
 
+# Recorded calls that are run again while seeding, so the learner state matches.
+STATE_TOOLS = {"record_question", "set_topic_status", "open_thread", "close_thread"}
+
+
 def _seed_history(
-    agent: TutorAgent, slug: str, subject: Subject, history: tuple[Turn, ...]
+    agent: TutorAgent,
+    slug: str,
+    subject: Subject,
+    history: tuple[Turn, ...],
+    tools: TutorTools,
 ):
     """Put the earlier part of the session into the agent's history, the session record and
-    the markdown log, the way it would be after those turns had run."""
+    the markdown log, the way it would be after those turns had run. Recorded calls that
+    change learner state are run again, so the state matches too."""
     session = _active_session(slug, subject)
     messages = agent.messages
     annotations: list[str] = []
     blocks: list[str] = []
-    for turn in history:
+    for n, turn in enumerate(history):
         if turn.role == "annotation":
             session.render()
             with session.log_path.open("a", encoding="utf-8") as f:
@@ -178,6 +187,43 @@ def _seed_history(
         elif turn.role == "block":
             session.append("block", turn.text, title=turn.title, kind="example")
             blocks.append(block_note(turn))
+        elif turn.role == "tool":
+            # The call as the tutor made it. The result wasn't recorded (it can hold
+            # source text), so the tutor sees a placeholder.
+            session.append(
+                "event", turn.text, kind="tool", meta={"input": turn.args or {}}
+            )
+            if turn.text in STATE_TOOLS:
+                try:
+                    getattr(tools, turn.text)(**(turn.args or {}))
+                except (ToolError, TypeError):
+                    pass  # it failed (or was malformed) the first time too
+            call_id = f"replayed_{n}"
+            messages.append(
+                {
+                    "role": "assistant",
+                    "content": [
+                        {
+                            "type": "tool_use",
+                            "id": call_id,
+                            "name": turn.text,
+                            "input": turn.args or {},
+                        }
+                    ],
+                }
+            )
+            messages.append(
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "tool_result",
+                            "tool_use_id": call_id,
+                            "content": "(Result not recorded. The call succeeded.)",
+                        }
+                    ],
+                }
+            )
         elif turn.role == "tutor":
             session.append("tutor", turn.text)
             text = "\n\n".join([*blocks, turn.text])

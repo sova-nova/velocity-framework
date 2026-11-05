@@ -5,6 +5,7 @@ user-prompt    log the learner's message verbatim
 stop           log the tutor's final message verbatim
 session-end    close the log ("ended without wrap-up" unless already ended)
 guard          PreToolUse: refuse file edits inside the vault
+tool-use       PostToolUse: record the tutor's tool call (name and input) in the session record
 """
 
 import json
@@ -193,6 +194,37 @@ def session_end(config: Config, subject: Subject, payload: dict) -> dict:
     return {}
 
 
+MCP_TOOL_PREFIX = "mcp__velocity__"
+
+
+def tool_use(config: Config, subject: Subject, payload: dict) -> dict:
+    """Record a tool call in the session record, so a session can be replayed with them.
+
+    Only the name and input are kept: results can contain source text, which must not be
+    copied into records. Tool calls never appear in the markdown log. Claude Code's MCP tool
+    names lose their `mcp__velocity__` prefix, and its Skill tool is recorded as
+    `load_skill`, the name the own agent loop uses, so records from both front ends match.
+    """
+    session = _active(subject)
+    name = payload.get("tool_name", "")
+    if not session or session.ended or not name:
+        return {}
+    tool_input = payload.get("tool_input") or {}
+    if name == "Skill":
+        # The skill's name; the field isn't documented, so accept the likely ones.
+        skill = next(
+            (tool_input[k] for k in ("skill", "command", "name") if tool_input.get(k)),
+            "",
+        )
+        name, tool_input = "load_skill", {"name": str(skill).lstrip("/")}
+    name = name.removeprefix(MCP_TOOL_PREFIX)
+    meta = {"input": tool_input}
+    if payload.get("is_error"):
+        meta["error"] = True
+    session.append("event", name, kind="tool", meta=meta)
+    return {}
+
+
 def guard(config: Config, subject: Subject, payload: dict) -> dict:
     tool_input = payload.get("tool_input") or {}
     raw = tool_input.get("file_path") or tool_input.get("notebook_path")
@@ -221,6 +253,7 @@ HANDLERS = {
     "stop": stop,
     "session-end": session_end,
     "guard": guard,
+    "tool-use": tool_use,
 }
 
 
