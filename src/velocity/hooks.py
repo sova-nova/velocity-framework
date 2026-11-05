@@ -131,6 +131,11 @@ def _log_changes(session: Session) -> str:
         session.append("event", a, kind="annotation")
     for m in new_missing:
         session.append("event", m, kind="missing")
+    return log_changes_context(new_annotations, new_missing)
+
+
+def log_changes_context(new_annotations: list[str], new_missing: list[str]) -> str:
+    """The message that tells the tutor about log annotations and missing text."""
     parts = []
     if new_annotations:
         parts.append(

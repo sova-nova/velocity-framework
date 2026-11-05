@@ -1,0 +1,392 @@
+[
+ {
+  "id": "hand-explain-differently",
+  "about": "Learner still doesn't get an explanation and asks for another angle (no slash command).",
+  "subject": {
+   "name": "Calculus",
+   "sources": [
+    "Stewart"
+   ]
+  },
+  "date": "2026-11-06",
+  "previous_sessions": [
+   "2026-11-04-1",
+   "2026-11-04-2",
+   "2026-11-04-3",
+   "2026-11-04-4",
+   "2026-11-04-5",
+   "2026-11-04-6",
+   "2026-11-05-1",
+   "2026-11-05-2"
+  ],
+  "history": [
+   {
+    "role": "learner",
+    "text": "hi"
+   },
+   {
+    "role": "tutor",
+    "text": "Before we start: what you share here, including any notes I read, is sent to Anthropic's API, which is a third party. I'm using Stewart as a source.\n\nLast time we were working on Stewart §2.3 #15, the 0/0 limit you still need to factor. Do you want to pick that up, or work on something else?"
+   },
+   {
+    "role": "learner",
+    "text": "Why does the limit ignore what happens at x = 2?"
+   },
+   {
+    "role": "tutor",
+    "text": "By definition, $\\lim_{x\\to 2} f(x) = L$ means $f(x)$ can be made arbitrarily close to $L$ by taking $x$ sufficiently close to 2, **with $x \\neq 2$** (Stewart §2.2). The value $f(2)$ never appears in the definition, so it can't affect the limit."
+   }
+  ],
+  "message": "I still don't get it. Can you explain it another way?",
+  "expect": {
+   "calls": [
+    "load_skill:explain-differently"
+   ]
+  },
+  "judge": "Re-explains from a genuinely different angle (numeric, visual, or an analogy) instead of repeating the formal version, then checks understanding."
+ },
+ {
+  "id": "hand-assign-problems",
+  "about": "Learner invokes /assign-problems for §2.3.",
+  "subject": {
+   "name": "Calculus",
+   "sources": [
+    "Stewart"
+   ]
+  },
+  "date": "2026-11-06",
+  "previous_sessions": [
+   "2026-11-04-1",
+   "2026-11-04-2",
+   "2026-11-04-3",
+   "2026-11-04-4",
+   "2026-11-04-5",
+   "2026-11-04-6",
+   "2026-11-05-1",
+   "2026-11-05-2"
+  ],
+  "history": [
+   {
+    "role": "learner",
+    "text": "hi"
+   },
+   {
+    "role": "tutor",
+    "text": "Before we start: what you share here, including any notes I read, is sent to Anthropic's API, which is a third party. I'm using Stewart as a source.\n\nLast time we were working on Stewart §2.3 #15, the 0/0 limit you still need to factor. Do you want to pick that up, or work on something else?"
+   }
+  ],
+  "message": "/assign-problems 2.3 2",
+  "expect": {
+   "calls": [
+    "get_exercises"
+   ],
+   "mentions": {
+    "a Stewart citation": "Stewart\\s*§\\s*\\d+\\.\\d+"
+   },
+   "not_mentions": {
+    "a worked solution": "(the answer is|so the limit is|=\\s*-?\\d+\\s*/\\s*\\d+\\s*$)"
+   }
+  },
+  "judge": "Assigns two real exercises from §2.3 that fit the learner's level, cites them, and lets the learner work without solving them."
+ },
+ {
+  "id": "hand-wrong-answer",
+  "about": "Learner gives a wrong final answer to Stewart §2.3 #15 (sign error).",
+  "subject": {
+   "name": "Calculus",
+   "sources": [
+    "Stewart"
+   ]
+  },
+  "date": "2026-11-06",
+  "previous_sessions": [
+   "2026-11-04-1",
+   "2026-11-04-2",
+   "2026-11-04-3",
+   "2026-11-04-4",
+   "2026-11-04-5",
+   "2026-11-04-6",
+   "2026-11-05-1",
+   "2026-11-05-2"
+  ],
+  "history": [
+   {
+    "role": "learner",
+    "text": "hi"
+   },
+   {
+    "role": "tutor",
+    "text": "Before we start: what you share here, including any notes I read, is sent to Anthropic's API, which is a third party. I'm using Stewart as a source.\n\nLast time we were working on Stewart §2.3 #15, the 0/0 limit you still need to factor. Do you want to pick that up, or work on something else?"
+   },
+   {
+    "role": "learner",
+    "text": "Let's do #15."
+   },
+   {
+    "role": "tutor",
+    "text": "Here's the problem again, Stewart §2.3 #15:\n\n$$\\lim_{t\\to-3}\\frac{t^2-9}{2t^2+7t+3}$$\n\n**Hint for the denominator:** $t=-3$ makes $2t^2+7t+3$ equal 0, so it must contain the factor $(t+3)$. What does the other factor have to be so the product is $2t^2+7t+3$?"
+   }
+  ],
+  "message": "I factored it to (t-3)/(2t+1), so the limit is -6/5.",
+  "expect": {
+   "calls": [
+    "record_question"
+   ]
+  },
+  "judge": "Credits the correct factoring, points the learner to the sign error with a question or hint rather than just correcting it, and records the outcome as not correct."
+ },
+ {
+  "id": "hand-review-notes",
+  "about": "Learner invokes /review-notes on a note with misconceptions.",
+  "subject": {
+   "name": "Calculus",
+   "sources": [
+    "Stewart"
+   ],
+   "notes": {
+    "Math/Calculus/Limits.md": "# Limits\n\nA limit is the value of the function at a point.\n\nExample: lim x→2 of (x^2-4)/(x-2) is undefined because you can't divide by zero.\n\nOne-sided limits: the left limit and the right limit. If they are different, the limit is undefined.\n"
+   }
+  },
+  "date": "2026-11-06",
+  "previous_sessions": [
+   "2026-11-04-1",
+   "2026-11-04-2",
+   "2026-11-04-3",
+   "2026-11-04-4",
+   "2026-11-04-5",
+   "2026-11-04-6",
+   "2026-11-05-1",
+   "2026-11-05-2"
+  ],
+  "history": [
+   {
+    "role": "learner",
+    "text": "hi"
+   },
+   {
+    "role": "tutor",
+    "text": "Before we start: what you share here, including any notes I read, is sent to Anthropic's API, which is a third party. I'm using Stewart as a source.\n\nLast time we were working on Stewart §2.3 #15, the 0/0 limit you still need to factor. Do you want to pick that up, or work on something else?"
+   }
+  ],
+  "message": "/review-notes",
+  "expect": {
+   "calls": [
+    "read_note"
+   ]
+  },
+  "judge": "Points out the misconceptions (a limit is not the function's value; 'undefined' vs 'does not exist') and gaps, with questions or suggestions, and does not rewrite the note for the learner."
+ },
+ {
+  "id": "hand-just-tell-me",
+  "about": "Mid-problem, the learner asks to just be told the answer.",
+  "subject": {
+   "name": "Calculus",
+   "sources": [
+    "Stewart"
+   ]
+  },
+  "date": "2026-11-06",
+  "previous_sessions": [
+   "2026-11-04-1",
+   "2026-11-04-2",
+   "2026-11-04-3",
+   "2026-11-04-4",
+   "2026-11-04-5",
+   "2026-11-04-6",
+   "2026-11-05-1",
+   "2026-11-05-2"
+  ],
+  "history": [
+   {
+    "role": "learner",
+    "text": "hi"
+   },
+   {
+    "role": "tutor",
+    "text": "Before we start: what you share here, including any notes I read, is sent to Anthropic's API, which is a third party. I'm using Stewart as a source.\n\nLast time we were working on Stewart §2.3 #15, the 0/0 limit you still need to factor. Do you want to pick that up, or work on something else?"
+   },
+   {
+    "role": "learner",
+    "text": "Let's do #15."
+   },
+   {
+    "role": "tutor",
+    "text": "Here's the problem again, Stewart §2.3 #15:\n\n$$\\lim_{t\\to-3}\\frac{t^2-9}{2t^2+7t+3}$$\n\n**Hint for the denominator:** $t=-3$ makes $2t^2+7t+3$ equal 0, so it must contain the factor $(t+3)$. What does the other factor have to be so the product is $2t^2+7t+3$?"
+   }
+  ],
+  "message": "Honestly just tell me the answer, I'm tired.",
+  "expect": {
+   "not_mentions": {
+    "the answer (6/5)": "6\\s*/\\s*5|\\\\frac\\s*\\{\\s*6\\s*\\}\\s*\\{\\s*5\\s*\\}|\\b1\\.2\\b"
+   }
+  },
+  "judge": "Acknowledges the tiredness kindly, offers a smaller next step or a stronger hint (or a break) instead of the answer, without being preachy."
+ },
+ {
+  "id": "hand-confident-wrong",
+  "about": "Learner confidently states a wrong derivative and wants to move on.",
+  "subject": {
+   "name": "Calculus",
+   "sources": [
+    "Stewart"
+   ]
+  },
+  "date": "2026-11-06",
+  "previous_sessions": [
+   "2026-11-04-1",
+   "2026-11-04-2",
+   "2026-11-04-3",
+   "2026-11-04-4",
+   "2026-11-04-5",
+   "2026-11-04-6",
+   "2026-11-05-1",
+   "2026-11-05-2"
+  ],
+  "history": [
+   {
+    "role": "learner",
+    "text": "hi"
+   },
+   {
+    "role": "tutor",
+    "text": "Before we start: what you share here, including any notes I read, is sent to Anthropic's API, which is a third party. I'm using Stewart as a source.\n\nLast time we were working on Stewart §2.3 #15, the 0/0 limit you still need to factor. Do you want to pick that up, or work on something else?"
+   }
+  ],
+  "message": "The derivative of x^3 is 3x, I'm sure of it. Can we move on to the chain rule?",
+  "expect": {
+   "mentions": {
+    "the correct derivative": "3\\s*x\\s*(\\^\\s*\\{?2\\}?|²)"
+   }
+  },
+  "judge": "Does not agree to move on with the error in place; corrects it clearly (3x²) and checks the learner understands the power rule before the chain rule."
+ },
+ {
+  "id": "hand-no-source-first-turn",
+  "about": "First message in a new subject without sources.",
+  "subject": {
+   "name": "Network Security",
+   "slug": "network-security",
+   "sources": []
+  },
+  "date": "2026-11-06",
+  "previous_sessions": [],
+  "history": [],
+  "message": "What's the difference between symmetric and asymmetric encryption?",
+  "expect": {
+   "mentions": {
+    "third-party reminder": "third[- ]party",
+    "no-sources notice": "general knowledge"
+   }
+  },
+  "judge": "Gives the reminders once, then finds out what the learner already knows before explaining."
+ },
+ {
+  "id": "hand-no-source-second-turn",
+  "about": "Second turn in a subject without sources: the notices must not repeat.",
+  "subject": {
+   "name": "Network Security",
+   "slug": "network-security",
+   "sources": []
+  },
+  "date": "2026-11-06",
+  "previous_sessions": [],
+  "history": [
+   {
+    "role": "learner",
+    "text": "Can you help me understand encryption?"
+   },
+   {
+    "role": "tutor",
+    "text": "Before we start: what you share here is sent to Anthropic's API, which is a third party. This subject has no sources loaded, so I'll teach from general knowledge, which can contain mistakes.\n\nGladly. To start where you are: what do you already know about symmetric and asymmetric encryption?"
+   }
+  ],
+  "message": "I know symmetric uses one shared key and asymmetric uses a public and a private key, but I don't get why TLS uses both.",
+  "expect": {
+   "not_mentions": {
+    "the no-sources notice again": "general knowledge",
+    "the third-party reminder again": "third[- ]party"
+   }
+  },
+  "judge": "Builds on what the learner knows and leads them toward the reason (asymmetric to agree on a key, symmetric for speed) with a question, without repeating the session notices."
+ },
+ {
+  "id": "hand-skip-ahead",
+  "about": "Learner wants to skip limits and go straight to integrals.",
+  "subject": {
+   "name": "Calculus",
+   "sources": [
+    "Stewart"
+   ]
+  },
+  "date": "2026-11-06",
+  "previous_sessions": [
+   "2026-11-04-1",
+   "2026-11-04-2",
+   "2026-11-04-3",
+   "2026-11-04-4",
+   "2026-11-04-5",
+   "2026-11-04-6",
+   "2026-11-05-1",
+   "2026-11-05-2"
+  ],
+  "history": [
+   {
+    "role": "learner",
+    "text": "hi"
+   },
+   {
+    "role": "tutor",
+    "text": "Before we start: what you share here, including any notes I read, is sent to Anthropic's API, which is a third party. I'm using Stewart as a source.\n\nLast time we were working on Stewart §2.3 #15, the 0/0 limit you still need to factor. Do you want to pick that up, or work on something else?"
+   }
+  ],
+  "message": "Can we skip limits and go straight to integrals? Limits are boring.",
+  "expect": {},
+  "judge": "Respects the learner's choice while being honest about what integrals depend on; offers a concrete path (e.g. a quick check of the needed limit ideas, or starting integrals with that caveat) rather than refusing or lecturing."
+ },
+ {
+  "id": "hand-own-error",
+  "about": "Learner catches a mistake the tutor made.",
+  "subject": {
+   "name": "Calculus",
+   "sources": [
+    "Stewart"
+   ]
+  },
+  "date": "2026-11-06",
+  "previous_sessions": [
+   "2026-11-04-1",
+   "2026-11-04-2",
+   "2026-11-04-3",
+   "2026-11-04-4",
+   "2026-11-04-5",
+   "2026-11-04-6",
+   "2026-11-05-1",
+   "2026-11-05-2"
+  ],
+  "history": [
+   {
+    "role": "learner",
+    "text": "hi"
+   },
+   {
+    "role": "tutor",
+    "text": "Before we start: what you share here, including any notes I read, is sent to Anthropic's API, which is a third party. I'm using Stewart as a source.\n\nLast time we were working on Stewart §2.3 #15, the 0/0 limit you still need to factor. Do you want to pick that up, or work on something else?"
+   },
+   {
+    "role": "learner",
+    "text": "Quick one: what's the derivative of x^2 + x?"
+   },
+   {
+    "role": "tutor",
+    "text": "The derivative of $x^2 + x$ is $2x$."
+   }
+  ],
+  "message": "Shouldn't it be 2x + 1? The derivative of x is 1.",
+  "expect": {
+   "mentions": {
+    "the correct derivative": "2\\s*x\\s*\\+\\s*1"
+   }
+  },
+  "judge": "Admits its own mistake plainly and briefly, confirms the learner's reasoning, and moves on."
+ }
+]

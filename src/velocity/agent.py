@@ -211,6 +211,8 @@ class TutorAgent:
     messages: list[dict] = field(default_factory=list)
     usage: UsageByModel = field(default_factory=UsageByModel)
     session_id: str = field(default_factory=lambda: str(uuid.uuid4()))
+    # Every tool call as (name, arguments), including load_skill; read by the evals.
+    tool_log: list[tuple[str, dict]] = field(default_factory=list)
     _pending_context: list[str] = field(default_factory=list)
 
     # -- lifecycle -----------------------------------------------------------------
@@ -381,6 +383,7 @@ class TutorAgent:
             return self._result(
                 block.id, json.dumps({"INVALID_JSON": str(block.input)}), True
             )
+        self.tool_log.append((block.name, args))
         self.out.write(
             f"  · {block.name}({', '.join(f'{k}={v!r}'[:60] for k, v in args.items())})\n"
         )
@@ -412,6 +415,19 @@ class TutorAgent:
 # -- wiring for the `velocity chat` command ------------------------------------------
 
 
+def mcp_tool_caller(mcp: Any) -> ToolCaller:
+    """A ToolCaller that runs tools on a connected `mcp.Client`."""
+
+    async def call_tool(name: str, args: dict) -> tuple[str, bool]:
+        result = await mcp.call_tool(name, args)
+        text = "\n".join(
+            c.text for c in result.content if getattr(c, "type", "") == "text"
+        )
+        return text, bool(result.is_error)
+
+    return call_tool
+
+
 async def chat(
     config: Config,
     subject: Subject,
@@ -435,20 +451,12 @@ async def chat(
     )
     client = anthropic.AsyncAnthropic()
     async with Client(server) as mcp:
-
-        async def call_tool(name: str, args: dict) -> tuple[str, bool]:
-            result = await mcp.call_tool(name, args)
-            text = "\n".join(
-                c.text for c in result.content if getattr(c, "type", "") == "text"
-            )
-            return text, bool(result.is_error)
-
         skills = load_skills()
         agent = TutorAgent(
             config=config,
             subject=subject,
             stream=client.beta.messages.stream,
-            call_tool=call_tool,
+            call_tool=mcp_tool_caller(mcp),
             tools=mcp_tool_params((await mcp.list_tools()).tools),
             skills=skills,
             out=out,
