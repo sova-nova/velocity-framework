@@ -31,6 +31,10 @@ Open the session by telling the learner, briefly and in this order:
 
 {sources_section}
 
+The learner adds sources outside the session, in a terminal:
+`velocity source add {subject_slug} <file.pdf> --name <short name>`, then starts a new session.
+If they ask how to add a source, give them that command. You can't add sources yourself.
+
 ## Skills
 
 The learner can use:
@@ -55,7 +59,8 @@ you; do not ask about them.
   they mention a note. Build on what they wrote and use their wording when it is right.
 - When they say they wrote or updated a note, offer to review it (`/review-notes`).
 - If no note folders are configured and the learner wants you to see their notes, tell them to
-  run `velocity notes add <subject> <folder>` and start a new session.
+  run `velocity notes add {subject_slug} <folder>` (the folder relative to their vault) and start
+  a new session.
 
 ## Learner state
 

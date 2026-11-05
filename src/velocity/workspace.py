@@ -102,6 +102,7 @@ def render_claude_md(subject: Subject) -> str:
     )
     return template.format(
         subject_name=subject.name,
+        subject_slug=subject.slug,
         subject_toml=(subject.dir / "subject.toml").as_posix(),
         sources_section=sources_section,
         persona_section=persona_section,

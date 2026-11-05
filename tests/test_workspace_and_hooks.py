@@ -1,5 +1,6 @@
 import io
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -52,6 +53,10 @@ def test_workspace_files(config, subject, data_home):
     assert "Stewart §2.4" in claude_md
     assert "Use physics examples." in claude_md
     assert "sent to Anthropic's API (a third party)" in claude_md
+    # The tutor can tell the learner the exact commands for this subject.
+    assert "`velocity source add calculus <file.pdf> --name <short name>`" in claude_md
+    assert "`velocity notes add calculus <folder>`" in claude_md
+    assert not re.search(r"\{[a-z_]+\}", claude_md)  # no unfilled placeholders
     mcp = json.loads((ws / ".mcp.json").read_text())
     assert mcp["mcpServers"]["velocity"]["args"][-3:] == [
         "mcp",
