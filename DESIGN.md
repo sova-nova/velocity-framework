@@ -95,7 +95,7 @@ Naive chunk-and-embed RAG is a poor fit for teaching, because textbooks have str
 3. Later: extract problem sets separately so the tutor can assign exercises; ingest a solution manual if available.
 4. Later: non-PDF sources (markdown, HTML, EPUB) behind the same interface.
 
-Source tools: `get_outline()`, `read_section(id)`, later `search(query)` and `get_exercises(section_id)`.
+Source tools: `get_outline()`, `read_section(id)`, and `get_exercises(section_id)`, which returns the section text from its EXERCISES heading on. `search(query)` comes later.
 
 OCR (marker, torch, llama.cpp) is an **optional install extra**, so the base install stays light.
 
@@ -161,7 +161,7 @@ Linux is the primary platform (the developer's). macOS is supported. Windows is 
 1. **M1: Source ingestion (minimum). Done 2026-11-04.** `get_outline` and a lazy `read_section` for the test book using marker, with a per-page cache shared between sections. A section runs from its heading to the next outline entry's heading, and warns if either is not found. No drop-check repair yet.
 2. **M2: Tutor in Claude Code. Done 2026-11-04 (PRs #1-#5).** Rename the package to `velocity`; CI (pytest, ruff). Config files, the MCP server with source and log tools, the workspace template and `velocity tutor <subject>`, logging hooks and the session record, notes write protection, the third-party reminder.
 3. **M3: Learner state. Done 2026-11-04.** Per-subject state, session-start summary, spaced-review scheduling.
-4. **M4: Skills.** `/quiz` and `/end-session` done 2026-11-04; `/quiz` and `/end-session`, then the rest.
+4. **M4: Skills. Done 2026-11-04** except `/review-notes`, which moves to M5 because it needs `read_notes`. `/quiz` and `/end-session`, then the rest.
 5. **M5: Notes.** `read_notes` with per-subject folder lists and `private: true`; `/review-notes`; note-taking prompts.
 6. **M6: Own agent loop.** Front end B on the `anthropic` SDK, with the same MCP server and skills.
 7. **M7: Polish and portfolio.** MIT license (added once the project is finished, decided 2026-11-04), README with a demo, teaching-quality evals (replaying session records), drop-check repair, non-PDF sources.

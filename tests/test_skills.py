@@ -14,7 +14,13 @@ def frontmatter(text: str) -> dict[str, str]:
 
 
 def test_planned_first_skills_exist():
-    assert {"quiz", "end-session"} <= set(SKILLS)
+    assert {
+        "quiz",
+        "end-session",
+        "socratic",
+        "explain-differently",
+        "assign-problems",
+    } <= set(SKILLS)
 
 
 @pytest.mark.parametrize("skill", SKILLS)

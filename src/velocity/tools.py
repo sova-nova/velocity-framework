@@ -3,6 +3,7 @@
 Return values are plain text meant for the model to read.
 """
 
+import re
 from collections.abc import Callable
 from datetime import date
 from typing import Literal
@@ -106,6 +107,20 @@ class TutorTools:
         header = f"{source} §{text.id}: {text.title} (PDF pp. {text.first_page}-{text.last_page})"
         warnings = "".join(f"\nWARNING: {w}" for w in text.warnings)
         return f"{header}{warnings}\n\n{text.markdown}"
+
+    def get_exercises(self, source: str, section_id: str) -> str:
+        """The exercise set at the end of a section (everything after its EXERCISES heading)."""
+        text = self.read_section(source, section_id)
+        heading = re.search(
+            r"^#{1,6}[^\n]*\bexercises\b[^\n]*$", text, re.IGNORECASE | re.MULTILINE
+        )
+        if heading is None:
+            raise ToolError(
+                f"No exercises heading found in {source} §{section_id}. Use read_section and "
+                "look for problems in the text, or write your own."
+            )
+        header = text.split("\n", 1)[0]
+        return f"Exercises from {header}\n\n{text[heading.start() :].strip()}"
 
     # -- session log ---------------------------------------------------------------
 

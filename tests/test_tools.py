@@ -11,7 +11,7 @@ from velocity.session import Session, record_dir, set_active
 from velocity.tools import ToolError, TutorTools
 
 PAGES = {
-    1: "## 1.1 Limits\n\nA limit is...",
+    1: "## 1.1 Limits\n\nA limit is...\n\n## 1.1 EXERCISES\n\n**1.** Find the limit.",
     2: "## 1.2 Continuity\n\nContinuous means...",
 }
 
@@ -180,3 +180,12 @@ def test_state_tools_over_mcp(tools, subject):
     ok, bad = asyncio.run(run())
     assert not ok.is_error and "Recorded (hinted)" in ok.content[0].text
     assert bad.is_error
+
+
+def test_get_exercises(tools):
+    text = tools.get_exercises("Book", "1.1")
+    assert text.startswith("Exercises from Book §1.1: 1.1: Limits")
+    assert text.endswith("## 1.1 EXERCISES\n\n**1.** Find the limit.")
+    assert "A limit is" not in text
+    with pytest.raises(ToolError, match="No exercises heading"):
+        tools.get_exercises("Book", "1.2")

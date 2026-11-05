@@ -13,6 +13,7 @@ TOOL_NAMES = [
     "list_sources",
     "get_outline",
     "read_section",
+    "get_exercises",
     "append_log",
     "list_sessions",
     "read_session",
