@@ -57,7 +57,9 @@ The log has two forms:
 | Session log (markdown) | `<vault>/Tutor/<subject>/sessions/` | Tool writes, learner annotates | The readable view, rendered live in Obsidian. |
 
 - The dialogue is captured **verbatim by hooks**, not by the model: learner messages are appended as `**You:** …` and tutor replies as `**Tutor:** …`. The tutor adds its own blocks (worked problems, recaps) with `append_log` during its turn.
-- The tutor only **appends**. It never rewrites earlier content, and it treats past sessions' logs as read-only.
+- The tutor only **appends**. It never rewrites earlier content, and it treats past sessions' logs as read-only. The one exception is the `title:` property (see the 2026-11-06 decisions).
+- **Titles:** the tutor names each session with `set_session_title` once its topic is clear and refines it at wrap-up. The title is recorded in the session record and shown as the log's `title:` property, in `list_sessions`, `velocity sessions` and the web History. File names stay date-based.
+- **Interrupted vs. finished sessions:** a session that ended without a wrap-up (paused, crashed, closed) can be resumed in place. A wrapped-up session is final, but it can be **continued**: a new session with `continues: "[[<id>]]"` in its properties, whose start context includes the earlier recap and tells the tutor to read that session first. Each log stays one sitting.
 - The learner may annotate the markdown. Text in the markdown that is not in the record is treated as a **learner annotation** and passed to the tutor as such.
 - If the markdown has **lost** text compared to the record (an accidental deletion), the tutor says so and offers to restore it. It never silently overwrites the learner's edits.
 - `/end-session` does a proper wrap-up: it catches up on progress, asks one retrieval question, writes a recap block (also shown to the tutor at the next session start), and closes the log after the tutor's final message. If the learner just quits, a session-end hook closes the log with an "ended without wrap-up" footer.
@@ -278,6 +280,12 @@ Tested on all of Section 2.4 (PDF pp. 136–145, plus neighbouring 2.3 exercises
 
 ## 5. Decisions Log
 
+- **2026-11-06 (sessions: titles, resume, continue; from an M8 design review):**
+  - Logs stay one sitting, so no file grows without limit. Interrupted sessions resume in place; wrapped-up sessions stay final and are *continued* in a new, linked session (`continues:` property, earlier recap in the start context).
+  - The tutor titles each session (`set_session_title`), so past sessions can be found by topic.
+  - Exception to "logs are append-only": velocity updates the `title:` line of the log's properties block. It is metadata Obsidian edits too, and the log check already ignores the header. The dialogue is never rewritten.
+  - `--continue <id>` for `velocity tutor` and `velocity chat` (through the `VELOCITY_CONTINUE` environment variable for Claude Code's SessionStart hook, and the hook payload for the own loop), and `velocity sessions <subject>`.
+  - Existing sessions stay untitled; no backfill.
 - **2026-11-06 (M8 planning):**
   - The web UI drives both engines, selectable: the own agent loop (API key, billed per token) and Claude Code run headless (`claude -p --input-format stream-json --output-format stream-json --include-partial-messages`), which uses the learner's own plan through their own Claude Code install.
   - v1 has chat and session history. Progress view and source reader may come later.

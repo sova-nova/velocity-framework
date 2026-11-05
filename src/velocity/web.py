@@ -7,6 +7,7 @@ read here, through the session code.
 """
 
 import re
+from dataclasses import asdict
 from importlib.resources import files
 from pathlib import Path
 
@@ -20,12 +21,11 @@ from starlette.staticfiles import StaticFiles
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 from velocity.config import Config, ConfigError, list_subjects, load_subject
-from velocity.session import Session, record_dir
+from velocity.session import SESSION_ID, Session, record_dir, session_summaries
 
 HOST = "127.0.0.1"
 DEFAULT_PORT = 8765
 ALLOWED_HOSTS = ["127.0.0.1", "localhost"]
-_SESSION_ID = re.compile(r"^\d{4}-\d{2}-\d{2}-\d+$")
 _FRONT_MATTER = re.compile(r"\A---\n.*?\n---\n", re.DOTALL)
 STATIC = Path(str(files("velocity").joinpath("web_static")))
 
@@ -84,7 +84,7 @@ def build_app(config: Config) -> Starlette:
     async def session_log(request: Request) -> Response:
         subject = subject_or_404(request.path_params["slug"])
         session_id = request.path_params["session_id"]
-        if subject is None or not _SESSION_ID.match(session_id):
+        if subject is None or not SESSION_ID.match(session_id):
             return JSONResponse({"error": "unknown session"}, 404)
         session = Session(
             subject.slug, session_id, record_dir(subject.slug), subject.sessions_dir
@@ -120,35 +120,6 @@ def build_app(config: Config) -> Starlette:
     return Starlette(routes=routes, middleware=middleware)
 
 
-def _session_order(session_id: str) -> tuple[str, int]:
-    day, n = session_id.rsplit("-", 1)
-    return day, int(n)
-
-
 def session_list(subject) -> list[dict]:
     """The subject's sessions, newest first, with a short summary of each."""
-    records = record_dir(subject.slug)
-    ids = [p.stem for p in records.glob("*.jsonl") if _SESSION_ID.match(p.stem)]
-    out = []
-    for session_id in sorted(ids, key=_session_order, reverse=True):
-        session = Session(subject.slug, session_id, records, subject.sessions_dir)
-        events = session.events()
-        start = next((e for e in events if e.kind == "start"), None)
-        learner = [e.text for e in events if e.role == "learner"]
-        if session.wrapped_up:
-            ended = "wrapped-up"
-        elif session.ended:
-            ended = "no-wrap-up"
-        else:
-            ended = None  # still open, or the record ends without an end event
-        out.append(
-            {
-                "id": session_id,
-                "started": start.ts if start else None,
-                "turns": len(learner),
-                "first_message": learner[0][:120] if learner else "",
-                "ended": ended,
-                "has_recap": session.recap() is not None,
-            }
-        )
-    return out
+    return [asdict(s) for s in session_summaries(subject.slug, subject.sessions_dir)]

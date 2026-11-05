@@ -111,7 +111,13 @@ def test_sessions_and_log_check(tools, subject):
     s = start_session(subject)
     s.append("learner", "hello")
     s.render()
-    assert tools.list_sessions() == f"- {s.id} (current)"
+    assert tools.list_sessions() == f"- {s.id}: untitled; starts: 'hello' (current)"
+    assert tools.set_session_title("  Limits:\n the basics ") == (
+        "Session title set: Limits: the basics"
+    )
+    assert tools.list_sessions() == f"- {s.id}: Limits: the basics (current)"
+    with pytest.raises(ToolError, match="empty"):
+        tools.set_session_title("   ")
     assert "**You:** hello" in tools.read_session(s.id)
     assert tools.check_log() == "The log matches the record; no annotations."
 

@@ -17,7 +17,25 @@ from velocity.config import (
 )
 
 
-def _tutor(subject_slug: str, resume: bool) -> int:
+def _continuable(subject, session_id: str) -> str:
+    """Check that a session can be continued: it exists and has ended."""
+    from velocity.session import SESSION_ID, Session, record_dir
+
+    session = Session(
+        subject.slug, session_id, record_dir(subject.slug), subject.sessions_dir
+    )
+    if not SESSION_ID.match(session_id) or not session.record_path.exists():
+        raise ConfigError(
+            f"no session {session_id!r} in {subject.slug} "
+            f"(see: velocity sessions {subject.slug})"
+        )
+    if not session.ended:
+        raise ConfigError(f"session {session_id} is still open; end it first")
+    return session_id
+
+
+def _tutor(subject_slug: str, resume: bool, continues: str | None = None) -> int:
+    from velocity.hooks import CONTINUE_ENV
     from velocity.workspace import build_workspace, claude_args
 
     config = load_config()
@@ -26,7 +44,13 @@ def _tutor(subject_slug: str, resume: bool) -> int:
         raise ConfigError(
             f'no subject {subject_slug!r} (known: {known}). Create one with: velocity new "<name>"'
         )
-    workspace = build_workspace(config, load_subject(config, subject_slug))
+    subject = load_subject(config, subject_slug)
+    if continues:
+        if resume:
+            raise ConfigError("use either --resume or --continue, not both")
+        # Read by the SessionStart hook, which Claude Code runs with this environment.
+        os.environ[CONTINUE_ENV] = _continuable(subject, continues)
+    workspace = build_workspace(config, subject)
     claude = shutil.which("claude")
     if claude is None:
         raise ConfigError("Claude Code (`claude`) is not on PATH; install it first")
@@ -36,7 +60,7 @@ def _tutor(subject_slug: str, resume: bool) -> int:
     return 0  # not reached
 
 
-def _chat(subject_slug: str, model: str | None) -> int:
+def _chat(subject_slug: str, model: str | None, continues: str | None = None) -> int:
     import asyncio
 
     from velocity.agent import DEFAULT_MODEL, chat, resolve_model
@@ -52,7 +76,27 @@ def _chat(subject_slug: str, model: str | None) -> int:
         model = resolve_model(model or config.api_model or DEFAULT_MODEL)
     except ValueError as e:
         raise ConfigError(str(e)) from None
-    asyncio.run(chat(config, subject, sys.stdout, input, model=model))
+    if continues:
+        continues = _continuable(subject, continues)
+    asyncio.run(
+        chat(config, subject, sys.stdout, input, model=model, continues=continues)
+    )
+    return 0
+
+
+def _sessions(subject_slug: str) -> int:
+    from velocity.session import session_summaries
+
+    subject = load_subject(load_config(), subject_slug)
+    summaries = session_summaries(subject.slug, subject.sessions_dir)
+    if not summaries:
+        print("No sessions yet.")
+        return 0
+    status = {"wrapped-up": "wrapped up", "no-wrap-up": "paused", None: "open"}
+    for s in summaries:
+        label = s.title or f"(untitled) {s.first_message[:60]}"
+        extra = f", continues {s.continues}" if s.continues else ""
+        print(f"{s.id}  {label}  [{status[s.ended]}, {s.turns} messages{extra}]")
     return 0
 
 
@@ -213,6 +257,12 @@ def main(argv: list[str] | None = None) -> int:
     tutor.add_argument(
         "--resume", action="store_true", help="continue the last session"
     )
+    tutor.add_argument(
+        "--continue",
+        dest="continues",
+        metavar="SESSION",
+        help="start a new session that picks up from a finished one, e.g. 2026-11-05-1",
+    )
 
     chat = commands.add_parser(
         "chat", help="tutor in the terminal via the Anthropic API (needs an API key)"
@@ -223,6 +273,17 @@ def main(argv: list[str] | None = None) -> int:
         help="opus, sonnet, haiku, or a full model ID (overrides [api] model in "
         "config.toml; switch during a chat with /model)",
     )
+    chat.add_argument(
+        "--continue",
+        dest="continues",
+        metavar="SESSION",
+        help="start a new session that picks up from a finished one, e.g. 2026-11-05-1",
+    )
+
+    sessions = commands.add_parser(
+        "sessions", help="list a subject's sessions with their titles"
+    )
+    sessions.add_argument("subject", help="subject id, e.g. calculus")
 
     web = commands.add_parser(
         "web", help="open the web UI in your browser (local only)"
@@ -293,9 +354,11 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         if args.command == "tutor":
-            return _tutor(args.subject, args.resume)
+            return _tutor(args.subject, args.resume, args.continues)
         if args.command == "chat":
-            return _chat(args.subject, args.model)
+            return _chat(args.subject, args.model, args.continues)
+        if args.command == "sessions":
+            return _sessions(args.subject)
         if args.command == "web":
             return _web(args.subject, args.port, not args.no_browser)
         if args.command == "new":

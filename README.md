@@ -31,7 +31,7 @@ An excerpt from a real session log, as it appears in Obsidian (math renders ther
 
 - **Teaching, not answering.** The tutor diagnoses what you know, gives hints before answers, mixes earlier material back into new questions, and says so when you (or it) are wrong.
 - **Optional sources.** Attach a textbook (PDF, EPUB, Markdown or HTML) and the tutor reads it section by section and cites it (`Stewart §2.4`). For PDFs: Math is OCR'd to LaTeX with [marker](https://github.com/datalab-to/marker) and cached locally. Text the OCR silently drops is detected against the PDF's text layer and restored. Without sources, it teaches from general knowledge and says so once per session.
-- **Session logs.** The dialogue is logged word for word by hooks, not by the model, to an append-only record and a markdown log in your vault. Text you type into the log is kept as your annotation.
+- **Session logs.** The dialogue is logged word for word by hooks, not by the model, to an append-only record and a markdown log in your vault. Text you type into the log is kept as your annotation. The tutor gives each session a title naming what it covered, so you can find it later. An interrupted session can be resumed; a finished one can be continued in a new session that picks up where it left off.
 - **Learner state.** Topics, every answered question, and open threads are stored per subject, with spaced review (a correct answer doubles a topic's review interval; a wrong one resets it). A summary loads at the start of every session, and a readable `progress.md` sits next to it.
 - **Your notes stay yours.** The tutor can read the note folders you allow and critique them on request, but it can't write to them. This is enforced by Claude Code permission rules, a hook and a test, not only by the prompt. Notes marked `private: true` are never read.
 - **Skills.** Teaching behaviors you can invoke by name, or that the tutor picks up when they fit:
@@ -114,6 +114,8 @@ The same tutor in your terminal, streamed from the Anthropic API. Type `/model` 
 | Command | What it does |
 |---|---|
 | `velocity subjects` | List subjects |
+| `velocity sessions <subject>` | List a subject's sessions with their titles |
+| `velocity tutor <subject> --continue <session>` | Start a new session that picks up from a finished one (also for `velocity chat`) |
 | `velocity web [subject]` | Open the local web UI (session history so far) at http://127.0.0.1:8765 |
 | `velocity source list <subject>` | List a subject's sources |
 | `velocity source recheck <subject> [--all]` | OCR cached pages again with the dropped-text check (by default only pages cached before it) |

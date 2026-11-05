@@ -213,6 +213,7 @@ class TutorAgent:
     session_id: str = field(default_factory=lambda: str(uuid.uuid4()))
     # Every tool call as (name, arguments), including load_skill; read by the evals.
     tool_log: list[tuple[str, dict]] = field(default_factory=list)
+    continues: str | None = None  # a finished session this one picks up from
     _pending_context: list[str] = field(default_factory=list)
 
     # -- lifecycle -----------------------------------------------------------------
@@ -222,7 +223,11 @@ class TutorAgent:
         result = hooks.session_start(
             self.config,
             self.subject,
-            {"session_id": self.session_id, "source": "startup"},
+            {
+                "session_id": self.session_id,
+                "source": "startup",
+                "continues": self.continues,
+            },
         )
         self._pending_context.append(result["hookSpecificOutput"]["additionalContext"])
 
@@ -448,9 +453,11 @@ async def chat(
     out: TextIO,
     read_line: Callable[[str], str],
     model: str | None = None,
+    continues: str | None = None,
 ) -> None:
     """Run an interactive tutoring session in the terminal. `model` (an alias or full ID)
-    overrides `[api] model` in config.toml."""
+    overrides `[api] model` in config.toml; `continues` names a finished session to pick
+    up from."""
     import asyncio
     import sys
 
@@ -476,6 +483,7 @@ async def chat(
             out=out,
             model=resolve_model(model or config.api_model or DEFAULT_MODEL),
             effort=config.api_effort or DEFAULT_EFFORT,
+            continues=continues,
         )
         agent.start()
         out.write(

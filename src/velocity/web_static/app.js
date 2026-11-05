@@ -58,7 +58,7 @@ function renderCallouts(container) {
 
 const ENDED = {
   "wrapped-up": "wrapped up",
-  "no-wrap-up": "ended without wrap-up",
+  "no-wrap-up": "paused",
 };
 
 async function loadSessions(slug) {
@@ -76,9 +76,11 @@ async function loadSessions(slug) {
     button.className = "session";
     const status = s.ended ? ENDED[s.ended] : "open";
     button.innerHTML = `<strong></strong><span class="meta"></span><span class="preview"></span>`;
-    button.querySelector("strong").textContent = s.id;
-    button.querySelector(".meta").textContent = `${s.turns} messages · ${status}`;
-    button.querySelector(".preview").textContent = s.first_message;
+    button.querySelector("strong").textContent = s.title || s.id;
+    const meta = [s.title ? s.id : null, `${s.turns} messages`, status];
+    if (s.continues) meta.push(`continues ${s.continues}`);
+    button.querySelector(".meta").textContent = meta.filter(Boolean).join(" · ");
+    button.querySelector(".preview").textContent = s.title ? "" : s.first_message;
     button.addEventListener("click", () => showSession(slug, s.id, button));
     item.append(button);
     list.append(item);

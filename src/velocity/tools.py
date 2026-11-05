@@ -15,7 +15,13 @@ from velocity.notes import list_notes as _list_notes
 from velocity.notes import read_note as _read_note
 from velocity.ocr import PageOcr
 from velocity.pdf_source import PdfSource
-from velocity.session import RECAP_TITLE, Session, active_session_id, record_dir
+from velocity.session import (
+    RECAP_TITLE,
+    Session,
+    active_session_id,
+    record_dir,
+    session_summaries,
+)
 from velocity.state import (
     LearnerState,
     Outcome,
@@ -171,16 +177,20 @@ class TutorTools:
         return f"Added '{title}' to the session log."
 
     def list_sessions(self) -> str:
-        """Past and current sessions for this subject, newest first."""
-        ids = sorted(
-            (p.stem for p in record_dir(self.subject.slug).glob("*.jsonl")),
-            key=lambda i: (i.rsplit("-", 1)[0], int(i.rsplit("-", 1)[1])),
-            reverse=True,
-        )
-        if not ids:
+        """Past and current sessions for this subject, newest first, with their titles."""
+        summaries = session_summaries(self.subject.slug, self.subject.sessions_dir)
+        if not summaries:
             return "No sessions yet."
         active = active_session_id(self.subject.slug)
-        return "\n".join(f"- {i}{' (current)' if i == active else ''}" for i in ids)
+        lines = []
+        for s in summaries:
+            label = s.title or f"untitled; starts: {s.first_message[:60]!r}"
+            notes = [
+                "current" if s.id == active else s.ended or "open",
+                *([f"continues {s.continues}"] if s.continues else []),
+            ]
+            lines.append(f"- {s.id}: {label} ({', '.join(notes)})")
+        return "\n".join(lines)
 
     def read_session(self, session_id: str) -> str:
         """The full dialogue of a session, from the tamper-proof record."""
@@ -219,6 +229,17 @@ class TutorTools:
         """
         self._active().restore_log()
         return "Restored the session log from the record."
+
+    def set_session_title(self, title: str) -> str:
+        """Give the current session a short title naming what it covers, e.g. "One-sided
+        limits and the 0/0 factoring trick". Set it once the topic is clear and refine it at
+        wrap-up if the session moved on. It helps the learner find the session later.
+        """
+        try:
+            title = self._active().set_title(title)
+        except ValueError as e:
+            raise ToolError(str(e)) from None
+        return f"Session title set: {title}"
 
     def end_session(self, recap: str) -> str:
         """Wrap up the session (used by /end-session).

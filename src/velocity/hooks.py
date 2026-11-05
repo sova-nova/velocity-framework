@@ -9,6 +9,7 @@ tool-use       PostToolUse: record the tutor's tool call (name and input) in the
 """
 
 import json
+import os
 from datetime import date
 from pathlib import Path
 from typing import TextIO
@@ -16,6 +17,7 @@ from typing import TextIO
 from velocity.config import Config, Subject
 from velocity.session import (
     ENDED_WITH_WRAP_UP,
+    SESSION_ID,
     Session,
     active_session_id,
     record_dir,
@@ -39,6 +41,19 @@ def _active(subject: Subject) -> Session | None:
     return _session(subject, session_id) if session_id else None
 
 
+# Set by `velocity tutor --continue <id>` for the SessionStart hook Claude Code runs.
+CONTINUE_ENV = "VELOCITY_CONTINUE"
+
+
+def _continues(subject: Subject, payload: dict) -> str | None:
+    """The finished session a new session should continue, if one was asked for."""
+    session_id = payload.get("continues") or os.environ.get(CONTINUE_ENV, "")
+    if not SESSION_ID.match(session_id):
+        return None
+    earlier = _session(subject, session_id)
+    return session_id if earlier.record_path.exists() and earlier.ended else None
+
+
 def session_start(config: Config, subject: Subject, payload: dict) -> dict:
     claude_id = payload.get("session_id", "")
     mapping = _claude_map(subject) / claude_id if claude_id else None
@@ -59,6 +74,7 @@ def session_start(config: Config, subject: Subject, payload: dict) -> dict:
             record_dir(subject.slug),
             subject.sessions_dir,
             sources=[s.name for s in subject.sources],
+            continues=_continues(subject, payload),
         )
     if mapping:
         mapping.parent.mkdir(parents=True, exist_ok=True)
@@ -94,7 +110,22 @@ def session_start(config: Config, subject: Subject, payload: dict) -> dict:
         + (" (use read_session to review the last one)." if previous else "."),
         "The conversation log is at " + session.log_path.as_posix() + ".",
     ]
-    if previous:
+    if session.title:
+        context.append(f"Session title so far: {session.title}")
+    else:
+        context.append(
+            "This session has no title yet: give it one with set_session_title once its "
+            "topic is clear."
+        )
+    if session.continues:
+        earlier = _session(subject, session.continues)
+        context.append(
+            f"This session continues session {earlier.id}"
+            + (f" ({earlier.title})" if earlier.title else "")
+            + ". Before teaching, read it with read_session and pick up where it left off."
+            + (f"\nIts recap:\n{earlier.recap()}" if earlier.recap() else "")
+        )
+    elif previous:
         recap = _session(subject, previous[-1]).recap()
         if recap:
             context.append(f"Recap of the last session ({previous[-1]}):\n{recap}")
