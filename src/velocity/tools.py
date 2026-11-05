@@ -142,7 +142,9 @@ class TutorTools:
         from velocity.session import render_event
 
         events = sorted(self._session(session_id).events(), key=lambda e: e.ts)
-        return f"Session {session_id}:\n\n" + "".join(render_event(e) for e in events)
+        return f"Session {session_id}:\n\n" + "".join(
+            render_event(e, annotations=True) for e in events
+        )
 
     def check_log(self) -> str:
         """Compare the current session's markdown log with the record.

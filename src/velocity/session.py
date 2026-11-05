@@ -35,8 +35,12 @@ class Event:
     )
 
 
-def render_event(event: Event) -> str:
-    """Markdown for one event. Session-start events render to the header via render_header."""
+def render_event(event: Event, annotations: bool = False) -> str:
+    """Markdown for one event. Session-start events render to the header via render_header.
+
+    Annotations are learner text already in the markdown, so they render only when
+    annotations=True (for reading a session back from the record).
+    """
     if event.role == "learner":
         return f"**You:** {event.text.strip()}\n\n"
     if event.role == "tutor":
@@ -45,6 +49,8 @@ def render_event(event: Event) -> str:
         lines = [f"> [!{event.kind or 'note'}] {event.title or ''}".rstrip()]
         lines += [f"> {line}".rstrip() for line in event.text.strip().splitlines()]
         return "\n".join(lines) + "\n\n"
+    if event.kind == "annotation" and annotations:
+        return f"_(learner annotation)_ {event.text.strip()}\n\n"
     if event.kind == "end":
         how = (
             "Session ended with /end-session."

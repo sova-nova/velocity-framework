@@ -82,12 +82,57 @@ def session_start(config: Config, subject: Subject, payload: dict) -> dict:
     }
 
 
+def _log_changes(session: Session) -> str:
+    """Report log annotations and deletions the tutor hasn't been told about yet.
+
+    Reported items are saved in the record, so each is reported once and annotations stay
+    available to read_session even if the learner later deletes them from the markdown.
+    """
+    if not session.log_path.exists():
+        return ""
+    check = session.check_log()
+    seen = {
+        (e.kind, e.text)
+        for e in session.events()
+        if e.kind in ("annotation", "missing")
+    }
+    new_annotations = [a for a in check.annotations if ("annotation", a) not in seen]
+    new_missing = [m for m in check.missing if ("missing", m) not in seen]
+    for a in new_annotations:
+        session.append("event", a, kind="annotation")
+    for m in new_missing:
+        session.append("event", m, kind="missing")
+    parts = []
+    if new_annotations:
+        parts.append(
+            "The learner added these annotations to the session log (their own thoughts; "
+            "respond to them if relevant):\n"
+            + "\n".join(f"- {a}" for a in new_annotations)
+        )
+    if new_missing:
+        parts.append(
+            "Text is missing from the session log (deleted or edited by the learner). Mention it "
+            "and ask before calling restore_log:\n"
+            + "\n".join(f"- {m}" for m in new_missing)
+        )
+    return "\n\n".join(parts)
+
+
 def user_prompt(config: Config, subject: Subject, payload: dict) -> dict:
     session = _active(subject)
-    if session and not session.ended and payload.get("prompt", "").strip():
-        session.append("learner", payload["prompt"])
-        session.render()
-    return {}
+    if not session or session.ended or not payload.get("prompt", "").strip():
+        return {}
+    changes = _log_changes(session)
+    session.append("learner", payload["prompt"])
+    session.render()
+    if not changes:
+        return {}
+    return {
+        "hookSpecificOutput": {
+            "hookEventName": "UserPromptSubmit",
+            "additionalContext": changes,
+        }
+    }
 
 
 def stop(config: Config, subject: Subject, payload: dict) -> dict:

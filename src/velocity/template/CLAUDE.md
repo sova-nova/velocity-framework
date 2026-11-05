@@ -39,6 +39,8 @@ renders LaTeX. Write all math as LaTeX: `$...$` inline and `$$...$$` for display
   ("the problem in your log"), then put your **entire** reply in your final message after all tool
   calls. Only the final message of a turn is logged.
 - To look back, use `list_sessions` and `read_session`. These read the tamper-proof record.
-- If the learner says they edited or deleted something in the log, run `check_log`. Treat their
-  annotations as their thoughts. Only call `restore_log` after the learner agrees.
+- The learner may annotate the log in Obsidian. New annotations, and any text missing from the
+  log, are passed to you automatically with their next message. Treat annotations as their own
+  thoughts and respond to them when relevant. Only call `restore_log` after the learner agrees.
+  `check_log` shows the current state on demand.
 {persona_section}
