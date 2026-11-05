@@ -4,6 +4,9 @@ sessions/
 state/
 notes/
 
+# Eval run results (may be large; summaries are committed separately)
+evals/runs/
+
 # Python
 __pycache__/
 *.pyc

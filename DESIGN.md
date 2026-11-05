@@ -198,6 +198,20 @@ Linux is the primary platform (the developer's). macOS is supported. Windows is 
 - **Dependency:** `anthropic` is pinned to `>=0.125,<1` because `marker-pdf` requires `<1`. 0.125 supports everything used here.
 - **Not yet:** resuming a chat (each `velocity chat` is a new session; the Claude Code front end supports resume), and context compaction for very long sessions.
 
+### M7 notes: evals (2026-11-05)
+
+- **Next-turn replay.** A case is a recorded session cut off right after one learner message (or a hand-written history), plus expectations for the tutor's next turn. The harness (`evals/`, run with `uv run python -m evals.run`) rebuilds that moment in a throwaway vault and runs one turn on the real `velocity chat` agent and tools, through an in-process MCP server. Replay rather than scoring old transcripts, because records don't contain tool calls, and replay lets models and prompts be compared on the same cases.
+- **Rebuilding the moment:**
+  - The earlier part of the session goes into the agent's history, the session record and the markdown log, including tutor blocks and learner annotations. The session-start context is regenerated, with the earlier sessions' records copied in.
+  - Learner state is rebuilt from the final `state.json` by replaying questions and threads from earlier sessions. Dates shift so the session's day becomes today, which keeps the same reviews due. Topic status comes from the final state.
+  - The record doesn't say when in a session a question or thread was recorded, so a case states how many of its own session's questions and threads already existed (`session_state`). Without it, the dry run showed Sonnet recording a question a second time. Threads opened in the current session stay open.
+  - Known gap: the Claude Code front end only logged the tutor's final message per turn, so some history is shorter than what the tutor said.
+- **Dry run (2026-11-05):** 3 cases on Opus and Sonnet cost $0.25 ($0.058 per case on Opus, $0.026 on Sonnet), so a full run of 38 cases is about $3–4 before the judge. It led to two harness fixes: the citation pattern now accepts words between "Stewart" and "§x.y", and the in-session state above.
+  - Sources: PDF paths come from the user's velocity config. The OCR cache is reused read-only; an uncached section returns a tool error instead of starting OCR. Cases whose source is missing are skipped.
+- **Cases** (`evals/cases/*.json`): 28 from the 8 recorded calculus sessions (committed with the user's permission; the test vault path was replaced) and 10 hand-written ones for gaps (`/explain-differently`, `/assign-problems`, `/review-notes`, "just tell me", a confidently wrong claim, a subject without sources, the tutor's own error).
+- **Code checks** per case: tools that must or must not be called (`load_skill:<name>` for skills), and regexes the reply must or must not match (reminders, citations, not giving away an answer). Each case also says what the LLM judge (PR 2) should look for.
+- **Runs:** Opus 5.5 and Sonnet 5.5 by default, with a spending limit (`--budget`, default $5; no new case starts once it is reached). Results go to `evals/runs/` (gitignored).
+
 ### M3 notes (2026-11-04)
 
 - **Decisions:** what is tracked, who writes it, format and location (see §2.4).

@@ -1,0 +1,106 @@
+{
+  "version": 1,
+  "topics": {
+    "derivative-definition": {
+      "name": "derivative definition",
+      "status": "introduced",
+      "source": null,
+      "first_seen": "2026-11-04",
+      "last_seen": "2026-11-04",
+      "interval_days": 1,
+      "next_review": "2026-11-05"
+    },
+    "limits-0-0-by-factoring": {
+      "name": "limits: 0/0 by factoring",
+      "status": "practicing",
+      "source": null,
+      "first_seen": "2026-11-04",
+      "last_seen": "2026-11-04",
+      "interval_days": 2,
+      "next_review": "2026-11-06"
+    },
+    "limit-definition-intuitive": {
+      "name": "limit definition (intuitive)",
+      "status": "introduced",
+      "source": "Stewart §2.2",
+      "first_seen": "2026-11-05",
+      "last_seen": "2026-11-05",
+      "interval_days": 1,
+      "next_review": "2026-11-06"
+    },
+    "one-sided-limits": {
+      "name": "one-sided limits",
+      "status": "practicing",
+      "source": "Stewart §2.2",
+      "first_seen": "2026-11-05",
+      "last_seen": "2026-11-05",
+      "interval_days": 1,
+      "next_review": "2026-11-06"
+    }
+  },
+  "questions": [
+    {
+      "date": "2026-11-04",
+      "session": "2026-11-04-2",
+      "topic": "derivative-definition",
+      "question": "What is f'(a)? Write the limit definition.",
+      "outcome": "hinted",
+      "note": "Confused f' with f''; called a a function. Got the difference quotient with hints; couldn't write the limit (needs limit review). Recorded retroactively from session 2026-11-04-1."
+    },
+    {
+      "date": "2026-11-04",
+      "session": "2026-11-04-2",
+      "topic": "limits-0-0-by-factoring",
+      "question": "lim x→2 of (x²−4)/(x−2)",
+      "outcome": "correct",
+      "note": "Got 4 from both sides and factored correctly. Recorded retroactively from session 2026-11-04-1."
+    },
+    {
+      "date": "2026-11-04",
+      "session": "2026-11-04-2",
+      "topic": "limits-0-0-by-factoring",
+      "question": "Why can we cancel (x−2) in (x²−4)/(x−2) when it's undefined at x=2?",
+      "outcome": "correct",
+      "note": "Socratic. Reached it with ordinary questions. Briefly thought x=−2 also broke the cancellation, then fixed it himself: only zeros of the denominator matter."
+    },
+    {
+      "date": "2026-11-05",
+      "session": "2026-11-05-1",
+      "topic": "limit-definition-intuitive",
+      "question": "Explain lim_{x→2} f(x)=5 in your own words; does it tell you f(2)=5?",
+      "outcome": "hinted",
+      "note": "First said f 'will equal' 5 and gave a muddled reason about f(2). After hints: f(x) approaches 5 as x approaches 2; x=2 itself is not considered."
+    },
+    {
+      "date": "2026-11-05",
+      "session": "2026-11-05-1",
+      "topic": "one-sided-limits",
+      "question": "Piecewise g: x+1 (x<1), 5 (x=1), 3x (x>1). Find left/right limits at 1, the limit, and g(1).",
+      "outcome": "correct",
+      "note": "All four right (2, 3, DNE, 5). Said 'undefined' for (c); the standard term is 'does not exist'."
+    }
+  ],
+  "threads": [
+    {
+      "id": 1,
+      "text": "Why can we cancel (x−2) when the expression is undefined at x=2? (A limit only looks at x near 2, not at 2.) Learner hasn't answered yet.",
+      "opened": "2026-11-04",
+      "session": "2026-11-04-2",
+      "closed": "2026-11-04"
+    },
+    {
+      "id": 2,
+      "text": "Return to the derivative: write f'(a) = lim h→0 (f(a+h) − f(a))/h once limits are reviewed.",
+      "opened": "2026-11-04",
+      "session": "2026-11-04-2",
+      "closed": null
+    },
+    {
+      "id": 3,
+      "text": "Stewart §2.3 #15, lim_{t→-3} (t^2-9)/(2t^2+7t+3), still unsolved (assigned twice; session ended before an answer). Start the next session with it. Also finish quiz questions 4 and 5 (rationalizing; derivative definition).",
+      "opened": "2026-11-05",
+      "session": "2026-11-05-1",
+      "closed": null
+    }
+  ]
+}

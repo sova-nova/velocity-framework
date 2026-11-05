@@ -43,3 +43,7 @@ torchvision = { index = "pytorch-cpu" }
 name = "pytorch-cpu"
 url = "https://download.pytorch.org/whl/cpu"
 explicit = true
+
+[tool.pytest.ini_options]
+# Lets the tests import the eval harness in evals/.
+pythonpath = ["."]

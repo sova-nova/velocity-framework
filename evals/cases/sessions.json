@@ -1,0 +1,389 @@
+[
+ {
+  "id": "2026-11-04-1-t1",
+  "session": "2026-11-04-1",
+  "turn": 1,
+  "about": "First message of the first session, no sources: wants to learn calculus basics for astrophysics.",
+  "expect": {
+   "mentions": {
+    "third-party reminder": "third[- ]party",
+    "no-sources notice": "general knowledge"
+   },
+   "not_calls": [
+    "record_question"
+   ]
+  },
+  "judge": "Opens with the reminders, then finds out what the learner already knows before teaching anything."
+ },
+ {
+  "id": "2026-11-04-1-t3",
+  "session": "2026-11-04-1",
+  "turn": 3,
+  "about": "Learner misreads f'(a) as a second derivative.",
+  "expect": {},
+  "judge": "Corrects the misconception plainly (one prime = first derivative) without lecturing the whole topic, and keeps the learner working on the question."
+ },
+ {
+  "id": "2026-11-04-1-t6",
+  "session": "2026-11-04-1",
+  "turn": 6,
+  "about": "Learner says the secant becomes 'undefined' and can't write the limit definition without reviewing limits.",
+  "expect": {
+   "calls": [
+    "record_question"
+   ]
+  },
+  "judge": "Credits what is right (0/0 at h = 0), corrects the rest, and changes course to review limits rather than handing over the definition."
+ },
+ {
+  "id": "2026-11-04-1-t7",
+  "session": "2026-11-04-1",
+  "turn": 7,
+  "about": "Off-task: learner asks where the session log is stored.",
+  "expect": {
+   "mentions": {
+    "log location": "sessions/|\\.md\\b"
+   }
+  },
+  "judge": "Answers briefly and then returns to the open warm-up question."
+ },
+ {
+  "id": "2026-11-04-1-t8",
+  "session": "2026-11-04-1",
+  "turn": 8,
+  "about": "Clarifying question: from which side does x approach 2?",
+  "expect": {
+   "not_mentions": {
+    "the warm-up's answer (4)": "(=|equals|is|approaches|→)\\s*\\**\\s*4\\b"
+   }
+  },
+  "judge": "Explains two-sided approach without giving away the limit's value."
+ },
+ {
+  "id": "2026-11-04-1-t9",
+  "session": "2026-11-04-1",
+  "turn": 9,
+  "about": "Learner says they wrote their answer ('approaches 4 from both sides') into the log.",
+  "annotations": [
+   "It approaches 4 for both sides."
+  ],
+  "expect": {
+   "calls": [
+    "record_question"
+   ]
+  },
+  "judge": "Notices the annotation, confirms the answer, and asks the learner to explain why."
+ },
+ {
+  "id": "2026-11-04-1-t10",
+  "session": "2026-11-04-1",
+  "turn": 10,
+  "about": "Learner explains the limit by factoring: it cancels to x + 2.",
+  "expect": {
+   "calls": [
+    "record_question"
+   ]
+  },
+  "judge": "Confirms, then pushes on the remaining conceptual gap (why cancelling is allowed) without answering it."
+ },
+ {
+  "id": "2026-11-04-2-t1",
+  "session": "2026-11-04-2",
+  "turn": 1,
+  "about": "Resuming the subject in a new session, no sources.",
+  "expect": {
+   "mentions": {
+    "third-party reminder": "third[- ]party",
+    "no-sources notice": "general knowledge"
+   },
+   "calls": [
+    "read_session"
+   ]
+  },
+  "judge": "Picks up accurately where the last session stopped, using the previous session."
+ },
+ {
+  "id": "2026-11-04-2-t2",
+  "session": "2026-11-04-2",
+  "turn": 2,
+  "about": "Learner invokes /socratic.",
+  "session_state": {
+   "questions": 3,
+   "threads": 2
+  },
+  "expect": {
+   "mentions": {
+    "a question": "\\?"
+   }
+  },
+  "judge": "Starts guiding by questions only, on the open conceptual question from last time, and states nothing it should let the learner find."
+ },
+ {
+  "id": "2026-11-04-2-t5",
+  "session": "2026-11-04-2",
+  "turn": 5,
+  "about": "In Socratic mode, learner slips: claims cancelling fails at -2 as well.",
+  "session_state": {
+   "questions": 3,
+   "threads": 2
+  },
+  "expect": {},
+  "judge": "Leads the learner to find the slip with a question, without stating the correction."
+ },
+ {
+  "id": "2026-11-04-2-t9",
+  "session": "2026-11-04-2",
+  "turn": 9,
+  "about": "Learner states the full argument for why cancelling is allowed.",
+  "session_state": {
+   "questions": 3,
+   "threads": 2
+  },
+  "expect": {
+   "calls": [
+    "record_question"
+   ]
+  },
+  "judge": "Confirms and consolidates the argument, ends Socratic mode cleanly, and suggests the learner write it in their own notes."
+ },
+ {
+  "id": "2026-11-04-2-t10",
+  "session": "2026-11-04-2",
+  "turn": 10,
+  "about": "Learner asks how to attach a textbook as a source.",
+  "session_state": {
+   "questions": 3,
+   "threads": 2
+  },
+  "expect": {
+   "mentions": {
+    "the source add command": "velocity source add"
+   }
+  },
+  "judge": "Gives the actual command and says a new session is needed, without inventing anything."
+ },
+ {
+  "id": "2026-11-04-3-t1",
+  "session": "2026-11-04-3",
+  "turn": 1,
+  "about": "Asks for a practice problem from Stewart, but no source is attached.",
+  "expect": {
+   "mentions": {
+    "third-party reminder": "third[- ]party"
+   },
+   "not_mentions": {
+    "an invented Stewart exercise number": "Stewart\\s*§?\\s*\\d+\\.\\d+\\s*,?\\s*(#|exercise|problem)\\s*\\d+"
+   }
+  },
+  "judge": "Is honest that it doesn't have the book and doesn't fabricate a citation; offers a problem clearly labelled as its own."
+ },
+ {
+  "id": "2026-11-04-3-t2",
+  "session": "2026-11-04-3",
+  "turn": 2,
+  "about": "Asks how sources get loaded.",
+  "expect": {
+   "mentions": {
+    "the source add command": "velocity source add"
+   }
+  },
+  "judge": "Gives the actual command instead of guessing."
+ },
+ {
+  "id": "2026-11-04-4-t1",
+  "session": "2026-11-04-4",
+  "turn": 1,
+  "about": "First message after attaching Stewart: does the tutor see the source?",
+  "expect": {
+   "mentions": {
+    "third-party reminder": "third[- ]party",
+    "the source": "Stewart"
+   }
+  },
+  "judge": "Confirms the source accurately and connects it to where the learner left off."
+ },
+ {
+  "id": "2026-11-04-4-t2",
+  "session": "2026-11-04-4",
+  "turn": 2,
+  "about": "Asks for a practice problem from the book.",
+  "expect": {
+   "calls": [
+    "get_exercises"
+   ],
+   "mentions": {
+    "a Stewart citation": "Stewart[^\\n]{0,80}§\\s*\\d+\\.\\d+"
+   }
+  },
+  "judge": "Picks a real exercise that fits what the learner practised, cites it, and doesn't solve it."
+ },
+ {
+  "id": "2026-11-04-6-t1",
+  "session": "2026-11-04-6",
+  "turn": 1,
+  "about": "First message: asks for a practice problem from Stewart (source attached).",
+  "expect": {
+   "mentions": {
+    "third-party reminder": "third[- ]party",
+    "a Stewart citation": "Stewart[^\\n]{0,80}§\\s*\\d+\\.\\d+"
+   },
+   "calls": [
+    "get_exercises"
+   ]
+  },
+  "judge": "Gives one real, fitting exercise with its citation and invites the learner to try it."
+ },
+ {
+  "id": "2026-11-05-1-t1",
+  "session": "2026-11-05-1",
+  "turn": 1,
+  "about": "First message: wants to learn limits from Stewart.",
+  "expect": {
+   "mentions": {
+    "third-party reminder": "third[- ]party",
+    "a Stewart citation": "Stewart[^\\n]{0,80}§\\s*\\d+\\.\\d+"
+   },
+   "calls_any": [
+    [
+     "get_outline",
+     "read_section"
+    ]
+   ]
+  },
+  "judge": "Uses the source's structure and the learner's history to propose a starting point, then asks rather than lectures."
+ },
+ {
+  "id": "2026-11-05-1-t2",
+  "session": "2026-11-05-1",
+  "turn": 2,
+  "about": "Learner invokes /quiz.",
+  "expect": {
+   "mentions": {
+    "a question": "\\?"
+   },
+   "not_mentions": {
+    "a second question at once": "question\\s*2\\b"
+   }
+  },
+  "judge": "Asks exactly one question, suited to the learner's level and due reviews."
+ },
+ {
+  "id": "2026-11-05-1-t3",
+  "session": "2026-11-05-1",
+  "turn": 3,
+  "about": "Learner answered quiz question 1 in the log ('the function will equal 5').",
+  "expect": {},
+  "judge": "Finds the annotation, credits the right conclusion, and challenges the word 'equal' with a hint rather than the correction."
+ },
+ {
+  "id": "2026-11-05-1-t4",
+  "session": "2026-11-05-1",
+  "turn": 4,
+  "about": "Learner rewrote the answer in the log ('approaches').",
+  "expect": {
+   "calls": [
+    "record_question"
+   ]
+  },
+  "judge": "Confirms, records the question (with hints), and moves to the next question."
+ },
+ {
+  "id": "2026-11-05-1-t5",
+  "session": "2026-11-05-1",
+  "turn": 5,
+  "about": "Learner answered the one-sided limits question in the log (c: 'undefined').",
+  "session_state": {
+   "questions": 1
+  },
+  "expect": {
+   "calls": [
+    "record_question"
+   ],
+   "mentions": {
+    "'does not exist'": "does not exist|\\bDNE\\b"
+   }
+  },
+  "judge": "Marks the answers correct and fixes the wording: the limit does not exist, rather than being undefined."
+ },
+ {
+  "id": "2026-11-05-1-t6",
+  "session": "2026-11-05-1",
+  "turn": 6,
+  "about": "Learner invokes /end-session.",
+  "session_state": {
+   "questions": 2
+  },
+  "expect": {
+   "not_calls": [
+    "end_session"
+   ],
+   "mentions": {
+    "a question": "\\?"
+   }
+  },
+  "judge": "Records outstanding progress and asks one retrieval question before closing."
+ },
+ {
+  "id": "2026-11-05-1-t7",
+  "session": "2026-11-05-1",
+  "turn": 7,
+  "about": "Learner answers the closing retrieval question.",
+  "session_state": {
+   "questions": 2,
+   "threads": 1
+  },
+  "expect": {
+   "calls": [
+    "end_session"
+   ]
+  },
+  "judge": "Writes an accurate recap, sets up the next session, and prompts the learner to write notes."
+ },
+ {
+  "id": "2026-11-05-2-t1",
+  "session": "2026-11-05-2",
+  "turn": 1,
+  "about": "First message: 'hi can we continue?' after a wrapped-up session with an open problem.",
+  "expect": {
+   "mentions": {
+    "third-party reminder": "third[- ]party",
+    "the open problem": "#\\s*15|exercise\\s*15|problem\\s*15"
+   }
+  },
+  "judge": "Restarts with the open problem (Stewart §2.3 #15) from the recap and threads."
+ },
+ {
+  "id": "2026-11-05-2-t2",
+  "session": "2026-11-05-2",
+  "turn": 2,
+  "about": "Learner wrote their plan into the log and asks for a hint on factoring the denominator.",
+  "expect": {
+   "not_mentions": {
+    "the answer (6/5)": "6\\s*/\\s*5|\\\\frac\\s*\\{\\s*6\\s*\\}\\s*\\{\\s*5\\s*\\}|\\b1\\.2\\b",
+    "the denominator's factorization": "\\(\\s*2t\\s*\\+\\s*1\\s*\\)|\\(\\s*t\\s*\\+\\s*3\\s*\\)\\s*\\(\\s*2t"
+   }
+  },
+  "judge": "Corrects '0' to '0/0' and gives a hint for factoring without doing it."
+ },
+ {
+  "id": "2026-11-05-2-t4",
+  "session": "2026-11-05-2",
+  "turn": 4,
+  "about": "Off-task: 'Which model are you now?'",
+  "expect": {},
+  "judge": "Answers briefly and honestly, then returns to the problem."
+ },
+ {
+  "id": "2026-11-05-2-t5",
+  "session": "2026-11-05-2",
+  "turn": 5,
+  "about": "Learner asks the tutor to re-ask the question.",
+  "expect": {
+   "not_mentions": {
+    "the answer (6/5)": "6\\s*/\\s*5|\\\\frac\\s*\\{\\s*6\\s*\\}\\s*\\{\\s*5\\s*\\}|\\b1\\.2\\b",
+    "the denominator's factorization": "\\(\\s*2t\\s*\\+\\s*1\\s*\\)|\\(\\s*t\\s*\\+\\s*3\\s*\\)\\s*\\(\\s*2t"
+   }
+  },
+  "judge": "Restates the current step clearly and briefly, without solving it."
+ }
+]
