@@ -18,9 +18,9 @@ M1–M6 done and merged. M7 (polish and portfolio) is in progress; M8 (web front
 1. Fixes from the M6 live test: done (#15).
 2. README with a demo (a real session excerpt, used with the user's permission), setup, both front ends, model advice.
 3. Teaching-quality evals, in 3 PRs (the user chose: commit cases from their sessions, compare Opus and Sonnet, they will hand-label ~15 cases, budget ~$5 per full run):
-   - PR 1 (branch `evals-harness`): cases, next-turn replay harness, code checks. The user runs the 3-case dry run with their key and reports the cost.
-   - PR 2: LLM judge (Opus 5.5, pass/fail rubric) and a labeling file; measure judge agreement with the user's labels.
-   - PR 3: full run; results summary committed, headline numbers in the README.
+   - PR 1 (#17, merged): cases, next-turn replay harness, code checks. Dry run: $0.25 for 3 cases on two models.
+   - PR 2 (#18, branch `evals-judge`): LLM judge (Opus 5.5, pass/fail rubric) and the labeling tool (`python -m evals.label export/agree`). Judge dry run: $0.40 for 3 cases.
+   - PR 3, **postponed by the user (2026-11-06) to limit spending**: full run (estimated $5–6; the user hadn't yet chosen between allowing ~$6.50 once, a Sonnet judge, or accepting gaps), the user labels ~15 replies from it, judge agreement measured, results in the README. Ask before starting it.
 4. Source improvements: drop-check repair for OCR (prototype in `DESIGN.md` M1 findings), then non-PDF sources.
 - Optional later: resuming `velocity chat`, compaction for long chats, a `search` source tool.
 - Then M8, a web front end (scope to be planned). Ask about the MIT license after M8.
@@ -39,7 +39,7 @@ M1–M6 done and merged. M7 (polish and portfolio) is in progress; M8 (web front
 - Commands: `velocity new "<name>"`, `velocity subjects`, `velocity source add/list`, `velocity notes add/list`, `velocity tutor <subject> [--resume]` (front end A, Claude Code), `velocity chat <subject> [--model opus|sonnet|haiku]` (front end B, API; `/model` switches mid-chat). Internal: `velocity mcp --subject`, `velocity hook <event>`.
 - Modules: `config`, `outline`, `ocr`, `pdf_source`, `session` (record + markdown log), `state` (learner state), `notes`, `skills`, `tools` (TutorTools), `mcp_server`, `workspace` (template, settings, notes protection, `claude_args`), `hooks`, `agent` (front end B), `cli`.
 - The tutor prompt is `src/velocity/template/CLAUDE.md`; skills are in `src/velocity/template/skills/<name>/SKILL.md`. The same files back both front ends.
-- Evals: `evals/` (cases, replay, checks, run); `uv run python -m evals.run --list`. See `DESIGN.md` "M7 notes: evals".
+- Evals: `evals/` (cases, replay, checks, judge, label, run); `uv run python -m evals.run --list`. See `DESIGN.md` "M7 notes: evals".
 - Tests: about 155, `uv run pytest`. The slow real-OCR test runs only with `VELOCITY_OCR_TESTS=1`.
 
 *How to test with real Claude Code without touching the user's vault:*

@@ -1,7 +1,8 @@
-"""Run the eval cases against one or more models and report the code checks.
+"""Run the eval cases against one or more models; report code checks and judge verdicts.
 
     uv run python -m evals.run --models opus,sonnet
-    uv run python -m evals.run --cases s1-turn1,s2-socratic --models sonnet --budget 1
+    uv run python -m evals.run --cases '2026-11-05-1-*' --models sonnet --budget 1
+    uv run python -m evals.run --judge none        # code checks only (cheaper)
 
 Needs ANTHROPIC_API_KEY. Each case runs one tutor turn in a throwaway vault. Cases that use
 a source need its PDF: by default the paths come from your velocity config (the subject
@@ -23,6 +24,7 @@ from pathlib import Path
 
 from evals.cases import EVALS_DIR, Case, load_cases, replay_input
 from evals.checks import CheckResult, run_checks
+from evals.judge import RUBRIC, judge
 from evals.replay import ReplayResult, SkipCase, replay
 from velocity.agent import DEFAULT_EFFORT, resolve_model
 from velocity.config import ConfigError, data_dir, load_config, load_subject
@@ -39,12 +41,19 @@ class Outcome:
     checks: list[CheckResult] = field(default_factory=list)
     reply: str = ""
     tool_calls: list[tuple[str, dict]] = field(default_factory=list)
-    cost: float = 0.0
+    cost: float = 0.0  # the tutor's turn
     detail: str = ""
+    judge: dict[str, dict[str, str]] = field(default_factory=dict)
+    judge_cost: float = 0.0
+    judge_error: str = ""
 
     @property
     def passed(self) -> bool:
+        """All code checks passed (judge verdicts are reported separately)."""
         return self.status == "ok" and all(c.passed for c in self.checks)
+
+    def verdicts(self, verdict: str) -> list[str]:
+        return [c for c, v in self.judge.items() if v["verdict"] == verdict]
 
 
 def select_cases(
@@ -99,6 +108,8 @@ async def run_all(
     budget: float,
     concurrency: int,
     effort: str,
+    create=None,  # like client.beta.messages.create, for the judge
+    judge_model: str | None = None,
     report=print,
 ) -> list[Outcome]:
     outcomes: list[Outcome] = []
@@ -113,9 +124,10 @@ async def run_all(
                     Outcome(case.id, model, "skipped", detail="budget reached")
                 )
                 return
+            inp = replay_input(case)
             try:
                 result = await replay(
-                    replay_input(case),
+                    inp,
                     sandbox=sandbox / f"{case.id}-{model}",
                     stream=stream,
                     model=model,
@@ -141,6 +153,23 @@ async def run_all(
                     result.tool_log,
                     cost,
                 )
+                if judge_model:
+                    try:
+                        graded = await judge(
+                            create,
+                            case,
+                            inp,
+                            result.reply,
+                            result.tool_log,
+                            judge_model,
+                        )
+                    except Exception as e:  # noqa: BLE001
+                        e = root_cause(e)
+                        outcome.judge_error = f"{type(e).__name__}: {e}"
+                    else:
+                        outcome.judge = graded.verdicts
+                        outcome.judge_cost = graded.usage.cost(judge_model) or 0.0
+                        spent += outcome.judge_cost
             outcomes.append(outcome)
             report(format_outcome(outcome))
 
@@ -170,25 +199,63 @@ def format_outcome(o: Outcome) -> str:
     lines += [
         f"        x {c.name}" + (f" ({c.detail})" if c.detail else "") for c in failed
     ]
+    if o.judge:
+        lines[0] += (
+            f"; judge {len(o.verdicts('pass'))} pass, {len(o.verdicts('fail'))} fail, "
+            f"${o.judge_cost:.3f}"
+        )
+        lines += [
+            f"        judge fail {c}: {o.judge[c]['reason']}"
+            for c in o.verdicts("fail")
+        ]
+    if o.judge_error:
+        lines.append(f"        judge error: {o.judge_error}")
     return "\n".join(lines)
 
 
 def summary(outcomes: list[Outcome], models: list[str]) -> str:
     rows = [
-        "| Model | Cases passed | Checks passed | Skipped | Errors | Cost |",
-        "|---|---|---|---|---|---|",
+        (
+            "| Model | Cases passing all checks | Checks passed | Judge: criteria passed "
+            "| Skipped | Errors | Tutor cost | Judge cost |"
+        ),
+        "|---|---|---|---|---|---|---|---|",
     ]
     for model in models:
         mine = [o for o in outcomes if o.model == model]
         ok = [o for o in mine if o.status == "ok"]
         checks = [c for o in ok for c in o.checks]
+        passes = sum(len(o.verdicts("pass")) for o in ok)
+        graded = passes + sum(len(o.verdicts("fail")) for o in ok)
         rows.append(
             f"| {model} | {sum(o.passed for o in ok)}/{len(ok)} "
             f"| {sum(c.passed for c in checks)}/{len(checks)} "
+            f"| {passes}/{graded} "
             f"| {sum(o.status == 'skipped' for o in mine)} "
             f"| {sum(o.status == 'error' for o in mine)} "
-            f"| ${sum(o.cost for o in mine):.2f} |"
+            f"| ${sum(o.cost for o in mine):.2f} "
+            f"| ${sum(o.judge_cost for o in mine):.2f} |"
         )
+    return "\n".join(rows)
+
+
+def judge_table(outcomes: list[Outcome], models: list[str]) -> str:
+    """Judge verdicts per criterion and model: passed / graded (n/a not counted)."""
+    rows = [
+        "| Criterion | " + " | ".join(models) + " |",
+        "|---" * (len(models) + 1) + "|",
+    ]
+    for criterion, (name, _) in RUBRIC.items():
+        cells = []
+        for model in models:
+            verdicts = [
+                o.judge[criterion]["verdict"]
+                for o in outcomes
+                if o.model == model and criterion in o.judge
+            ]
+            graded = [v for v in verdicts if v != "n/a"]
+            cells.append(f"{graded.count('pass')}/{len(graded)}")
+        rows.append(f"| {name} | " + " | ".join(cells) + " |")
     return "\n".join(rows)
 
 
@@ -208,6 +275,9 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--concurrency", type=int, default=4)
     parser.add_argument("--effort", default=DEFAULT_EFFORT)
+    parser.add_argument(
+        "--judge", default="opus", help="judge model, or 'none' for code checks only"
+    )
     parser.add_argument("--source", action="append", default=[], help="NAME=PDF path")
     parser.add_argument("--list", action="store_true", help="list the cases and exit")
     args = parser.parse_args(argv)
@@ -232,7 +302,8 @@ def main(argv: list[str] | None = None) -> int:
     # The in-process MCP server turns on INFO logging; keep the output to the results.
     for name in ("httpx", "mcp", "anthropic"):
         logging.getLogger(name).setLevel(logging.WARNING)
-    stream = anthropic.AsyncAnthropic().beta.messages.stream
+    client = anthropic.AsyncAnthropic()
+    judge_model = None if args.judge == "none" else resolve_model(args.judge)
     real_data = data_dir()
     with tempfile.TemporaryDirectory(prefix="velocity-evals-") as tmp:
         sandbox = Path(tmp)
@@ -242,16 +313,20 @@ def main(argv: list[str] | None = None) -> int:
             run_all(
                 cases,
                 models,
-                stream=stream,
+                stream=client.beta.messages.stream,
                 sources=sources,
                 sandbox=sandbox,
                 budget=args.budget,
                 concurrency=args.concurrency,
                 effort=args.effort,
+                create=client.beta.messages.create,
+                judge_model=judge_model,
             )
         )
 
     print("\n" + summary(outcomes, models))
+    if judge_model:
+        print("\n" + judge_table(outcomes, models))
     RUNS_DIR.mkdir(exist_ok=True)
     path = RUNS_DIR / f"{datetime.now():%Y%m%d-%H%M%S}.json"
     path.write_text(
@@ -259,6 +334,7 @@ def main(argv: list[str] | None = None) -> int:
             {
                 "models": models,
                 "effort": args.effort,
+                "judge_model": judge_model,
                 "outcomes": [asdict(o) for o in outcomes],
             },
             indent=1,

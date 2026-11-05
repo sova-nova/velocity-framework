@@ -212,6 +212,15 @@ Linux is the primary platform (the developer's). macOS is supported. Windows is 
 - **Code checks** per case: tools that must or must not be called (`load_skill:<name>` for skills), and regexes the reply must or must not match (reminders, citations, not giving away an answer). Each case also says what the LLM judge (PR 2) should look for.
 - **Runs:** Opus 5.5 and Sonnet 5.5 by default, with a spending limit (`--budget`, default $5; no new case starts once it is reached). Results go to `evals/runs/` (gitignored).
 
+### M7 notes: the judge (2026-11-06)
+
+- **Judge** (`evals/judge.py`): Opus 5.5 by default (`--judge sonnet` or `none`), effort `medium`, structured output (a JSON schema), refusal fallbacks. It sees what the tutor saw (conversation so far, annotations, the learner's message), the tool calls of the turn, and the reply.
+- **Rubric:** six criteria, each graded pass, fail or n/a, with the reason written before the verdict: asks before telling, hints before answers, correct, honest feedback, clear next step, and the case's own focus. Pass/fail rather than a 1–5 scale, because binary verdicts are more consistent and easier to check against human labels.
+- **Self-preference:** Opus judges Opus's own replies, which can bias it upward. The hand labels measure this: agreement is reported per model as well as overall.
+- **Judge dry run (2026-11-06):** the same 3 cases cost $0.40 ($0.26 tutor, $0.14 judge, about $0.023 per judged reply). The judge failed Opus on "asks before telling" for explaining encryption before asking what the learner knew, which matched a human read, and used n/a sensibly. A full run is estimated at $5–6, right at the $5 limit; the user postponed it.
+- **Known gap: earlier tool calls aren't in the replayed history.** Session records store what the tutor said, not its tool calls, so a replayed tutor can't see that it already recorded a question in an earlier turn. Sonnet re-recorded quiz question 1 in `2026-11-05-1-t5` for this reason. No check penalizes it. Fix: store tool calls in session records from now on.
+- **Labels** (`evals/label.py`): `export` samples replies from a run (alternating models, fixed seed) into a Markdown file for Obsidian, hiding the model and the judge's verdicts; `agree` reports agreement and Cohen's kappa per criterion and lists every disagreement with the judge's reason. Labels are committed in `evals/labels/`.
+
 ### M3 notes (2026-11-04)
 
 - **Decisions:** what is tracked, who writes it, format and location (see §2.4).
