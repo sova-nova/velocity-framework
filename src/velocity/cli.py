@@ -4,9 +4,11 @@ import argparse
 import os
 import shutil
 import sys
+from pathlib import Path
 
 from velocity.config import (
     ConfigError,
+    add_source,
     create_subject,
     list_subjects,
     load_config,
@@ -33,6 +35,35 @@ def _tutor(subject_slug: str, resume: bool) -> int:
     return 0  # not reached
 
 
+def _source(args: argparse.Namespace) -> int:
+    from velocity.config import load_subject
+
+    config = load_config()
+    if args.source_command == "list":
+        sources = load_subject(config, args.subject).sources
+        print("\n".join(f"{s.name}: {s.path}" for s in sources) or "No sources.")
+        return 0
+
+    from velocity.outline import toc_size
+
+    added = add_source(config, args.subject, args.file, args.name)
+    print(f"Added '{added.name}' to {args.subject}. Start a new session to use it.")
+    if args.name is None:
+        print(
+            f'Tip: the tutor cites it as "{added.name} §<section>". To use a shorter name, edit '
+            "subject.toml or remove it and add it again with --name."
+        )
+    entries = toc_size(added.path)
+    if entries == 0:
+        print(
+            "Warning: this PDF has no table of contents (bookmarks), so the tutor cannot find "
+            "its sections. read_section and get_exercises will not work for it yet."
+        )
+    else:
+        print(f"Found {entries} entries in its table of contents.")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="velocity", description="A local subject tutor."
@@ -49,6 +80,17 @@ def main(argv: list[str] | None = None) -> int:
     new.add_argument("name", help='subject name, e.g. "Network Security"')
 
     commands.add_parser("subjects", help="list subjects")
+
+    source = commands.add_parser("source", help="manage a subject's sources")
+    source_commands = source.add_subparsers(dest="source_command", required=True)
+    source_add = source_commands.add_parser("add", help="attach a PDF to a subject")
+    source_add.add_argument("subject", help="subject id, e.g. calculus")
+    source_add.add_argument("file", type=Path, help="path to the PDF")
+    source_add.add_argument(
+        "--name", help='short name used in citations, e.g. "Stewart"'
+    )
+    source_list = source_commands.add_parser("list", help="list a subject's sources")
+    source_list.add_argument("subject")
 
     mcp = commands.add_parser("mcp", help="run the tutor's MCP server over stdio")
     mcp.add_argument("--subject", required=True)
@@ -69,6 +111,8 @@ def main(argv: list[str] | None = None) -> int:
             print(
                 f"Created subject '{subject.slug}'. Edit {subject.dir / 'subject.toml'} to add sources and note folders."
             )
+        elif args.command == "source":
+            return _source(args)
         elif args.command == "subjects":
             print("\n".join(list_subjects(load_config())) or "No subjects yet.")
         elif args.command == "mcp":

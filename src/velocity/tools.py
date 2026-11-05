@@ -3,6 +3,7 @@
 Return values are plain text meant for the model to read.
 """
 
+import os
 import re
 from collections.abc import Callable
 from datetime import date
@@ -28,7 +29,10 @@ class ToolError(Exception):
     """An error the model should see and can act on."""
 
 
-def _default_ocr() -> PageOcr:
+def _default_ocr(config: Config) -> PageOcr:
+    if config.llama_cpp_binary and "LLAMA_CPP_BINARY" not in os.environ:
+        # Read by marker's OCR engine (surya) when it is imported, so set it first.
+        os.environ["LLAMA_CPP_BINARY"] = config.llama_cpp_binary.as_posix()
     try:
         import marker  # noqa: F401
 
@@ -46,13 +50,13 @@ class TutorTools:
         self,
         config: Config,
         subject: Subject,
-        ocr_factory: Callable[[], PageOcr] = _default_ocr,
+        ocr_factory: Callable[[], PageOcr] | None = None,
         today: Callable[[], date] = date.today,
     ) -> None:
         self._today = today
         self.config = config
         self.subject = subject
-        self._ocr_factory = ocr_factory
+        self._ocr_factory = ocr_factory or (lambda: _default_ocr(config))
         self._ocr: PageOcr | None = None
         self._sources: dict[str, PdfSource] = {}
 

@@ -4,6 +4,7 @@ Global: ~/.config/velocity/config.toml (vault path).
 Subject: <vault>/Tutor/<subject>/subject.toml (sources, readable note folders, persona extras).
 """
 
+import json
 import os
 import re
 import tomllib
@@ -34,6 +35,9 @@ def data_dir() -> Path:
 @dataclass(frozen=True)
 class Config:
     vault_path: Path
+    llama_cpp_binary: Path | None = (
+        None  # llama.cpp `llama-server`, for OCR without an NVIDIA GPU
+    )
 
     @property
     def tutor_dir(self) -> Path:
@@ -79,7 +83,8 @@ def load_config(path: Path | None = None) -> Config:
     vault = Path(data["vault_path"]).expanduser()
     if not vault.is_dir():
         raise ConfigError(f"{path}: vault_path {vault} is not a directory")
-    return Config(vault.resolve())
+    llama = data.get("llama_cpp_binary")
+    return Config(vault.resolve(), Path(llama).expanduser() if llama else None)
 
 
 def slugify(name: str) -> str:
@@ -148,7 +153,8 @@ persona = """
 # Notes with `private: true` in their front matter are always skipped.
 note_folders = []
 
-# Optional sources to ground teaching in, e.g.:
+# Optional sources to ground teaching in. Easiest: velocity source add <subject> <file.pdf> --name <Name>
+# Or by hand:
 # [[sources]]
 # name = "Stewart"   # short label used in citations
 # path = "~/books/textbook.pdf"
@@ -165,3 +171,35 @@ def create_subject(config: Config, name: str) -> Subject:
         _SUBJECT_TEMPLATE.format(name=name.replace('"', '\\"')), encoding="utf-8"
     )
     return load_subject(config, slug)
+
+
+def add_source(
+    config: Config, slug: str, path: Path, name: str | None = None
+) -> SourceRef:
+    """Append a source to a subject's subject.toml (keeping the rest of the file as is)."""
+    subject = load_subject(config, slug)
+    path = path.expanduser().resolve()
+    if not path.is_file():
+        raise ConfigError(f"{path} is not a file")
+    if path.suffix.lower() != ".pdf":
+        raise ConfigError(
+            f"{path.name} is not a PDF; only PDF sources are supported so far"
+        )
+    name = (name or path.stem).strip()
+    if not name:
+        raise ConfigError("source name is empty")
+    if any(s.name == name for s in subject.sources):
+        raise ConfigError(f"subject {slug!r} already has a source named {name!r}")
+    if any(s.path == path for s in subject.sources):
+        raise ConfigError(f"{path.name} is already a source of {slug!r}")
+    toml = subject.dir / "subject.toml"
+    text = toml.read_text(encoding="utf-8")
+    entry = (
+        "\n[[sources]]\n"
+        f"name = {json.dumps(name, ensure_ascii=False)}\n"
+        f"path = {json.dumps(path.as_posix(), ensure_ascii=False)}\n"
+    )
+    toml.write_text(text.rstrip("\n") + "\n" + entry, encoding="utf-8")
+    added = load_subject(config, slug).sources[-1]
+    assert added.path == path
+    return added
