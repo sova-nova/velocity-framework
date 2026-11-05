@@ -40,7 +40,7 @@ M1–M6 done and merged. M7 (polish and portfolio) is in progress; M8 (web front
 - Modules: `config`, `outline`, `ocr`, `dropcheck`, `pdf_source`, `session` (record + markdown log), `state` (learner state), `notes`, `skills`, `tools` (TutorTools), `mcp_server`, `workspace` (template, settings, notes protection, `claude_args`), `hooks`, `agent` (front end B), `cli`.
 - The tutor prompt is `src/velocity/template/CLAUDE.md`; skills are in `src/velocity/template/skills/<name>/SKILL.md`. The same files back both front ends.
 - Evals: `evals/` (cases, replay, checks, judge, label, run); `uv run python -m evals.run --list`. See `DESIGN.md` "M7 notes: evals".
-- Tests: about 178, `uv run pytest`. The slow real-OCR test runs only with `VELOCITY_OCR_TESTS=1`.
+- Tests: about 181, `uv run pytest`. The slow real-OCR test runs only with `VELOCITY_OCR_TESTS=1`.
 
 *How to test with real Claude Code without touching the user's vault:*
 - Use a throwaway `XDG_CONFIG_HOME`/`XDG_DATA_HOME` with a scratch vault, then `velocity new`. For OCR'd sections, copy `~/.local/share/velocity/sources/*` into the throwaway data dir.

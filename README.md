@@ -113,7 +113,7 @@ The same tutor in your terminal, streamed from the Anthropic API. Type `/model` 
 |---|---|
 | `velocity subjects` | List subjects |
 | `velocity source list <subject>` | List a subject's sources |
-| `velocity source recheck <subject>` | OCR pages cached before the dropped-text check again, with the check |
+| `velocity source recheck <subject> [--all]` | OCR cached pages again with the dropped-text check (by default only pages cached before it) |
 | `velocity notes list <subject>` | List the notes the tutor may read |
 
 ### Where things live

@@ -204,6 +204,12 @@ Linux is the primary platform (the developer's). macOS is supported. Windows is 
 - **Repair:** all regions of one OCR run are re-OCR'd in a single marker call, each as a tightly cropped page (1.5 pt above and below; with 6 pt, marker read the neighbouring line instead). Recovered text goes in after the block that precedes it in marker's reading order, found in the page markdown by that block's text (letters and digits only). Headings in recovered text become bold, so they aren't mistaken for section boundaries. If re-OCR returns nothing, the text-layer text is used with a note that its math may be garbled, and `read_section` warns the tutor.
 - **Per-page report:** `pages/<n>.check.json` lists each region and how it was repaired; its absence marks a page cached before the check. `velocity source recheck <subject>` OCRs such pages again.
 - **Result on Stewart §2.4 (PDF pp. 136–146):** 5 regions found, all real: the 4 known drops (including the key clause of Definition 7) and one more on p. 146 (the start of Definition 1 in §2.5), outside M1's range. All 5 were restored by re-OCR, in the right place, with LaTeX and ligatures intact. There were no false positives. It added about 3 seconds to the 90-second run.
+- **Fixes after the first recheck of the user's cache (25 pages, 18 regions):**
+  - A region now also takes in adjacent uncovered math-only lines (a limit's subscript, the end of a formula), which the prose-only crop cut off: exercise 38 on p. 135 ended at "lim g", and 39 lacked "= 0".
+  - Regions sharing an anchor were inserted in reverse order (37, 39, 38). They are now inserted last to first.
+  - marker's result on small crops depends on the exact crop: the grown crop of "Find the value of c so that lim B(t) exists" came back empty, while the prose-only crop was read perfectly, subscript included. Empty results are now retried on the prose-only crop before falling back to the text layer.
+  - On §2.3 (pp. 127–136): 11 regions, 9 restored by re-OCR in the right place, and 2 text-layer fallbacks (both empty on both crops; the tutor is warned).
+  - `velocity source recheck --all` re-OCRs every cached page, not only unchecked ones.
 - **Blind spot (unchanged):** a block with partial output can still hide a dropped line, because the line counts as covered.
 
 ### M7 notes: evals (2026-11-05)
