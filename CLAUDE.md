@@ -10,23 +10,22 @@ Read `DESIGN.md` before making architectural decisions. It is the source of trut
 
 ## Current Status
 
-M1–M6 done and merged. M7 (polish and portfolio) is next. See `DESIGN.md` section 4.
+M1–M6 done and merged. M7 (polish and portfolio) is in progress; M8 (web front end) follows. See `DESIGN.md` section 4.
 
 **Where we left off (2026-11-05):**
 
-*M6 is finished (2026-11-05):* live-tested with the user's API key and merged as #13. The user found the API costs more than Claude Code on their plan (pay per token vs. a flat subscription; the default is Opus 5.5). Branch `chat-model-switch` adds `--model` and `/model` to `velocity chat`.
-
-*Then M7 (polish and portfolio; ask the user about scope and order first):*
-- README with a demo: GIF or sample log, setup, both front ends, recommended models (Haiku does not reliably call the state tools).
-- Teaching-quality evals that replay the JSONL session records.
-- MIT license (the user wanted it only once the project is finished).
-- Drop-check repair for OCR (prototype in `DESIGN.md` M1 findings) and non-PDF sources.
-- Optional: resuming `velocity chat`, compaction for long chats, a `search` source tool.
+*M7 plan (agreed 2026-11-05; see `DESIGN.md` sections 4 and 5), one PR each, in order:*
+1. Fixes from the M6 live test: done (#15).
+2. README with a demo (a real session excerpt, used with the user's permission), setup, both front ends, model advice.
+3. Teaching-quality evals: replay JSONL session records; code checks plus an LLM judge. Plan the details with the user first; runs cost API money.
+4. Source improvements: drop-check repair for OCR (prototype in `DESIGN.md` M1 findings), then non-PDF sources.
+- Optional later: resuming `velocity chat`, compaction for long chats, a `search` source tool.
+- Then M8, a web front end (scope to be planned). Ask about the MIT license after M8.
 
 *How the user works (see also memory):*
 - One branch and PR per change, based on `main`. The user reviews and merges on GitHub with a merge commit and deletes the branch.
 - Don't stack PRs; that went wrong once (#2–#5, fixed by #6).
-- Merged so far: #1–#13.
+- Merged so far: #1–#15.
 
 *Environment facts:*
 - The user's `~/.config/velocity/config.toml` points `vault_path` at the test vault `/home/sokosova/personal/test/obsidian`. Their real vault is `/home/sokosova/Documents/Linux Vault`; they will switch when ready.
@@ -37,7 +36,7 @@ M1–M6 done and merged. M7 (polish and portfolio) is next. See `DESIGN.md` sect
 - Commands: `velocity new "<name>"`, `velocity subjects`, `velocity source add/list`, `velocity notes add/list`, `velocity tutor <subject> [--resume]` (front end A, Claude Code), `velocity chat <subject> [--model opus|sonnet|haiku]` (front end B, API; `/model` switches mid-chat). Internal: `velocity mcp --subject`, `velocity hook <event>`.
 - Modules: `config`, `outline`, `ocr`, `pdf_source`, `session` (record + markdown log), `state` (learner state), `notes`, `skills`, `tools` (TutorTools), `mcp_server`, `workspace` (template, settings, notes protection, `claude_args`), `hooks`, `agent` (front end B), `cli`.
 - The tutor prompt is `src/velocity/template/CLAUDE.md`; skills are in `src/velocity/template/skills/<name>/SKILL.md`. The same files back both front ends.
-- Tests: about 137, `uv run pytest`. The slow real-OCR test runs only with `VELOCITY_OCR_TESTS=1`.
+- Tests: about 140, `uv run pytest`. The slow real-OCR test runs only with `VELOCITY_OCR_TESTS=1`.
 
 *How to test with real Claude Code without touching the user's vault:*
 - Use a throwaway `XDG_CONFIG_HOME`/`XDG_DATA_HOME` with a scratch vault, then `velocity new`. For OCR'd sections, copy `~/.local/share/velocity/sources/*` into the throwaway data dir.

@@ -22,7 +22,7 @@ The project is also a public portfolio piece aimed at entry-level AI roles. It s
 - Hosting, accounts, or multi-user deployment. Each user runs it locally and brings their own key or Claude plan.
 - Training or fine-tuning models.
 - Automatic grading of free-form proofs or long-form work beyond LLM judgment.
-- A custom GUI. Obsidian renders the session log; a UI may come later.
+- A custom GUI before M8. Obsidian renders the session log; a web front end is planned as M8.
 - Writing, restructuring, or reorganizing the learner's notes (see Rubicon in section 7).
 
 ## 2. Core Concepts
@@ -165,7 +165,8 @@ Linux is the primary platform (the developer's). macOS is supported. Windows is 
 4. **M4: Skills. Done 2026-11-04** except `/review-notes`, which moves to M5 because it needs `read_notes`. `/quiz` and `/end-session`, then the rest.
 5. **M5: Notes. Done 2026-11-04.** `read_notes` with per-subject folder lists and `private: true`; `/review-notes`; note-taking prompts.
 6. **M6: Own agent loop. Done 2026-11-05** (`velocity chat`, live-tested with an API key, merged in #13). Front end B on the `anthropic` SDK, with the same MCP server and skills.
-7. **M7: Polish and portfolio.** MIT license (added once the project is finished, decided 2026-11-04), README with a demo, teaching-quality evals (replaying session records), drop-check repair, non-PDF sources.
+7. **M7: Polish and portfolio.** One PR each, in this order: fixes from the M6 live test (done, #15); README with a demo; teaching-quality evals (replaying session records); source improvements (drop-check repair, then non-PDF sources).
+8. **M8: Web front end.** A local web UI as a third front end on the same MCP core. Scope to be planned after M7. The MIT license is added after M8; ask the user then.
 
 ### M2 notes (2026-11-04)
 
@@ -231,6 +232,10 @@ Tested on all of Section 2.4 (PDF pp. 136–145, plus neighbouring 2.3 exercises
 
 ## 5. Decisions Log
 
+- **2026-11-05 (M7 planning):**
+  - M7 covers the README, teaching-quality evals and source improvements, in that order, one PR each.
+  - A web front end becomes M8. The MIT license comes after M8, not at the end of M7.
+  - Teaching-quality evals replay the JSONL session records and combine **code checks** for hard rules (cites sources when it has them, calls the state tools, never writes notes) with an **LLM judge** scoring teaching quality against a rubric (asks before telling, checks understanding). The details are planned with the user before building, since runs cost API money.
 - **2026-11-02:** Python 3.12 (ML dependencies lack 3.14 wheels), `uv`, `pytest`, `ruff`.
 - **2026-11-04:** OCR with `marker-pdf --force_ocr`, ingested lazily per section and cached; spatial drop check with crop re-OCR repair (deferred to M7).
 - **2026-11-04 (design interview):**
@@ -250,10 +255,9 @@ Tested on all of Section 2.4 (PDF pp. 136–145, plus neighbouring 2.3 exercises
 
 ## 6. Open Questions
 
-- Teaching-quality evaluation design. **Deferred to M7**; session records from M2 on are its raw material.
+- None at the moment.
 
 ## 7. Future Directions
 
 - **Rubicon:** a separate future project, a knowledge-base overseer that finds connections and tensions in notes, quizzes recall, and suggests vault restructuring. It would reuse the notes MCP tools from this project, and would only ever **propose** changes for the learner to approve, never edit notes directly.
-- A local web UI or desktop app if the Obsidian workflow feels limiting.
 - Name alternatives considered: Marginalia, Whetstone, Lantern, Maieutic.
