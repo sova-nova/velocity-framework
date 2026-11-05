@@ -59,7 +59,10 @@ def test_add_source_appends_and_keeps_comments(config, tmp_path):
     "setup, message",
     [
         (lambda d: d / "missing.pdf", "not a file"),
-        (lambda d: (d / "notes.txt").write_text("x") and d / "notes.txt", "not a PDF"),
+        (
+            lambda d: (d / "notes.txt").write_text("x") and d / "notes.txt",
+            "unsupported file type",
+        ),
     ],
 )
 def test_add_source_rejects_bad_files(config, tmp_path, setup, message):

@@ -24,6 +24,7 @@ from velocity.state import (
     load_state,
     save_state,
 )
+from velocity.text_source import TEXT_SUFFIXES, TextSource
 
 BlockKind = Literal["example", "summary", "note", "tip", "question", "warning", "quote"]
 
@@ -78,12 +79,13 @@ class TutorTools:
         if ref is None:
             names = ", ".join(s.name for s in self.subject.sources) or "none"
             raise ToolError(f"Unknown source {name!r}. Available: {names}.")
-        if ref.path.suffix.lower() != ".pdf":
-            raise ToolError(
-                f"Source {name!r} is not a PDF; only PDF sources are supported so far."
-            )
         if not ref.path.is_file():
             raise ToolError(f"Source file for {name!r} not found at {ref.path}.")
+        if ref.path.suffix.lower() in TEXT_SUFFIXES:
+            self._sources[name] = TextSource(ref.path)
+            return self._sources[name]
+        if ref.path.suffix.lower() != ".pdf":
+            raise ToolError(f"Source {name!r} has an unsupported file type.")
 
         def ocr(*args):
             if self._ocr is None:
@@ -94,13 +96,18 @@ class TutorTools:
         return self._sources[name]
 
     def get_outline(self, source: str) -> str:
-        """Table of contents of a source: section ids, titles, and PDF page ranges."""
-        lines = [f"Outline of {source} (cite sections as '{source} §<id>'):"]
-        for s in self._source(source).outline():
-            indent = "  " * (s.level - 1)
-            lines.append(
-                f"{indent}{s.title} [id: {s.id}, PDF pp. {s.start_page}-{s.end_page}]"
+        """Table of contents of a source: section ids, titles, and (for PDFs) page ranges."""
+        outline = self._source(source).outline()
+        if not outline:
+            return (
+                f"{source} has no table of contents or headings, so its sections can't be "
+                "read separately."
             )
+        lines = [f"Outline of {source} (cite sections as '{source} §<id>'):"]
+        for s in outline:
+            indent = "  " * (s.level - 1)
+            pages = f", PDF pp. {s.start_page}-{s.end_page}" if s.start_page else ""
+            lines.append(f"{indent}{s.title} [id: {s.id}{pages}]")
         return "\n".join(lines)
 
     def read_section(self, source: str, section_id: str) -> str:
@@ -111,15 +118,20 @@ class TutorTools:
             raise ToolError(
                 f"No section {section_id!r} in {source}. Use get_outline to find section ids."
             ) from None
-        header = f"{source} §{text.id}: {text.title} (PDF pp. {text.first_page}-{text.last_page})"
+        header = f"{source} §{text.id}: {text.title}"
+        if text.first_page:
+            header += f" (PDF pp. {text.first_page}-{text.last_page})"
         warnings = "".join(f"\nWARNING: {w}" for w in text.warnings)
         return f"{header}{warnings}\n\n{text.markdown}"
 
     def get_exercises(self, source: str, section_id: str) -> str:
         """The exercise set at the end of a section (everything after its EXERCISES heading)."""
         text = self.read_section(source, section_id)
+        # A heading ("## 2.4 EXERCISES") or a label paragraph ("*Exercises I.*").
         heading = re.search(
-            r"^#{1,6}[^\n]*\bexercises\b[^\n]*$", text, re.IGNORECASE | re.MULTILINE
+            r"^(?:#{1,6}[^\n]*\bexercises\b|[*_]{1,2}exercises\b)[^\n]*$",
+            text,
+            re.IGNORECASE | re.MULTILINE,
         )
         if heading is None:
             raise ToolError(

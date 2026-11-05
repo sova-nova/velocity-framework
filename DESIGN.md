@@ -94,7 +94,7 @@ Naive chunk-and-embed RAG is a poor fit for teaching, because textbooks have str
 1. Extract the table of contents and build an outline with stable section IDs (`2.4`, `ch2`, `2.review`, `app-f`, `preface`).
 2. Extract section text on demand (lazily, on first `read_section`), with math as LaTeX, and cache it.
 3. Later: extract problem sets separately so the tutor can assign exercises; ingest a solution manual if available.
-4. Later: non-PDF sources (markdown, HTML, EPUB) behind the same interface.
+4. Non-PDF sources (Markdown, HTML, EPUB) behind the same interface: built in M7 (see "M7 notes: non-PDF sources").
 
 Source tools: `get_outline()`, `read_section(id)`, and `get_exercises(section_id)`, which returns the section text from its EXERCISES heading on. `search(query)` comes later.
 
@@ -197,6 +197,15 @@ Linux is the primary platform (the developer's). macOS is supported. Windows is 
 - **History is append-only.** A turn that fails (API error or refusal) is rolled back to its start, so the history stays valid and its context is re-sent with the next message.
 - **Dependency:** `anthropic` is pinned to `>=0.125,<1` because `marker-pdf` requires `<1`. 0.125 supports everything used here.
 - **Not yet:** resuming a chat (each `velocity chat` is a new session; the Claude Code front end supports resume), and context compaction for very long sessions.
+
+### M7 notes: non-PDF sources (2026-11-06)
+
+- **`TextSource`** (`text_source.py`) reads Markdown, HTML and EPUB with the standard library only (`html.parser`, `zipfile`, `xml.etree`). The file becomes markdown in memory; no cache, since parsing a whole book takes well under a second. It has the same `outline()` / `read_section()` interface as `PdfSource`; sections have no page numbers, so the tools leave them out.
+- **Outline:** Markdown and HTML use their headings (ATX and setext; not inside code fences). EPUB uses the book's own table of contents (the EPUB 3 `nav`, else the EPUB 2 NCX), resolved to positions in the text through element ids, and falls back to headings. A section runs to the next outline entry, as for PDFs.
+- **Section ids:** the number for numbered titles (`2.4`), `ch<n>` for chapters (also Roman numerals: "CHAPTER IV." is `ch4`), `part-<n>`, `app-<x>`, otherwise a slug of the title; repeats get `-2`, `-3`.
+- **HTML to markdown:** headings, paragraphs, lists, emphasis, code, tables (as rows), image alt text. Math: LaTeX in the text passes through; MathML becomes its TeX annotation or alt text; an image with a `data-tex` attribute (MathJax-rendered math, as in Project Gutenberg's EPUBs) becomes its LaTeX.
+- **Exercises:** `get_exercises` also accepts an emphasized label paragraph ("*Exercises I.*"), not only an "Exercises" heading.
+- **Tested on a real book:** *Calculus Made Easy* (Thompson, 1914; Project Gutenberg #33283, EPUB 3, 13 MB). 37 entries from its table of contents in 0.16 s, every formula as LaTeX, and `get_exercises(ch4)` returns Exercise Set I complete.
 
 ### M7 notes: dropped-text check (2026-11-06)
 
