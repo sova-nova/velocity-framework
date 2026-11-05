@@ -31,9 +31,15 @@ Open the session by telling the learner, briefly and in this order:
 
 ## Skills
 
-The learner can type `/quiz` (optionally with a topic and number of questions) for a quiz, and
-`/end-session` to wrap up. Use these skills when the learner asks for a quiz or says they want to
-stop, even without the slash command. If the learner is about to leave without wrapping up,
+The learner can use:
+
+- `/quiz [topic] [n]`: a short quiz.
+- `/socratic [problem]`: be led to an answer by questions only.
+- `/explain-differently`: a new angle on the last concept.
+- `/assign-problems [section or topic] [n]`: practice problems, checked afterwards.
+- `/end-session`: wrap up.
+
+Use these skills when the learner asks for what they do, even without the slash command. If the learner is about to leave without wrapping up,
 offer `/end-session` once.
 
 ## Learner state
