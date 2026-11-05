@@ -36,10 +36,10 @@ def _tutor(subject_slug: str, resume: bool) -> int:
     return 0  # not reached
 
 
-def _chat(subject_slug: str) -> int:
+def _chat(subject_slug: str, model: str | None) -> int:
     import asyncio
 
-    from velocity.agent import chat
+    from velocity.agent import DEFAULT_MODEL, chat, resolve_model
     from velocity.config import load_subject
 
     try:
@@ -48,7 +48,11 @@ def _chat(subject_slug: str) -> int:
         pass
     config = load_config()
     subject = load_subject(config, subject_slug)
-    asyncio.run(chat(config, subject, sys.stdout, input))
+    try:
+        model = resolve_model(model or config.api_model or DEFAULT_MODEL)
+    except ValueError as e:
+        raise ConfigError(str(e)) from None
+    asyncio.run(chat(config, subject, sys.stdout, input, model=model))
     return 0
 
 
@@ -130,6 +134,11 @@ def main(argv: list[str] | None = None) -> int:
         "chat", help="tutor in the terminal via the Anthropic API (needs an API key)"
     )
     chat.add_argument("subject", help="subject id, e.g. calculus")
+    chat.add_argument(
+        "--model",
+        help="opus, sonnet, haiku, or a full model ID (overrides [api] model in "
+        "config.toml; switch during a chat with /model)",
+    )
 
     new = commands.add_parser("new", help="create a subject")
     new.add_argument("name", help='subject name, e.g. "Network Security"')
@@ -178,7 +187,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "tutor":
             return _tutor(args.subject, args.resume)
         if args.command == "chat":
-            return _chat(args.subject)
+            return _chat(args.subject, args.model)
         if args.command == "new":
             subject = create_subject(load_config(), args.name)
             print(

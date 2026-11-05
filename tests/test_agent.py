@@ -9,8 +9,10 @@ from velocity.agent import (
     FALLBACK_BETA,
     TutorAgent,
     Usage,
+    UsageByModel,
     echo_content,
     mcp_tool_params,
+    resolve_model,
     system_prompt,
 )
 from velocity.config import Config, Subject
@@ -298,3 +300,51 @@ def test_slash_command_parsing():
     assert "review-notes" in system_prompt(
         Subject("x", "X", Path("."), "", (), ()), skills
     )
+
+
+def test_resolve_model():
+    assert resolve_model("sonnet") == "claude-sonnet-5-5"
+    assert resolve_model(" Haiku ") == "claude-haiku-5-5"
+    assert resolve_model("claude-opus-5") == "claude-opus-5"
+    with pytest.raises(ValueError, match="Unknown model"):
+        resolve_model("gpt-5")
+
+
+def test_model_command_switches_the_model_for_later_requests(config, subject):
+    api = FakeAPI(response(text("one")), response(text("two")))
+    agent = make_agent(config, subject, api)
+    asyncio.run(agent.turn("hello"))
+
+    assert "Current model: claude-opus-5-5" in agent.model_command("")
+    assert "Unknown model" in agent.model_command("gpt")
+    assert agent.model == "claude-opus-5-5"
+    assert "Already using" in agent.model_command("opus")
+    assert "Switched to claude-haiku-5-5" in agent.model_command("haiku")
+
+    asyncio.run(agent.turn("again"))
+    second = api.requests[1]
+    assert second["model"] == "claude-haiku-5-5"
+    assert "fallbacks" not in second  # Haiku has no server-side fallback
+    assert (
+        second["messages"][: len(api.requests[0]["messages"])]
+        == api.requests[0]["messages"]
+    )  # history kept as is
+    assert set(agent.usage.models) == {"claude-opus-5-5", "claude-haiku-5-5"}
+    assert "/model" not in log_text(agent)  # not part of the dialogue
+
+
+def test_usage_by_model_summary():
+    usage = UsageByModel()
+    assert usage.summary() == "No API requests."
+    tokens = NS(
+        input_tokens=1_000_000,
+        output_tokens=0,
+        cache_read_input_tokens=0,
+        cache_creation_input_tokens=0,
+    )
+    usage.add("claude-opus-5-5", tokens)
+    assert usage.summary().startswith("claude-opus-5-5: 1 API requests")
+    assert "Total" not in usage.summary()
+    usage.add("claude-sonnet-5-5", tokens)
+    assert usage.requests == 2
+    assert "Total: about $6.00" in usage.summary()

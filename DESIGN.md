@@ -164,7 +164,7 @@ Linux is the primary platform (the developer's). macOS is supported. Windows is 
 3. **M3: Learner state. Done 2026-11-04.** Per-subject state, session-start summary, spaced-review scheduling.
 4. **M4: Skills. Done 2026-11-04** except `/review-notes`, which moves to M5 because it needs `read_notes`. `/quiz` and `/end-session`, then the rest.
 5. **M5: Notes. Done 2026-11-04.** `read_notes` with per-subject folder lists and `private: true`; `/review-notes`; note-taking prompts.
-6. **M6: Own agent loop. Built 2026-11-04 (`velocity chat`); live API test pending the user's key.** Front end B on the `anthropic` SDK, with the same MCP server and skills.
+6. **M6: Own agent loop. Done 2026-11-05** (`velocity chat`, live-tested with an API key, merged in #13). Front end B on the `anthropic` SDK, with the same MCP server and skills.
 7. **M7: Polish and portfolio.** MIT license (added once the project is finished, decided 2026-11-04), README with a demo, teaching-quality evals (replaying session records), drop-check repair, non-PDF sources.
 
 ### M2 notes (2026-11-04)
@@ -188,6 +188,7 @@ Linux is the primary platform (the developer's). macOS is supported. Windows is 
   - It calls the same hook functions Claude Code's hooks run, so logs, state and recaps behave identically in both front ends.
 - **Requests:**
   - Default model `claude-opus-5-5` at effort `medium`, configurable under `[api]` in `config.toml`.
+  - Pick the model per run with `--model` and switch during a chat with `/model` (aliases `opus`, `sonnet`, `haiku`, or a full ID). `/model` is handled by the loop and not logged. History is sent unchanged after a switch (the API ignores thinking blocks the new model can't read); the cache is per model, so the first request after a switch rebuilds it. The cost summary is per model.
   - Adaptive thinking (always on for Opus 5.5) and top-level automatic prompt caching.
   - Session context, log annotations and invoked skills arrive as mid-conversation `system` messages, so the cached prefix stays intact.
   - Server-side refusal fallbacks (`fallbacks: "default"`) on models that support them.
