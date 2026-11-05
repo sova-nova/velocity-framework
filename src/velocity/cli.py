@@ -178,7 +178,14 @@ def main(argv: list[str] | None = None) -> int:
     hook = commands.add_parser("hook", help="Claude Code hook handler (internal)")
     hook.add_argument(
         "event",
-        choices=["session-start", "user-prompt", "stop", "session-end", "guard"],
+        choices=[
+            "session-start",
+            "user-prompt",
+            "stop",
+            "session-end",
+            "guard",
+            "tool-use",
+        ],
     )
     hook.add_argument("--subject", required=True)
 

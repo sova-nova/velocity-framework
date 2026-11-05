@@ -602,3 +602,64 @@ def test_cohen_kappa():
     assert cohen_kappa([("pass", "pass"), ("fail", "fail")]) == 1.0
     assert cohen_kappa([("pass", "pass"), ("pass", "pass")]) == 1.0
     assert cohen_kappa([("pass", "fail"), ("fail", "pass")]) == pytest.approx(-1.0)
+
+
+def test_records_with_tool_calls_replay_them(tmp_path):
+    import shutil
+
+    data = tmp_path / "evaldata"
+    records = data / "records" / "calculus"
+    records.mkdir(parents=True)
+    shutil.copy(DATA_DIR / "state.json", data / "state.json")
+    question = {"topic": "t", "question": "2+2", "outcome": "correct"}
+    events = [
+        ("event", "start", "Calculus", {"sources": []}),
+        ("learner", None, "Quiz me", None),
+        ("event", "tool", "load_skill", {"input": {"name": "quiz"}}),
+        ("tutor", None, "Q1: what is 2+2?", None),
+        ("learner", None, "4", None),
+        ("event", "tool", "record_question", {"input": question}),
+        ("tutor", None, "Right. Q2: 3+3?", None),
+        ("learner", None, "6", None),
+    ]
+    lines = [
+        json.dumps(
+            {"ts": f"2026-11-07T10:00:0{i}", "role": role, "text": text, "title": None}
+            | {"kind": kind, "meta": meta}
+        )
+        for i, (role, kind, text, meta) in enumerate(events)
+    ]
+    (records / "2026-11-07-1.jsonl").write_text("\n".join(lines))
+
+    inp = replay_input(case(session="2026-11-07-1", turn=3), data_dir=data)
+    tool_turns = [t.text for t in inp.history if t.role == "tool"]
+    assert tool_turns == ["load_skill", "record_question"]
+
+    api = FakeAPI(response(text("ok")))
+    box = tmp_path / "box"
+    asyncio.run(
+        replay(
+            inp,
+            sandbox=box,
+            stream=api,
+            model="m",
+            source_paths={},
+            today=TODAY,
+            data_dir=data,
+        )
+    )
+    messages = api.requests[0]["messages"]
+    blocks = [m["content"][0] for m in messages if isinstance(m["content"], list)]
+    assert [(b["type"], b.get("name")) for b in blocks] == [
+        ("tool_use", "load_skill"),
+        ("tool_result", None),
+        ("tool_use", "record_question"),
+        ("tool_result", None),
+    ]
+    assert blocks[2]["input"] == question
+    assert blocks[1]["tool_use_id"] == blocks[0]["id"]
+    # The recorded record_question ran again, so the sandbox state has the question.
+    state = next((box / "vault/Tutor").glob("*/state.json"))
+    assert [q["question"] for q in json.loads(state.read_text())["questions"]] == [
+        "2+2"
+    ]

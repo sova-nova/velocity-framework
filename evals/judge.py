@@ -115,6 +115,9 @@ def render_history(history: tuple[Turn, ...]) -> str:
             lines.append(f"TUTOR {block_note(t)}")
         elif t.role == "annotation":
             lines.append(f"[The learner typed into the session log:] {t.text}")
+        elif t.role == "tool":
+            args = json.dumps(t.args or {}, ensure_ascii=False)
+            lines.append(f"[TUTOR called {t.text}({args})]")
     return "\n\n".join(lines) or "(This is the first message of the session.)"
 
 

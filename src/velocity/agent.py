@@ -383,6 +383,20 @@ class TutorAgent:
             return self._result(
                 block.id, json.dumps({"INVALID_JSON": str(block.input)}), True
             )
+        result = await self._call(block, args)
+        # Like Claude Code's PostToolUse hook: keep the call in the session record.
+        hooks.tool_use(
+            self.config,
+            self.subject,
+            {
+                "tool_name": block.name,
+                "tool_input": args,
+                "is_error": result.get("is_error", False),
+            },
+        )
+        return result
+
+    async def _call(self, block: Any, args: dict) -> dict:
         self.tool_log.append((block.name, args))
         self.out.write(
             f"  · {block.name}({', '.join(f'{k}={v!r}'[:60] for k, v in args.items())})\n"

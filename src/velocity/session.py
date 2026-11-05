@@ -143,13 +143,19 @@ class Session:
         *,
         title: str | None = None,
         kind: str | None = None,
+        meta: dict | None = None,
         now: datetime | None = None,
     ) -> Event:
         """Record an event. It reaches the markdown on the next render()."""
         if self.ended:
             raise RuntimeError(f"session {self.id} has ended")
         event = Event(
-            (now or datetime.now().astimezone()).isoformat(), role, text, title, kind
+            (now or datetime.now().astimezone()).isoformat(),
+            role,
+            text,
+            title,
+            kind,
+            meta,
         )
         self._write_record(event)
         return event
