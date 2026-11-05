@@ -28,7 +28,7 @@ An excerpt from a real session log, as it appears in Obsidian (math renders ther
 ## Features
 
 - **Teaching, not answering.** The tutor diagnoses what you know, gives hints before answers, mixes earlier material back into new questions, and says so when you (or it) are wrong.
-- **Optional sources.** Attach a textbook PDF and the tutor reads it section by section and cites it (`Stewart §2.4`). Math is OCR'd to LaTeX with [marker](https://github.com/datalab-to/marker) and cached locally. Text the OCR silently drops is detected against the PDF's text layer and restored. Without sources, it teaches from general knowledge and says so once per session.
+- **Optional sources.** Attach a textbook (PDF, EPUB, Markdown or HTML) and the tutor reads it section by section and cites it (`Stewart §2.4`). For PDFs: Math is OCR'd to LaTeX with [marker](https://github.com/datalab-to/marker) and cached locally. Text the OCR silently drops is detected against the PDF's text layer and restored. Without sources, it teaches from general knowledge and says so once per session.
 - **Session logs.** The dialogue is logged word for word by hooks, not by the model, to an append-only record and a markdown log in your vault. Text you type into the log is kept as your annotation.
 - **Learner state.** Topics, every answered question, and open threads are stored per subject, with spaced review (a correct answer doubles a topic's review interval; a wrong one resets it). A summary loads at the start of every session, and a readable `progress.md` sits next to it.
 - **Your notes stay yours.** The tutor can read the note folders you allow and critique them on request, but it can't write to them. This is enforced by Claude Code permission rules, a hook and a test, not only by the prompt. Notes marked `private: true` are never read.
@@ -73,7 +73,7 @@ Then create a subject, and optionally attach a source and note folders:
 
 ```bash
 uv run velocity new "Calculus"
-uv run velocity source add calculus ~/books/stewart.pdf --name Stewart
+uv run velocity source add calculus ~/books/stewart.pdf --name Stewart   # or .epub, .md, .html
 uv run velocity notes add calculus "Math/Calculus"
 ```
 

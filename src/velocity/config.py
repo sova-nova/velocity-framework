@@ -183,6 +183,9 @@ def create_subject(config: Config, name: str) -> Subject:
     return load_subject(config, slug)
 
 
+SOURCE_SUFFIXES = {".pdf", ".md", ".markdown", ".html", ".htm", ".xhtml", ".epub"}
+
+
 def add_source(
     config: Config, slug: str, path: Path, name: str | None = None
 ) -> SourceRef:
@@ -191,9 +194,9 @@ def add_source(
     path = path.expanduser().resolve()
     if not path.is_file():
         raise ConfigError(f"{path} is not a file")
-    if path.suffix.lower() != ".pdf":
+    if path.suffix.lower() not in SOURCE_SUFFIXES:
         raise ConfigError(
-            f"{path.name} is not a PDF; only PDF sources are supported so far"
+            f"{path.name}: unsupported file type (use PDF, Markdown, HTML or EPUB)"
         )
     name = (name or path.stem).strip()
     if not name:

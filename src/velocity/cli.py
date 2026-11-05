@@ -76,14 +76,31 @@ def _source(args: argparse.Namespace) -> int:
             f'Tip: the tutor cites it as "{added.name} §<section>". To use a shorter name, edit '
             "subject.toml or remove it and add it again with --name."
         )
-    entries = toc_size(added.path)
-    if entries == 0:
+    if added.path.suffix.lower() == ".pdf":
+        entries = toc_size(added.path)
+        if entries == 0:
+            print(
+                "Warning: this PDF has no table of contents (bookmarks), so the tutor cannot "
+                "find its sections. read_section and get_exercises will not work for it yet."
+            )
+        else:
+            print(f"Found {entries} entries in its table of contents.")
+        return 0
+
+    from velocity.text_source import TextSource
+
+    sections = TextSource(added.path).outline()
+    if not sections:
         print(
-            "Warning: this PDF has no table of contents (bookmarks), so the tutor cannot find "
-            "its sections. read_section and get_exercises will not work for it yet."
+            "Warning: no headings (or, for EPUB, no table of contents) were found, so the "
+            "tutor cannot find its sections."
         )
     else:
-        print(f"Found {entries} entries in its table of contents.")
+        print(
+            f"Found {len(sections)} sections, e.g. "
+            + ", ".join(f"§{s.id} {s.title}" for s in sections[:3])
+            + "."
+        )
     return 0
 
 
