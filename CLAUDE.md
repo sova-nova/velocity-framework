@@ -19,8 +19,8 @@ M1–M6 done and merged. M7 (polish and portfolio) is in progress; M8 (web front
 2. README with a demo (a real session excerpt, used with the user's permission), setup, both front ends, model advice.
 3. Teaching-quality evals, in 3 PRs (the user chose: commit cases from their sessions, compare Opus and Sonnet, they will hand-label ~15 cases, budget ~$5 per full run):
    - PR 1 (#17, merged): cases, next-turn replay harness, code checks. Dry run: $0.25 for 3 cases on two models.
-   - PR 2 (branch `evals-judge`): LLM judge (Opus 5.5, pass/fail rubric) and the labeling tool (`python -m evals.label export/agree`). The user runs a small judge dry run.
-   - PR 3: full run, the user labels ~15 replies from it, judge agreement measured; results summary committed, headline numbers in the README.
+   - PR 2 (#18, branch `evals-judge`): LLM judge (Opus 5.5, pass/fail rubric) and the labeling tool (`python -m evals.label export/agree`). Judge dry run: $0.40 for 3 cases.
+   - PR 3, **postponed by the user (2026-11-06) to limit spending**: full run (estimated $5–6; the user hadn't yet chosen between allowing ~$6.50 once, a Sonnet judge, or accepting gaps), the user labels ~15 replies from it, judge agreement measured, results in the README. Ask before starting it.
 4. Source improvements: drop-check repair for OCR (prototype in `DESIGN.md` M1 findings), then non-PDF sources.
 - Optional later: resuming `velocity chat`, compaction for long chats, a `search` source tool.
 - Then M8, a web front end (scope to be planned). Ask about the MIT license after M8.
