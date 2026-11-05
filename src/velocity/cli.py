@@ -8,6 +8,7 @@ from pathlib import Path
 
 from velocity.config import (
     ConfigError,
+    add_note_folder,
     add_source,
     create_subject,
     list_subjects,
@@ -64,6 +65,39 @@ def _source(args: argparse.Namespace) -> int:
     return 0
 
 
+def _notes(args: argparse.Namespace) -> int:
+    from velocity.config import load_subject
+    from velocity.notes import list_notes
+
+    config = load_config()
+    if args.notes_command == "add":
+        folder = add_note_folder(config, args.subject, args.folder)
+        count = len(list_notes(config, load_subject(config, args.subject)))
+        print(
+            f"The tutor can now read notes in {folder} ({count} readable "
+            f"note{'s' if count != 1 else ''} in this subject's folders). It never writes to them. Add `private: true` to a note's "
+            "front matter to hide it. Start a new session to use it."
+        )
+        return 0
+    subject = load_subject(config, args.subject)
+    if not subject.note_folders:
+        print(
+            f"No note folders. Add one with: velocity notes add {args.subject} <folder>"
+        )
+        return 0
+    print(
+        "Folders: "
+        + ", ".join(
+            f.relative_to(config.vault_path).as_posix() for f in subject.note_folders
+        )
+    )
+    notes = list_notes(config, subject)
+    print(
+        "\n".join(f"- {n.path} ({n.title})" for n in notes) or "No readable notes yet."
+    )
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="velocity", description="A local subject tutor."
@@ -92,6 +126,22 @@ def main(argv: list[str] | None = None) -> int:
     source_list = source_commands.add_parser("list", help="list a subject's sources")
     source_list.add_argument("subject")
 
+    notes = commands.add_parser(
+        "notes", help="manage which note folders the tutor may read"
+    )
+    notes_commands = notes.add_subparsers(dest="notes_command", required=True)
+    notes_add = notes_commands.add_parser(
+        "add", help="let the tutor read a vault folder"
+    )
+    notes_add.add_argument("subject")
+    notes_add.add_argument(
+        "folder", help='folder relative to the vault, e.g. "Math/Calculus"'
+    )
+    notes_list = notes_commands.add_parser(
+        "list", help="list readable notes for a subject"
+    )
+    notes_list.add_argument("subject")
+
     mcp = commands.add_parser("mcp", help="run the tutor's MCP server over stdio")
     mcp.add_argument("--subject", required=True)
 
@@ -113,6 +163,8 @@ def main(argv: list[str] | None = None) -> int:
             )
         elif args.command == "source":
             return _source(args)
+        elif args.command == "notes":
+            return _notes(args)
         elif args.command == "subjects":
             print("\n".join(list_subjects(load_config())) or "No subjects yet.")
         elif args.command == "mcp":

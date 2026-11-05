@@ -25,6 +25,8 @@ TOOL_NAMES = [
     "open_thread",
     "close_thread",
     "read_state",
+    "list_notes",
+    "read_note",
 ]
 
 

@@ -77,9 +77,18 @@ def session_start(config: Config, subject: Subject, payload: dict) -> dict:
         key=lambda i: (i.rsplit("-", 1)[0], int(i.rsplit("-", 1)[1])),
     )
     status = "resumed" if resumed else "new session"
+    from velocity.notes import list_notes
+
+    note_count = len(list_notes(config, subject)) if subject.note_folders else 0
+    notes_line = (
+        f"Learner notes: {note_count} readable notes (list_notes / read_note; read-only)."
+        if subject.note_folders
+        else "Learner notes: no note folders configured."
+    )
     context = [
         f"velocity session {session.id} for subject '{subject.name}' ({status}).",
         f"Sources: {sources}.",
+        notes_line,
         f"Previous sessions: {', '.join(previous[-5:]) or 'none'}"
         + (" (use read_session to review the last one)." if previous else "."),
         "The conversation log is at " + session.log_path.as_posix() + ".",
