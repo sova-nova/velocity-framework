@@ -260,8 +260,8 @@ class Session:
             annotations.append(extra)
         return LogCheck(missing, annotations)
 
-    def restore_log(self) -> None:
-        """Rewrite the markdown from the record. Learner annotations are lost; callers ask first."""
+    def rendered_text(self) -> str:
+        """The markdown log as the record says it was rendered (without learner edits)."""
         events = self.events()[: self._rendered()]
         start = next(e for e in events if e.kind == "start")
         sources = (start.meta or {}).get("sources", [])
@@ -272,7 +272,11 @@ class Session:
             render_event(e)
             for e in sorted((e for e in events if e is not start), key=lambda e: e.ts)
         )
-        self.log_path.write_text(header + body, encoding="utf-8")
+        return header + body
+
+    def restore_log(self) -> None:
+        """Rewrite the markdown from the record. Learner annotations are lost; callers ask first."""
+        self.log_path.write_text(self.rendered_text(), encoding="utf-8")
 
     # -- internals -----------------------------------------------------------------
 

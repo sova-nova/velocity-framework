@@ -56,6 +56,28 @@ def _chat(subject_slug: str, model: str | None) -> int:
     return 0
 
 
+def _web(subject_slug: str | None, port: int, open_browser: bool) -> int:
+    import threading
+    import webbrowser
+
+    import uvicorn
+
+    from velocity.config import load_subject
+    from velocity.web import HOST, build_app
+
+    config = load_config()
+    if subject_slug:
+        load_subject(config, subject_slug)  # fail early on an unknown subject
+    url = f"http://{HOST}:{port}/" + (
+        f"?subject={subject_slug}" if subject_slug else ""
+    )
+    print(f"velocity web UI at {url} (Ctrl+C to stop)")
+    if open_browser:
+        threading.Timer(1.0, webbrowser.open, [url]).start()
+    uvicorn.run(build_app(config), host=HOST, port=port, log_level="warning")
+    return 0
+
+
 def _source(args: argparse.Namespace) -> int:
     from velocity.config import load_subject
 
@@ -202,6 +224,15 @@ def main(argv: list[str] | None = None) -> int:
         "config.toml; switch during a chat with /model)",
     )
 
+    web = commands.add_parser(
+        "web", help="open the web UI in your browser (local only)"
+    )
+    web.add_argument("subject", nargs="?", help="subject to open first, e.g. calculus")
+    web.add_argument("--port", type=int, default=8765)
+    web.add_argument(
+        "--no-browser", action="store_true", help="don't open a browser window"
+    )
+
     new = commands.add_parser("new", help="create a subject")
     new.add_argument("name", help='subject name, e.g. "Network Security"')
 
@@ -265,6 +296,8 @@ def main(argv: list[str] | None = None) -> int:
             return _tutor(args.subject, args.resume)
         if args.command == "chat":
             return _chat(args.subject, args.model)
+        if args.command == "web":
+            return _web(args.subject, args.port, not args.no_browser)
         if args.command == "new":
             subject = create_subject(load_config(), args.name)
             print(
