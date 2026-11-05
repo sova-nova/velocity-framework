@@ -10,17 +10,43 @@ Read `DESIGN.md` before making architectural decisions. It is the source of trut
 
 ## Current Status
 
-M1–M6 built (M6 awaiting a live API test with the user's key); M7 (polish and portfolio) is next. See `DESIGN.md` section 4.
+M1–M6 built. M6 is **not merged yet**: it waits for a live API test. M7 (polish and portfolio) comes after. See `DESIGN.md` section 4.
 
-**Where we left off (2026-11-04):**
-- `velocity new "<name>"` creates a subject. `velocity tutor <subject> [--resume]` regenerates the workspace in `~/.local/share/velocity/workspaces/<subject>/` and launches Claude Code there. Hooks (`velocity hook ...`) log the dialogue, and `velocity mcp --subject <id>` serves the tools.
-- Modules: `config`, `outline`, `ocr`, `pdf_source`, `session` (record + markdown log), `state` (learner state), `skills`, `agent` (own loop, front end B), `notes`, `tools` (TutorTools), `mcp_server`, `workspace` (template, settings, notes protection), `hooks`, `cli`. Tutor prompt template: `src/velocity/template/CLAUDE.md`.
-- OCR packages install by default (`[tool.uv] default-groups`); the llama.cpp server path comes from `llama_cpp_binary` in `config.toml` (or the `LLAMA_CPP_BINARY` env var). The slow real-OCR test runs only with `VELOCITY_OCR_TESTS=1`.
-- Test book: `sources/mathematics/James Stewart - Calculus - Early transcendentals (8th Edition).pdf`.
-- M3: `state.py` (topics, question log, threads, review scheduling); state tools in `tools.py`; summary injected at session start; `progress.md` generated in the vault. The launcher isolates the tutor with `--strict-mcp-config` and pre-approves `mcp__velocity` (see `workspace.claude_args`).
-- M4 in progress: skills live in `src/velocity/template/skills/<name>/SKILL.md` and are copied into the workspace. Done: `/quiz`, `/end-session` (tool `end_session`), `/socratic`, `/explain-differently`, `/assign-problems` (tool `get_exercises`). M4 is complete.
-- M5: `notes.py` (`list_notes`/`read_note`: note folders only, `private: true` skipped, no escapes), `velocity notes add/list`, `/review-notes` skill, note-taking prompts in the tutor template.
-- To test with real Claude Code without touching the user's vault: use a throwaway `XDG_CONFIG_HOME`/`XDG_DATA_HOME` with a scratch vault, build the workspace, and run `claude -p "<prompt>" --model sonnet` plus `workspace.claude_args(...)` from inside it (put the prompt before `--mcp-config`, which takes several values). Haiku does not reliably call the state tools.
+**Where we left off (2026-11-04, paused by the user):**
+
+*Immediate next step: finish M6.*
+- PR #13 (branch `m6-own-loop`, CI green) adds `velocity chat <subject>`, the own agent loop in `agent.py`. It is open and unmerged.
+- It needs a live run with the user's Anthropic API key. Don't ask for the key in chat; the user exports `ANTHROPIC_API_KEY` in their own terminal.
+- The user runs `uv run velocity chat calculus` on branch `m6-own-loop`. Check: a few messages, `/quiz` with an answer, `/end-session`, the session log in Obsidian, and the cost summary printed at exit.
+- Fix anything found on the same branch/PR, then the user merges #13.
+
+*Then M7 (polish and portfolio; ask the user about scope and order first):*
+- README with a demo: GIF or sample log, setup, both front ends, recommended models (Haiku does not reliably call the state tools).
+- Teaching-quality evals that replay the JSONL session records.
+- MIT license (the user wanted it only once the project is finished).
+- Drop-check repair for OCR (prototype in `DESIGN.md` M1 findings) and non-PDF sources.
+- Optional: resuming `velocity chat`, compaction for long chats, a `search` source tool.
+
+*How the user works (see also memory):*
+- One branch and PR per change, based on `main`. The user reviews and merges on GitHub with a merge commit and deletes the branch.
+- Don't stack PRs; that went wrong once (#2–#5, fixed by #6).
+- Merged so far: #1–#12.
+
+*Environment facts:*
+- The user's `~/.config/velocity/config.toml` points `vault_path` at the test vault `/home/sokosova/personal/test/obsidian`. Their real vault is `/home/sokosova/Documents/Linux Vault`; they will switch when ready.
+- OCR cache for Stewart §2.4 and Chapter 2's Review is in `~/.local/share/velocity/sources/`. llama.cpp (Vulkan build, AMD RX 7700 XT) is at `~/.local/opt/llama.cpp/b12118/llama-b12118/llama-server`; set `llama_cpp_binary` in `config.toml` or `LLAMA_CPP_BINARY`.
+- Claude Code 2.1.318 (`blockWritesOutsideWorkingDirectories` needs 2.1.314+). `gh` is installed and logged in.
+
+*Code map:*
+- Commands: `velocity new "<name>"`, `velocity subjects`, `velocity source add/list`, `velocity notes add/list`, `velocity tutor <subject> [--resume]` (front end A, Claude Code), `velocity chat <subject>` (front end B, API; on the unmerged branch). Internal: `velocity mcp --subject`, `velocity hook <event>`.
+- Modules: `config`, `outline`, `ocr`, `pdf_source`, `session` (record + markdown log), `state` (learner state), `notes`, `skills`, `tools` (TutorTools), `mcp_server`, `workspace` (template, settings, notes protection, `claude_args`), `hooks`, `agent` (front end B), `cli`.
+- The tutor prompt is `src/velocity/template/CLAUDE.md`; skills are in `src/velocity/template/skills/<name>/SKILL.md`. The same files back both front ends.
+- Tests: about 134, `uv run pytest`. The slow real-OCR test runs only with `VELOCITY_OCR_TESTS=1`.
+
+*How to test with real Claude Code without touching the user's vault:*
+- Use a throwaway `XDG_CONFIG_HOME`/`XDG_DATA_HOME` with a scratch vault, then `velocity new`. For OCR'd sections, copy `~/.local/share/velocity/sources/*` into the throwaway data dir.
+- Build the workspace, then from inside it run `claude -p "<prompt>" --model sonnet` plus `workspace.claude_args(...)`. Put the prompt before `--mcp-config`, which takes several values.
+- Use `--output-format stream-json --verbose` to see tool calls. Earlier scratch vaults lived in the session scratchpad and are gone.
 
 ## Stack and Commands
 
