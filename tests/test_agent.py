@@ -14,6 +14,7 @@ from velocity.agent import (
     mcp_tool_params,
     resolve_model,
     system_prompt,
+    unknown_command,
 )
 from velocity.config import Config, Subject
 from velocity.skills import load_skills, parse_slash_command
@@ -348,3 +349,17 @@ def test_usage_by_model_summary():
     usage.add("claude-sonnet-5-5", tokens)
     assert usage.requests == 2
     assert "Total: about $6.00" in usage.summary()
+
+
+def test_unknown_commands_are_answered_locally():
+    skills = load_skills()
+    assert unknown_command("/haiku", skills) == (
+        "Unknown command /haiku. To switch models, type /model haiku."
+    )
+    message = unknown_command("/foo bar", skills)
+    assert message.startswith("Unknown command /foo. Commands: ")
+    assert "/quiz" in message and "/model" in message
+    for known in ["/quiz limits 3", "/model haiku", "/exit", "/end-session"]:
+        assert unknown_command(known, skills) is None
+    for text in ["what is /quiz", "/usr/bin/env", "/ 2", "hello"]:
+        assert unknown_command(text, skills) is None

@@ -161,7 +161,9 @@ class Session:
         pending = sorted(events[done:], key=lambda e: e.ts)
         if pending:
             with self.log_path.open("a", encoding="utf-8") as f:
-                f.write("".join(render_event(e) for e in pending))
+                # Text the learner typed at the end (saved without a trailing blank line)
+                # must not run into the next turn.
+                f.write(_separator(self.log_path) + "".join(map(render_event, pending)))
         self._set_rendered(len(events))
 
     def end(
@@ -280,6 +282,17 @@ class Session:
 
     def _set_rendered(self, n: int) -> None:
         self._rendered_path.write_text(str(n))
+
+
+def _separator(path: Path) -> str:
+    """The newlines needed so text appended to `path` starts a new paragraph."""
+    with path.open("rb") as f:
+        size = f.seek(0, 2)
+        f.seek(max(0, size - 2))
+        tail = f.read()
+    if not tail or tail.endswith(b"\n\n"):
+        return ""
+    return "\n" if tail.endswith(b"\n") else "\n\n"
 
 
 def record_dir(subject_slug: str) -> Path:
