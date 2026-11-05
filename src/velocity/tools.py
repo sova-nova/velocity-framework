@@ -32,7 +32,7 @@ class ToolError(Exception):
     """An error the model should see and can act on."""
 
 
-def _default_ocr(config: Config) -> PageOcr:
+def default_ocr(config: Config) -> PageOcr:
     if config.llama_cpp_binary and "LLAMA_CPP_BINARY" not in os.environ:
         # Read by marker's OCR engine (surya) when it is imported, so set it first.
         os.environ["LLAMA_CPP_BINARY"] = config.llama_cpp_binary.as_posix()
@@ -59,7 +59,7 @@ class TutorTools:
         self._today = today
         self.config = config
         self.subject = subject
-        self._ocr_factory = ocr_factory or (lambda: _default_ocr(config))
+        self._ocr_factory = ocr_factory or (lambda: default_ocr(config))
         self._ocr: PageOcr | None = None
         self._sources: dict[str, PdfSource] = {}
 

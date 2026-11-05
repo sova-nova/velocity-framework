@@ -1,11 +1,13 @@
 """A PDF textbook as a source: outline plus lazily OCR'd, cached section text."""
 
+import json
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
 from velocity.config import data_dir
-from velocity.ocr import PageOcr
+from velocity.dropcheck import Region, find_drops, prose_lines, repair
+from velocity.ocr import OcrPage, PageOcr
 from velocity.outline import Section, get_outline
 
 _HEADING = re.compile(r"^#{1,6}\s+(.+)$", re.MULTILINE)
@@ -69,7 +71,7 @@ class PdfSource:
         last_page = following.start_page if following else _outline_end(outline)
 
         markdown = "\n\n".join(self._pages(section.start_page, last_page))
-        warnings = []
+        warnings = self._repair_warnings(section.start_page, last_page)
         start = _find_heading(markdown, section)
         if start is None:
             start = 0
@@ -92,24 +94,101 @@ class PdfSource:
             warnings,
         )
 
+    @property
+    def _page_dir(self) -> Path:
+        return self.cache_dir / "pages"
+
     def _pages(self, first: int, last: int) -> list[str]:
         """Markdown of pages first..last, OCR'ing and caching any not yet cached."""
-        page_dir = self.cache_dir / "pages"
         missing = [
-            p for p in range(first, last + 1) if not (page_dir / f"{p}.md").exists()
+            p
+            for p in range(first, last + 1)
+            if not (self._page_dir / f"{p}.md").exists()
         ]
         for run_first, run_last in _runs(missing):
-            pages = self._ocr(
-                self.pdf_path, run_first, run_last, self.cache_dir / "images"
-            )
-            page_dir.mkdir(parents=True, exist_ok=True)
-            for p in range(run_first, run_last + 1):
-                # A page marker produced no output for is cached empty, so it isn't retried forever.
-                (page_dir / f"{p}.md").write_text(pages.get(p, ""), encoding="utf-8")
+            self._ocr_run(run_first, run_last)
         return [
-            (page_dir / f"{p}.md").read_text(encoding="utf-8")
+            (self._page_dir / f"{p}.md").read_text(encoding="utf-8")
             for p in range(first, last + 1)
         ]
+
+    def unchecked_pages(self) -> list[int]:
+        """Cached pages OCR'd before the dropped-text check existed."""
+        if not self._page_dir.is_dir():
+            return []
+        return sorted(
+            int(md.stem)
+            for md in self._page_dir.glob("*.md")
+            if not md.with_suffix(".check.json").exists()
+        )
+
+    def recheck(self) -> list[int]:
+        """OCR the unchecked cached pages again, this time with the dropped-text check."""
+        pages = self.unchecked_pages()
+        for run_first, run_last in _runs(pages):
+            self._ocr_run(run_first, run_last)
+        return pages
+
+    def _ocr_run(self, first: int, last: int) -> None:
+        pages = self._ocr(self.pdf_path, first, last, self.cache_dir / "images")
+        self._page_dir.mkdir(parents=True, exist_ok=True)
+        for p, (markdown, regions) in self._check_drops(pages).items():
+            (self._page_dir / f"{p}.md").write_text(markdown, encoding="utf-8")
+            if regions is not None:
+                (self._page_dir / f"{p}.check.json").write_text(
+                    json.dumps([r.as_json() for r in regions], indent=1),
+                    encoding="utf-8",
+                )
+        for p in range(first, last + 1):
+            # A page marker produced no output for is cached empty, so it isn't retried forever.
+            if p not in pages:
+                (self._page_dir / f"{p}.md").write_text("", encoding="utf-8")
+
+    def _check_drops(
+        self, pages: dict[int, str | OcrPage]
+    ) -> dict[int, tuple[str, list[Region] | None]]:
+        """Find text the OCR dropped on each page (when it gave us its blocks) and put it
+        back: re-OCR'd where possible, else from the PDF's text layer."""
+        import pymupdf
+
+        result: dict[int, tuple[str, list[Region] | None]] = {
+            p: (page, None) for p, page in pages.items() if isinstance(page, str)
+        }
+        checked = {p: page for p, page in pages.items() if isinstance(page, OcrPage)}
+        if not checked:
+            return result
+        with pymupdf.open(self.pdf_path) as doc:
+            drops = {
+                p: find_drops(prose_lines(doc[p - 1]), page.blocks)
+                for p, page in checked.items()
+            }
+        wanted = [(p, r.bbox) for p in checked for r in drops[p]]
+        ocr_regions = getattr(self._ocr, "ocr_regions", None)
+        recovered = ocr_regions(self.pdf_path, wanted) if ocr_regions and wanted else []
+        recovered += [""] * (len(wanted) - len(recovered))
+        for p, page in checked.items():
+            mine, recovered = recovered[: len(drops[p])], recovered[len(drops[p]) :]
+            result[p] = (repair(page.markdown, page.blocks, drops[p], mine), drops[p])
+        return result
+
+    def _repair_warnings(self, first: int, last: int) -> list[str]:
+        warnings = []
+        for p in range(first, last + 1):
+            check = self._page_dir / f"{p}.check.json"
+            if not check.exists():
+                continue
+            for region in json.loads(check.read_text(encoding="utf-8")):
+                if region["repaired_by"] == "text-layer":
+                    warnings.append(
+                        f"PDF page {p}: OCR dropped a passage; it was restored from the PDF's "
+                        "text layer, where math may be garbled. Check it against the book."
+                    )
+                if not region["placed"]:
+                    warnings.append(
+                        f"PDF page {p}: a passage the OCR dropped was restored at the end of "
+                        "the page because its original position wasn't found."
+                    )
+        return warnings
 
 
 def _outline_end(outline: list[Section]) -> int:

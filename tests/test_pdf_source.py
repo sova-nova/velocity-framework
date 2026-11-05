@@ -1,3 +1,4 @@
+import json
 import os
 from pathlib import Path
 
@@ -115,3 +116,15 @@ def test_real_ocr_of_section_2_4(tmp_path):
     assert r"\lim_{x \rightarrow a} f(x) = L" in text.markdown
     assert "## 2.5" not in text.markdown
     assert "2.3" not in text.markdown.splitlines()[0]
+    # Restored by the dropped-text check (marker outputs nothing for these blocks).
+    assert "means that for every negative number" in text.markdown  # Definition 7
+    assert "where  $T$  is the temperature" in text.markdown or (
+        "where $T$ is the temperature" in text.markdown
+    )
+    checks = [
+        r
+        for f in (tmp_path / "pages").glob("*.check.json")
+        for r in json.loads(f.read_text())
+    ]
+    assert len(checks) >= 4
+    assert all(r["repaired_by"] == "ocr" and r["placed"] for r in checks)

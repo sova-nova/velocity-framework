@@ -21,7 +21,7 @@ M1–M6 done and merged. M7 (polish and portfolio) is in progress; M8 (web front
    - PR 1 (#17, merged): cases, next-turn replay harness, code checks. Dry run: $0.25 for 3 cases on two models.
    - PR 2 (#18, branch `evals-judge`): LLM judge (Opus 5.5, pass/fail rubric) and the labeling tool (`python -m evals.label export/agree`). Judge dry run: $0.40 for 3 cases.
    - PR 3, **postponed by the user (2026-11-06) to limit spending**: full run (estimated $5–6; the user hadn't yet chosen between allowing ~$6.50 once, a Sonnet judge, or accepting gaps), the user labels ~15 replies from it, judge agreement measured, results in the README. Ask before starting it.
-4. Source improvements: drop-check repair for OCR (prototype in `DESIGN.md` M1 findings), then non-PDF sources.
+4. Source improvements: drop-check repair for OCR (branch `ocr-drop-check`, see `DESIGN.md` "M7 notes: dropped-text check"), then non-PDF sources.
 - Optional later: resuming `velocity chat`, compaction for long chats, a `search` source tool.
 - Then M8, a web front end (scope to be planned). Ask about the MIT license after M8.
 
@@ -36,11 +36,11 @@ M1–M6 done and merged. M7 (polish and portfolio) is in progress; M8 (web front
 - Claude Code 2.1.318 (`blockWritesOutsideWorkingDirectories` needs 2.1.314+). `gh` is installed and logged in.
 
 *Code map:*
-- Commands: `velocity new "<name>"`, `velocity subjects`, `velocity source add/list`, `velocity notes add/list`, `velocity tutor <subject> [--resume]` (front end A, Claude Code), `velocity chat <subject> [--model opus|sonnet|haiku]` (front end B, API; `/model` switches mid-chat). Internal: `velocity mcp --subject`, `velocity hook <event>` (events: session-start, user-prompt, stop, session-end, guard, tool-use).
-- Modules: `config`, `outline`, `ocr`, `pdf_source`, `session` (record + markdown log), `state` (learner state), `notes`, `skills`, `tools` (TutorTools), `mcp_server`, `workspace` (template, settings, notes protection, `claude_args`), `hooks`, `agent` (front end B), `cli`.
+- Commands: `velocity new "<name>"`, `velocity subjects`, `velocity source add/list/recheck`, `velocity notes add/list`, `velocity tutor <subject> [--resume]` (front end A, Claude Code), `velocity chat <subject> [--model opus|sonnet|haiku]` (front end B, API; `/model` switches mid-chat). Internal: `velocity mcp --subject`, `velocity hook <event>` (events: session-start, user-prompt, stop, session-end, guard, tool-use).
+- Modules: `config`, `outline`, `ocr`, `dropcheck`, `pdf_source`, `session` (record + markdown log), `state` (learner state), `notes`, `skills`, `tools` (TutorTools), `mcp_server`, `workspace` (template, settings, notes protection, `claude_args`), `hooks`, `agent` (front end B), `cli`.
 - The tutor prompt is `src/velocity/template/CLAUDE.md`; skills are in `src/velocity/template/skills/<name>/SKILL.md`. The same files back both front ends.
 - Evals: `evals/` (cases, replay, checks, judge, label, run); `uv run python -m evals.run --list`. See `DESIGN.md` "M7 notes: evals".
-- Tests: about 168, `uv run pytest`. The slow real-OCR test runs only with `VELOCITY_OCR_TESTS=1`.
+- Tests: about 178, `uv run pytest`. The slow real-OCR test runs only with `VELOCITY_OCR_TESTS=1`.
 
 *How to test with real Claude Code without touching the user's vault:*
 - Use a throwaway `XDG_CONFIG_HOME`/`XDG_DATA_HOME` with a scratch vault, then `velocity new`. For OCR'd sections, copy `~/.local/share/velocity/sources/*` into the throwaway data dir.

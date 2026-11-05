@@ -64,6 +64,8 @@ def _source(args: argparse.Namespace) -> int:
         sources = load_subject(config, args.subject).sources
         print("\n".join(f"{s.name}: {s.path}" for s in sources) or "No sources.")
         return 0
+    if args.source_command == "recheck":
+        return _recheck(config, load_subject(config, args.subject))
 
     from velocity.outline import toc_size
 
@@ -82,6 +84,48 @@ def _source(args: argparse.Namespace) -> int:
         )
     else:
         print(f"Found {entries} entries in its table of contents.")
+    return 0
+
+
+def _recheck(config, subject) -> int:
+    """Re-OCR cached pages from before the dropped-text check, with the check."""
+    import json
+
+    from velocity.pdf_source import PdfSource
+    from velocity.tools import default_ocr
+
+    if not subject.sources:
+        print("This subject has no sources.")
+        return 0
+    todo = {}
+    for ref in subject.sources:
+        pages = PdfSource(ref.path, ocr=None).unchecked_pages()
+        if pages:
+            todo[ref] = pages
+        else:
+            print(f"{ref.name}: all cached pages are checked.")
+    if not todo:
+        return 0
+    ocr = default_ocr(config)
+    for ref, pages in todo.items():
+        print(
+            f"{ref.name}: OCR'ing {len(pages)} cached pages again with the dropped-text "
+            f"check (about {len(pages) * 8 // 60 + 1} min)..."
+        )
+        source = PdfSource(ref.path, ocr)
+        source.recheck()
+        regions = [
+            r
+            for p in pages
+            for r in json.loads(
+                (source.cache_dir / "pages" / f"{p}.check.json").read_text()
+            )
+        ]
+        fallback = sum(r["repaired_by"] == "text-layer" for r in regions)
+        print(
+            f"{ref.name}: done. {len(regions)} dropped passages restored"
+            + (f" ({fallback} from the text layer)." if fallback else ".")
+        )
     return 0
 
 
@@ -155,6 +199,11 @@ def main(argv: list[str] | None = None) -> int:
     )
     source_list = source_commands.add_parser("list", help="list a subject's sources")
     source_list.add_argument("subject")
+    source_recheck = source_commands.add_parser(
+        "recheck",
+        help="OCR cached pages again with the dropped-text check (pages cached before it)",
+    )
+    source_recheck.add_argument("subject")
 
     notes = commands.add_parser(
         "notes", help="manage which note folders the tutor may read"
