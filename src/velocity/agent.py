@@ -13,6 +13,7 @@ The loop owns the conversation history and only ever appends to it.
 """
 
 import json
+import re
 import uuid
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
@@ -130,6 +131,21 @@ class UsageByModel:
         if len(lines) > 1 and None not in costs:
             lines.append(f"Total: about ${sum(costs):.2f} (estimate)")
         return "\n".join(lines)
+
+
+CHAT_COMMANDS = ("model", "exit", "quit")
+
+
+def unknown_command(text: str, skills: dict[str, Skill]) -> str | None:
+    """A message for a `/word` that is neither a skill nor a chat command, else None.
+    Unknown commands are answered locally instead of being sent to the tutor."""
+    m = re.match(r"^/([a-z][a-z0-9-]*)(?:\s|$)", text.strip())
+    if not m or m[1] in skills or m[1] in CHAT_COMMANDS:
+        return None
+    if m[1] in MODEL_ALIASES:
+        return f"Unknown command /{m[1]}. To switch models, type /model {m[1]}."
+    commands = ", ".join("/" + c for c in [*skills, *CHAT_COMMANDS])
+    return f"Unknown command /{m[1]}. Commands: {commands}."
 
 
 def system_prompt(subject: Subject, skills: dict[str, Skill]) -> str:
@@ -455,6 +471,9 @@ async def chat(
                 if line.strip() in ("/exit", "/quit"):
                     break
                 if not line.strip():
+                    continue
+                if message := unknown_command(line, skills):
+                    out.write(message + "\n")
                     continue
                 if line.strip() == "/model" or line.strip().startswith("/model "):
                     out.write(agent.model_command(line.strip()[len("/model") :]) + "\n")

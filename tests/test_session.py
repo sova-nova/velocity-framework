@@ -132,3 +132,18 @@ def test_edited_properties_block_is_not_flagged(dirs):
         )
     )
     assert s.check_log() == LogCheck([], [])
+
+
+@pytest.mark.parametrize("typed", ["My answer.", "My answer.\n"])
+def test_text_typed_at_the_end_of_the_log_is_not_glued_to_the_next_turn(dirs, typed):
+    # Obsidian saves the learner's typed text without a trailing blank line.
+    s = make_dialogue(dirs)
+    with s.log_path.open("a") as f:
+        f.write(typed)
+    s.append("learner", "I wrote my answer in the log.", now=at(5))
+    s.render()
+    assert (
+        "My answer.\n\n**You:** I wrote my answer in the log." in s.log_path.read_text()
+    )
+    check = s.check_log()
+    assert check.missing == [] and check.annotations == ["My answer."]
