@@ -80,6 +80,7 @@ def test_notes_protection_is_in_generated_settings(config, subject):
     assert f"Edit(/{vault}/**)" in deny and deny[0].startswith("Edit(//")
     assert f"Read(/{vault}/**)" in deny
     assert "Bash" in deny
+    assert settings["permissions"]["allow"] == ["mcp__velocity"]
     assert settings["permissions"]["blockWritesOutsideWorkingDirectories"] is True
     guard = settings["hooks"]["PreToolUse"][0]
     assert guard["matcher"] == "Edit|Write|MultiEdit|NotebookEdit"
@@ -224,3 +225,31 @@ def test_annotations_are_kept_in_the_record(config, subject, tmp_path):
     text = TutorTools(config, subject).read_session(session_id)
     assert "_(learner annotation)_ my thought" in text
     assert "my thought" not in log.read_text()
+
+
+def test_session_start_includes_learner_state(config, subject):
+    from datetime import date
+
+    from velocity.state import LearnerState, save_state
+
+    state = LearnerState()
+    state.record_question(
+        "Limits", "q", "incorrect", "s0", date(2026, 1, 1), note="sign error"
+    )
+    save_state(state, subject.dir, subject.name, date(2026, 1, 1))
+    ctx = hook("session-start", config, subject, session_id="c1", source="startup")
+    text = ctx["hookSpecificOutput"]["additionalContext"]
+    assert "Due for review: Limits (practicing)" in text
+    assert 'Limits: incorrect on "q" (sign error)' in text
+
+
+def test_claude_launch_args_isolate_the_tutor(tmp_path):
+    from velocity.workspace import claude_args
+
+    args = claude_args(tmp_path)
+    assert args[:2] == ["--setting-sources", "project,local"]
+    assert "--strict-mcp-config" in args
+    assert args[args.index("--mcp-config") + 1] == (tmp_path / ".mcp.json").as_posix()
+    assert args[args.index("--allowedTools") + 1] == "mcp__velocity"
+    assert "--continue" not in args
+    assert claude_args(tmp_path, resume=True)[-1] == "--continue"

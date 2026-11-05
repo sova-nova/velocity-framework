@@ -138,3 +138,45 @@ def test_mcp_server_exposes_tools_and_reports_expected_errors(tools, subject):
         not outline.is_error and "1.2: Continuity [id: 1.2" in outline.content[0].text
     )
     assert bad.is_error and "Unknown source 'Nope'" in bad.content[0].text
+
+
+def test_learner_state_tools(tmp_path, subject):
+    from datetime import date
+
+    tools = TutorTools(
+        Config(tmp_path / "vault"), subject, today=lambda: date(2026, 11, 4)
+    )
+    start_session(subject)
+    assert "next review 2026-11-05" in tools.record_question(
+        "Limits", "What is lim x->2 of x^2?", "correct", source="Book §1.1"
+    )
+    assert (
+        tools.set_topic_status("Continuity", "introduced")
+        == "Continuity is now introduced."
+    )
+    assert tools.open_thread("Why epsilon first?") == "Opened thread #1."
+    state = tools.read_state()
+    assert "Limits: practicing" in state and "source Book §1.1" in state
+    assert "#1 Why epsilon first?" in state
+    assert (subject.dir / "progress.md").exists()
+    assert tools.close_thread(1) == "Closed thread #1."
+    with pytest.raises(ToolError, match="outcome"):
+        tools.record_question("Limits", "q", "great")
+
+
+def test_state_tools_over_mcp(tools, subject):
+    async def run():
+        async with Client(build_server(tools)) as client:
+            ok = await client.call_tool(
+                "record_question",
+                {"topic": "Limits", "question": "q", "outcome": "hinted"},
+            )
+            bad = await client.call_tool(
+                "record_question",
+                {"topic": "Limits", "question": "q", "outcome": "great"},
+            )
+            return ok, bad
+
+    ok, bad = asyncio.run(run())
+    assert not ok.is_error and "Recorded (hinted)" in ok.content[0].text
+    assert bad.is_error

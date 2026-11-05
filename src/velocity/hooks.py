@@ -8,11 +8,13 @@ guard          PreToolUse: refuse file edits inside the vault
 """
 
 import json
+from datetime import date
 from pathlib import Path
 from typing import TextIO
 
 from velocity.config import Config, Subject
 from velocity.session import Session, active_session_id, record_dir, set_active
+from velocity.state import StateError, load_state
 
 
 def _claude_map(subject: Subject) -> Path:
@@ -72,6 +74,10 @@ def session_start(config: Config, subject: Subject, payload: dict) -> dict:
         + (" (use read_session to review the last one)." if previous else "."),
         "The conversation log is at " + session.log_path.as_posix() + ".",
     ]
+    try:
+        context.append(load_state(subject.dir).summary(date.today()))
+    except StateError as e:
+        context.append(f"Learner state could not be read: {e}")
     if not resumed:
         context.append("Open with the third-party reminder from your instructions.")
     return {
