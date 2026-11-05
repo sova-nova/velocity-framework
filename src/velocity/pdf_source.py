@@ -1,10 +1,10 @@
 """A PDF textbook as a source: outline plus lazily OCR'd, cached section text."""
 
-import os
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from velocity.config import data_dir
 from velocity.ocr import PageOcr
 from velocity.outline import Section, get_outline
 
@@ -23,9 +23,8 @@ class SectionText:
 
 
 def default_cache_dir(pdf_path: Path) -> Path:
-    data_home = Path(os.environ.get("XDG_DATA_HOME") or Path.home() / ".local/share")
     stem = re.sub(r"[^a-z0-9]+", "-", pdf_path.stem.lower()).strip("-")[:60]
-    return data_home / "velocity" / "sources" / f"{stem}-{pdf_path.stat().st_size}"
+    return data_dir() / "sources" / f"{stem}-{pdf_path.stat().st_size}"
 
 
 def _norm(text: str) -> str:

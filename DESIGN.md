@@ -126,7 +126,7 @@ One core, two front ends.
            notes:   read_notes (read-only)
 ```
 
-- **Core:** tools are plain typed Python functions, exposed through a thin MCP server built on the official `mcp` SDK (FastMCP).
+- **Core:** tools are plain typed Python functions, exposed through a thin MCP server built on the official `mcp` SDK (`MCPServer`, called FastMCP before mcp 2.0).
 - **Front end A, Claude Code:** works with the learner's Claude plan or an API key. `velocity tutor <subject>` regenerates the **tutor workspace** from a template in this repo **on every launch**, then opens Claude Code in it. The workspace contains the tutor `CLAUDE.md` (persona and rules), `.claude/skills/`, `.mcp.json`, permission settings, and hooks. Customizations come from `subject.toml`, never from hand edits; generated files carry a header saying they are regenerated. The tutor never runs from this code repo, which keeps tutoring separate from Claude Code's coding behavior.
 - **Front end B, own loop:** a thin agent loop on the `anthropic` SDK with `ANTHROPIC_API_KEY`, using the same MCP server and skills.
 - **Authentication:** software distributed to others must not route requests through someone else's claude.ai login. Front end A is Claude Code itself, used with each learner's own login or key. Front end B uses API keys only.
@@ -150,12 +150,25 @@ Linux is the primary platform (the developer's). macOS is supported. Windows is 
 ## 4. Milestones
 
 1. **M1: Source ingestion (minimum). Done 2026-11-04.** `get_outline` and a lazy `read_section` for the test book using marker, with a per-page cache shared between sections. A section runs from its heading to the next outline entry's heading, and warns if either is not found. No drop-check repair yet.
-2. **M2: Tutor in Claude Code.** Rename the package to `velocity`; CI (pytest, ruff). Config files, the MCP server with source and log tools, the workspace template and `velocity tutor <subject>`, logging hooks and the session record, notes write protection, the third-party reminder.
+2. **M2: Tutor in Claude Code. Done 2026-11-04 (PRs #1-#5).** Rename the package to `velocity`; CI (pytest, ruff). Config files, the MCP server with source and log tools, the workspace template and `velocity tutor <subject>`, logging hooks and the session record, notes write protection, the third-party reminder.
 3. **M3: Learner state.** Per-subject state, session-start summary, spaced-review scheduling.
 4. **M4: Skills.** `/quiz` and `/end-session`, then the rest.
 5. **M5: Notes.** `read_notes` with per-subject folder lists and `private: true`; `/review-notes`; note-taking prompts.
 6. **M6: Own agent loop.** Front end B on the `anthropic` SDK, with the same MCP server and skills.
 7. **M7: Polish and portfolio.** MIT license (added once the project is finished, decided 2026-11-04), README with a demo, teaching-quality evals (replaying session records), drop-check repair, non-PDF sources.
+
+### M2 notes (2026-11-04)
+
+- **Claude Code facts the design depends on:**
+  - Permission deny rules cannot have allow exceptions, so the tutor is denied Edit and Read on the **whole** vault, plus Bash. Logs are written by velocity's hooks and MCP server, which run outside Claude Code's permissions.
+  - `blockWritesOutsideWorkingDirectories` (Claude Code 2.1.314+) blocks writes outside the workspace.
+  - Absolute paths in permission rules need a leading `//`.
+  - The launcher runs `claude --setting-sources project,local`, and the workspace excludes `~/.claude/CLAUDE.md`, so the user's own Claude Code setup doesn't leak into the tutor.
+- **Logging limitation:** the Stop hook uses `last_assistant_message`, because Claude Code's transcript format is internal. Only the tutor's final message in a turn is logged. The tutor prompt asks it to call tools first and put its whole reply last. Blocks from `append_log` are recorded with their own timestamps, so they appear before the reply text of the same turn.
+- **Verified end to end** with `claude -p` in a generated workspace:
+  - The hooks logged the dialogue word for word.
+  - The tutor gave the third-party reminder and the no-sources notice.
+  - Forced Write and Edit attempts into the vault were denied by the permission settings, and Bash was unavailable.
 
 ### M1 findings (2026-11-02)
 
@@ -190,11 +203,14 @@ Tested on all of Section 2.4 (PDF pp. 136–145, plus neighbouring 2.3 exercises
   - The interface is a CLI (Claude Code) with session logs rendered in Obsidian.
   - Notes: per-subject folder lists, `private: true` opt-out, read-only enforced by permissions, a hook and a test, and a third-party reminder at every session start.
   - The name is `velocity`.
+- **2026-11-04 (M2):**
+  - Session record: one JSONL file per session at `~/.local/share/velocity/records/<subject>/<session-id>.jsonl`, one event per line (timestamp, role `learner`/`tutor`/`block`/`event`, text).
+  - Session ids are `YYYY-MM-DD-N`.
+  - Markdown log: a properties block, an H1, then `**You:**` / `**Tutor:**` turns, with tutor-added blocks as Obsidian callouts (`> [!example] Problem 1`) and a footer saying how the session ended. It is rendered once per turn, sorted by timestamp, so blocks the tutor adds mid-turn land in the right place.
 
 ## 6. Open Questions
 
 - Structured state format and location (sheet vs. CSV vs. JSON vs. SQLite). **Deferred to M3.**
-- Exact format of the session record and the markdown log. **To decide in M2.**
 - Teaching-quality evaluation design. **Deferred to M7**; session records from M2 on are its raw material.
 
 ## 7. Future Directions
