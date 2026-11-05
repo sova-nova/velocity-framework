@@ -177,3 +177,50 @@ def test_new_launch_starts_a_new_log(config, subject):
     assert (
         f"Previous sessions: {first}" in ctx["hookSpecificOutput"]["additionalContext"]
     )
+
+
+def test_annotations_and_deletions_reach_the_tutor_once(config, subject):
+    hook("session-start", config, subject, session_id="c1", source="startup")
+    hook("user-prompt", config, subject, session_id="c1", prompt="What is a limit?")
+    hook(
+        "stop",
+        config,
+        subject,
+        session_id="c1",
+        last_assistant_message="What do you think?",
+    )
+    log = subject.sessions_dir / f"{active_session_id('calculus')}.md"
+
+    log.write_text(log.read_text() + "Why does delta depend on epsilon?\n")
+    ctx = hook("user-prompt", config, subject, session_id="c1", prompt="continue")
+    assert (
+        "- Why does delta depend on epsilon?"
+        in ctx["hookSpecificOutput"]["additionalContext"]
+    )
+    # Reported once only.
+    assert hook("user-prompt", config, subject, session_id="c1", prompt="ok") == {}
+
+    log.write_text(log.read_text().replace("**Tutor:** What do you think?\n\n", ""))
+    ctx = hook("user-prompt", config, subject, session_id="c1", prompt="hmm")
+    assert (
+        "- **Tutor:** What do you think?"
+        in ctx["hookSpecificOutput"]["additionalContext"]
+    )
+    assert (
+        "ask before calling restore_log"
+        in ctx["hookSpecificOutput"]["additionalContext"]
+    )
+
+
+def test_annotations_are_kept_in_the_record(config, subject, tmp_path):
+    from velocity.tools import TutorTools
+
+    hook("session-start", config, subject, session_id="c1", source="startup")
+    session_id = active_session_id("calculus")
+    log = subject.sessions_dir / f"{session_id}.md"
+    log.write_text(log.read_text() + "my thought\n")
+    hook("user-prompt", config, subject, session_id="c1", prompt="next")
+    log.write_text(log.read_text().replace("my thought\n", ""))  # deleted later
+    text = TutorTools(config, subject).read_session(session_id)
+    assert "_(learner annotation)_ my thought" in text
+    assert "my thought" not in log.read_text()
