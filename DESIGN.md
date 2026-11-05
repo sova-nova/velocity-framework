@@ -64,7 +64,15 @@ The log has two forms:
 
 ### 2.4 Learner state
 
-Structured per-subject state: topics covered, quiz results, confidence ratings, weak spots, next-review dates. A compact summary is loaded at session start instead of the full history, which keeps context small across many sessions. Format and location are decided in M3.
+Structured per-subject state in `<vault>/Tutor/<subject>/state.json`, written only by velocity's tools. It has three parts:
+
+- **Topics:** name, status (introduced / practicing / solid), source section, first and last seen, review interval, next review.
+- **Question log:** date, session, topic, question, outcome (correct / hinted / incorrect), and a short note.
+- **Open threads:** things to come back to, opened and closed by the tutor.
+
+Review scheduling: a correct answer doubles a topic's interval (1, 2, 4, 8… days), an answer that needed hints keeps it, and a wrong answer resets it to one day. This is deliberately simple and predictable.
+
+The tutor updates state **during** the session with small typed tools (`record_question` after every answered question, `set_topic_status`, `open_thread`, `close_thread`, `read_state`), so progress survives sessions that end without wrap-up. A compact summary (due reviews, weak spots, open threads, recent topics) is loaded at session start. A readable `progress.md` is regenerated beside `state.json` after every change; the learner corrects it by telling the tutor, not by editing it.
 
 ### 2.5 Learner-owned notes
 
@@ -138,7 +146,7 @@ One core, two front ends.
 | Global config (vault path, defaults) | `~/.config/velocity/config.toml` |
 | Subject config | `<vault>/Tutor/<subject>/subject.toml` |
 | Session logs (markdown) | `<vault>/Tutor/<subject>/sessions/YYYY-MM-DD-N.md` |
-| Learner state | `<vault>/Tutor/<subject>/` (format decided in M3) |
+| Learner state | `<vault>/Tutor/<subject>/state.json` (+ generated `progress.md`) |
 | Generated workspaces, OCR cache, session records | `~/.local/share/velocity/` |
 
 The OCR cache stays outside the vault so copyrighted text never syncs into notes or gets indexed by Obsidian.
@@ -151,7 +159,7 @@ Linux is the primary platform (the developer's). macOS is supported. Windows is 
 
 1. **M1: Source ingestion (minimum). Done 2026-11-04.** `get_outline` and a lazy `read_section` for the test book using marker, with a per-page cache shared between sections. A section runs from its heading to the next outline entry's heading, and warns if either is not found. No drop-check repair yet.
 2. **M2: Tutor in Claude Code. Done 2026-11-04 (PRs #1-#5).** Rename the package to `velocity`; CI (pytest, ruff). Config files, the MCP server with source and log tools, the workspace template and `velocity tutor <subject>`, logging hooks and the session record, notes write protection, the third-party reminder.
-3. **M3: Learner state.** Per-subject state, session-start summary, spaced-review scheduling.
+3. **M3: Learner state. Done 2026-11-04.** Per-subject state, session-start summary, spaced-review scheduling.
 4. **M4: Skills.** `/quiz` and `/end-session`, then the rest.
 5. **M5: Notes.** `read_notes` with per-subject folder lists and `private: true`; `/review-notes`; note-taking prompts.
 6. **M6: Own agent loop.** Front end B on the `anthropic` SDK, with the same MCP server and skills.
@@ -169,6 +177,18 @@ Linux is the primary platform (the developer's). macOS is supported. Windows is 
   - The hooks logged the dialogue word for word.
   - The tutor gave the third-party reminder and the no-sources notice.
   - Forced Write and Edit attempts into the vault were denied by the permission settings, and Bash was unavailable.
+
+### M3 notes (2026-11-04)
+
+- **Decisions:** what is tracked, who writes it, format and location (see §2.4).
+  - The tools are small and typed rather than one generic `update_state`, because narrow tools are easier for the model to call correctly.
+  - Log annotations reach the tutor automatically with the learner's next message (PR #7), after the first real session showed that switching windows to mention them was friction.
+- **Launcher isolation, found while testing:**
+  - Account-level MCP connectors (e.g. claude.ai integrations) were loaded into the tutor, so the launcher now passes `--strict-mcp-config --mcp-config <workspace>/.mcp.json`.
+  - Project `allow` rules only apply after the workspace is trusted, so velocity's tools are also pre-approved with `--allowedTools mcp__velocity`.
+- **Model behavior:**
+  - In real runs, Sonnet called `record_question` after the learner answered, with a sensible topic, outcome and note. It also opened a thread for the misconception on its own.
+  - Haiku did not call it. The tutor needs a capable model; this belongs in the README (M7).
 
 ### M1 findings (2026-11-02)
 
@@ -203,6 +223,7 @@ Tested on all of Section 2.4 (PDF pp. 136–145, plus neighbouring 2.3 exercises
   - The interface is a CLI (Claude Code) with session logs rendered in Obsidian.
   - Notes: per-subject folder lists, `private: true` opt-out, read-only enforced by permissions, a hook and a test, and a third-party reminder at every session start.
   - The name is `velocity`.
+- **2026-11-04 (M3):** Learner state is stored in `state.json` per subject in the vault, with a generated `progress.md`. The tutor updates it during sessions through small typed tools. Reviews double the interval on correct answers, keep it on hinted ones, and reset it on wrong ones.
 - **2026-11-04 (M2):**
   - Session record: one JSONL file per session at `~/.local/share/velocity/records/<subject>/<session-id>.jsonl`, one event per line (timestamp, role `learner`/`tutor`/`block`/`event`, text).
   - Session ids are `YYYY-MM-DD-N`.
@@ -210,7 +231,6 @@ Tested on all of Section 2.4 (PDF pp. 136–145, plus neighbouring 2.3 exercises
 
 ## 6. Open Questions
 
-- Structured state format and location (sheet vs. CSV vs. JSON vs. SQLite). **Deferred to M3.**
 - Teaching-quality evaluation design. **Deferred to M7**; session records from M2 on are its raw material.
 
 ## 7. Future Directions

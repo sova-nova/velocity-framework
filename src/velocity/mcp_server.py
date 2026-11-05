@@ -18,6 +18,11 @@ TOOL_NAMES = [
     "read_session",
     "check_log",
     "restore_log",
+    "record_question",
+    "set_topic_status",
+    "open_thread",
+    "close_thread",
+    "read_state",
 ]
 
 
@@ -37,7 +42,8 @@ def build_server(tools: TutorTools) -> MCPServer:
         name="velocity",
         instructions=(
             f"Tutor tools for the subject '{tools.subject.name}': its sources, "
-            "and the session log (append worked problems and recaps with append_log)."
+            "the session log (append worked problems and recaps with append_log), "
+            "and the learner's progress (record every answered question with record_question)."
         ),
     )
     for name in TOOL_NAMES:

@@ -4,12 +4,21 @@ Return values are plain text meant for the model to read.
 """
 
 from collections.abc import Callable
+from datetime import date
 from typing import Literal
 
 from velocity.config import Config, Subject
 from velocity.ocr import PageOcr
 from velocity.pdf_source import PdfSource
 from velocity.session import Session, active_session_id, record_dir
+from velocity.state import (
+    LearnerState,
+    Outcome,
+    StateError,
+    Status,
+    load_state,
+    save_state,
+)
 
 BlockKind = Literal["example", "summary", "note", "tip", "question", "warning", "quote"]
 
@@ -37,7 +46,9 @@ class TutorTools:
         config: Config,
         subject: Subject,
         ocr_factory: Callable[[], PageOcr] = _default_ocr,
+        today: Callable[[], date] = date.today,
     ) -> None:
+        self._today = today
         self.config = config
         self.subject = subject
         self._ocr_factory = ocr_factory
@@ -174,3 +185,85 @@ class TutorTools:
         """
         self._active().restore_log()
         return "Restored the session log from the record."
+
+    # -- learner state -------------------------------------------------------------
+
+    def _update_state(self, change: Callable[[LearnerState, date], str]) -> str:
+        try:
+            state = load_state(self.subject.dir)
+            message = change(state, self._today())
+        except StateError as e:
+            raise ToolError(str(e)) from None
+        save_state(state, self.subject.dir, self.subject.name, self._today())
+        return message
+
+    def record_question(
+        self,
+        topic: str,
+        question: str,
+        outcome: Outcome,
+        note: str = "",
+        source: str | None = None,
+    ) -> str:
+        """Record the outcome of a question the learner answered.
+
+        Call this after every question you asked and the learner answered. outcome is
+        "correct", "hinted" (needed hints), or "incorrect". topic is a short name, e.g.
+        "epsilon-delta definition"; reuse names consistently. note: what went wrong or
+        right, in a few words. source: section it came from, e.g. "Stewart §2.4".
+        """
+        session = active_session_id(self.subject.slug) or ""
+
+        def change(state: LearnerState, today: date) -> str:
+            t = state.record_question(
+                topic, question, outcome, session, today, note, source
+            )
+            return f"Recorded ({outcome}). {t.name}: {t.status}, next review {t.next_review}."
+
+        return self._update_state(change)
+
+    def set_topic_status(
+        self, topic: str, status: Status, source: str | None = None
+    ) -> str:
+        """Set a topic's status: "introduced", "practicing", or "solid".
+
+        Use "introduced" when you first teach a topic, and "solid" once the learner has
+        shown mastery across several questions.
+        """
+
+        def change(state: LearnerState, today: date) -> str:
+            t = state.set_status(topic, status, today, source)
+            return f"{t.name} is now {t.status}."
+
+        return self._update_state(change)
+
+    def open_thread(self, text: str) -> str:
+        """Note something to come back to (an unresolved confusion, a deferred question)."""
+        session = active_session_id(self.subject.slug) or ""
+
+        def change(state: LearnerState, today: date) -> str:
+            return f"Opened thread #{state.open_thread(text, session, today).id}."
+
+        return self._update_state(change)
+
+    def close_thread(self, thread_id: int) -> str:
+        """Close an open thread once it is resolved."""
+
+        def change(state: LearnerState, today: date) -> str:
+            return f"Closed thread #{state.close_thread(thread_id, today).id}."
+
+        return self._update_state(change)
+
+    def read_state(self) -> str:
+        """What the learner has studied: due reviews, weak spots, open threads, topics."""
+        try:
+            state = load_state(self.subject.dir)
+        except StateError as e:
+            raise ToolError(str(e)) from None
+        summary = state.summary(self._today(), limit=50)
+        topics = "\n".join(
+            f"- {t.name}: {t.status}, last seen {t.last_seen}, next review {t.next_review or 'none'}"
+            + (f", source {t.source}" if t.source else "")
+            for t in state.topics.values()
+        )
+        return summary + ("\n\nAll topics:\n" + topics if topics else "")

@@ -15,7 +15,7 @@ from velocity.config import (
 
 
 def _tutor(subject_slug: str, resume: bool) -> int:
-    from velocity.workspace import build_workspace
+    from velocity.workspace import build_workspace, claude_args
 
     config = load_config()
     if subject_slug not in list_subjects(config):
@@ -27,10 +27,7 @@ def _tutor(subject_slug: str, resume: bool) -> int:
     claude = shutil.which("claude")
     if claude is None:
         raise ConfigError("Claude Code (`claude`) is not on PATH; install it first")
-    # Project and local settings only: keep the user's own Claude Code settings out of the tutor.
-    args = [claude, "--setting-sources", "project,local"]
-    if resume:
-        args.append("--continue")
+    args = [claude, *claude_args(workspace, resume)]
     os.chdir(workspace)
     os.execv(claude, args)
     return 0  # not reached

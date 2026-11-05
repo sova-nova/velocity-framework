@@ -54,6 +54,8 @@ def build_settings(config: Config, subject: Subject) -> dict:
         "_comment": GENERATED_NOTE,
         "permissions": {
             # Absolute paths need a leading "//" in permission rules.
+            # velocity's own tools never write notes, so they don't need a prompt each time.
+            "allow": [f"mcp__{MCP_SERVER_NAME}"],
             "deny": [f"Edit(/{vault}/**)", f"Read(/{vault}/**)", "Bash"],
             "blockWritesOutsideWorkingDirectories": True,
         },
@@ -130,3 +132,25 @@ def build_workspace(config: Config, subject: Subject) -> Path:
         if skill.is_dir():
             shutil.copytree(Path(str(skill)), ws / ".claude/skills" / skill.name)
     return ws
+
+
+def claude_args(workspace: Path, resume: bool = False) -> list[str]:
+    """Arguments for launching Claude Code as the tutor in a workspace.
+
+    - Only project and local settings: the user's own Claude Code settings stay out.
+    - Only velocity's MCP server: account connectors (e.g. claude.ai integrations) stay out.
+    - velocity's tools are pre-approved on the command line, because project allow rules
+      only apply after the workspace is trusted. Deny rules apply regardless.
+    """
+    args = [
+        "--setting-sources",
+        "project,local",
+        "--strict-mcp-config",
+        "--mcp-config",
+        (workspace / ".mcp.json").as_posix(),
+        "--allowedTools",
+        f"mcp__{MCP_SERVER_NAME}",
+    ]
+    if resume:
+        args.append("--continue")
+    return args

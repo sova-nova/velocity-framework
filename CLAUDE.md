@@ -10,14 +10,15 @@ Read `DESIGN.md` before making architectural decisions. It is the source of trut
 
 ## Current Status
 
-M1 and M2 done (M2 lands via stacked PRs #1-#5); M3 (learner state) is next. See `DESIGN.md` section 4.
+M1, M2 and M3 done; M4 (skills: `/quiz`, `/end-session`, then the rest) is next. See `DESIGN.md` section 4.
 
 **Where we left off (2026-11-04):**
 - `velocity new "<name>"` creates a subject. `velocity tutor <subject> [--resume]` regenerates the workspace in `~/.local/share/velocity/workspaces/<subject>/` and launches Claude Code there. Hooks (`velocity hook ...`) log the dialogue, and `velocity mcp --subject <id>` serves the tools.
-- Modules: `config`, `outline`, `ocr`, `pdf_source`, `session` (record + markdown log), `tools` (TutorTools), `mcp_server`, `workspace` (template, settings, notes protection), `hooks`, `cli`. Tutor prompt template: `src/velocity/template/CLAUDE.md`.
+- Modules: `config`, `outline`, `ocr`, `pdf_source`, `session` (record + markdown log), `state` (learner state), `tools` (TutorTools), `mcp_server`, `workspace` (template, settings, notes protection), `hooks`, `cli`. Tutor prompt template: `src/velocity/template/CLAUDE.md`.
 - OCR needs the `ocr` group (`uv run --group ocr ...`) and `LLAMA_CPP_BINARY=$HOME/.local/opt/llama.cpp/b12118/llama-b12118/llama-server`. The slow real-OCR test runs only with `VELOCITY_OCR_TESTS=1`.
 - Test book: `sources/mathematics/James Stewart - Calculus - Early transcendentals (8th Edition).pdf`.
-- Next: M3 (per-subject learner state; format still open). Ask the user first, since the format is an open question.
+- M3: `state.py` (topics, question log, threads, review scheduling); state tools in `tools.py`; summary injected at session start; `progress.md` generated in the vault. The launcher isolates the tutor with `--strict-mcp-config` and pre-approves `mcp__velocity` (see `workspace.claude_args`).
+- Next: M4 skills (`/quiz`, `/end-session` first).
 
 ## Stack and Commands
 
