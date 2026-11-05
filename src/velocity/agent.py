@@ -41,7 +41,27 @@ PRICES = {
     "claude-sonnet-5-5": (2.00, 10.00, 0.20),
     "claude-haiku-5-5": (0.10, 0.50, 0.01),
 }
+# Short names accepted by `--model`, `/model`, and `[api] model`.
+MODEL_ALIASES = {
+    "opus": "claude-opus-5-5",
+    "sonnet": "claude-sonnet-5-5",
+    "haiku": "claude-haiku-5-5",
+}
 MAX_JSON_RETRIES = 2
+
+
+def resolve_model(name: str) -> str:
+    """A model alias or full Claude model ID -> the full ID. Raises ValueError otherwise."""
+    name = name.strip()
+    if name.lower() in MODEL_ALIASES:
+        return MODEL_ALIASES[name.lower()]
+    if name.startswith("claude-"):
+        return name
+    raise ValueError(
+        f"Unknown model {name!r}. Use {', '.join(MODEL_ALIASES)} or a full ID like "
+        "claude-sonnet-5-5."
+    )
+
 
 # (tool name, arguments) -> (result text, is_error)
 ToolCaller = Callable[[str, dict], Awaitable[tuple[str, bool]]]
@@ -87,6 +107,29 @@ class Usage:
             f"tokens ({self.cache_read:,} from cache), {self.output:,} output tokens{estimate} "
             "(estimate)"
         )
+
+
+@dataclass
+class UsageByModel:
+    """Token usage per model, for chats that switch models with /model."""
+
+    models: dict[str, Usage] = field(default_factory=dict)
+
+    def add(self, model: str, usage: Any) -> None:
+        self.models.setdefault(model, Usage()).add(usage)
+
+    @property
+    def requests(self) -> int:
+        return sum(u.requests for u in self.models.values())
+
+    def summary(self) -> str:
+        if not self.models:
+            return "No API requests."
+        lines = [f"{m}: {u.summary(m)}" for m, u in self.models.items()]
+        costs = [u.cost(m) for m, u in self.models.items()]
+        if len(lines) > 1 and None not in costs:
+            lines.append(f"Total: about ${sum(costs):.2f} (estimate)")
+        return "\n".join(lines)
 
 
 def system_prompt(subject: Subject, skills: dict[str, Skill]) -> str:
@@ -150,7 +193,7 @@ class TutorAgent:
     model: str = DEFAULT_MODEL
     effort: str = DEFAULT_EFFORT
     messages: list[dict] = field(default_factory=list)
-    usage: Usage = field(default_factory=Usage)
+    usage: UsageByModel = field(default_factory=UsageByModel)
     session_id: str = field(default_factory=lambda: str(uuid.uuid4()))
     _pending_context: list[str] = field(default_factory=list)
 
@@ -180,6 +223,24 @@ class TutorAgent:
             (self.subject.sessions_dir / f"{session_id}.md").as_posix()
             if session_id
             else ""
+        )
+
+    def model_command(self, args: str) -> str:
+        """Handle `/model [name]`: show the current model, or switch to another one."""
+        if not args.strip():
+            aliases = ", ".join(f"{a} ({m})" for a, m in MODEL_ALIASES.items())
+            return f"Current model: {self.model}. Switch with /model <name>: {aliases}."
+        try:
+            model = resolve_model(args)
+        except ValueError as e:
+            return str(e)
+        if model == self.model:
+            return f"Already using {model}."
+        self.model = model
+        note = "" if model in PRICES else " (no price known, so no cost estimate)"
+        return (
+            f"Switched to {model}{note}. The next message rebuilds the prompt cache, "
+            "so it costs a little more."
         )
 
     # -- one learner turn ----------------------------------------------------------
@@ -242,7 +303,7 @@ class TutorAgent:
                     raise
                 continue
             json_retries = 0
-            self.usage.add(response.usage)
+            self.usage.add(self.model, response.usage)
 
             if response.stop_reason == "refusal":
                 self.out.write("\n[The model declined to continue this turn.]\n")
@@ -336,9 +397,14 @@ class TutorAgent:
 
 
 async def chat(
-    config: Config, subject: Subject, out: TextIO, read_line: Callable[[str], str]
+    config: Config,
+    subject: Subject,
+    out: TextIO,
+    read_line: Callable[[str], str],
+    model: str | None = None,
 ) -> None:
-    """Run an interactive tutoring session in the terminal."""
+    """Run an interactive tutoring session in the terminal. `model` (an alias or full ID)
+    overrides `[api] model` in config.toml."""
     import asyncio
     import sys
 
@@ -370,14 +436,15 @@ async def chat(
             tools=mcp_tool_params((await mcp.list_tools()).tools),
             skills=skills,
             out=out,
-            model=config.api_model or DEFAULT_MODEL,
+            model=resolve_model(model or config.api_model or DEFAULT_MODEL),
             effort=config.api_effort or DEFAULT_EFFORT,
         )
         agent.start()
         out.write(
             f"velocity: {subject.name} with {agent.model} (effort {agent.effort}).\n"
             f"Log: {agent.log_path}\n"
-            f"Skills: {', '.join('/' + s for s in skills)}. Exit with /exit or Ctrl+D.\n"
+            f"Skills: {', '.join('/' + s for s in skills)}. "
+            "Switch models with /model. Exit with /exit or Ctrl+D.\n"
         )
         try:
             while not agent.ended:
@@ -388,6 +455,9 @@ async def chat(
                 if line.strip() in ("/exit", "/quit"):
                     break
                 if not line.strip():
+                    continue
+                if line.strip() == "/model" or line.strip().startswith("/model "):
+                    out.write(agent.model_command(line.strip()[len("/model") :]) + "\n")
                     continue
                 try:
                     await agent.turn(line)
@@ -403,4 +473,4 @@ async def chat(
                 out.write("\nSession wrapped up.\n")
         finally:
             agent.finish()
-            out.write(f"\n{agent.usage.summary(agent.model)}\n")
+            out.write(f"\n{agent.usage.summary()}\n")
