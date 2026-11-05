@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from velocity.config import data_dir
-from velocity.dropcheck import Region, find_drops, prose_lines, repair
+from velocity.dropcheck import Region, find_drops, repair, text_lines
 from velocity.ocr import OcrPage, PageOcr
 from velocity.outline import Section, get_outline
 
@@ -122,9 +122,14 @@ class PdfSource:
             if not md.with_suffix(".check.json").exists()
         )
 
-    def recheck(self) -> list[int]:
-        """OCR the unchecked cached pages again, this time with the dropped-text check."""
-        pages = self.unchecked_pages()
+    def cached_pages(self) -> list[int]:
+        if not self._page_dir.is_dir():
+            return []
+        return sorted(int(md.stem) for md in self._page_dir.glob("*.md"))
+
+    def recheck(self, all_pages: bool = False) -> list[int]:
+        """OCR cached pages again with the dropped-text check: the unchecked ones, or all."""
+        pages = self.cached_pages() if all_pages else self.unchecked_pages()
         for run_first, run_last in _runs(pages):
             self._ocr_run(run_first, run_last)
         return pages
@@ -159,17 +164,34 @@ class PdfSource:
             return result
         with pymupdf.open(self.pdf_path) as doc:
             drops = {
-                p: find_drops(prose_lines(doc[p - 1]), page.blocks)
+                p: find_drops(text_lines(doc[p - 1]), page.blocks)
                 for p, page in checked.items()
             }
-        wanted = [(p, r.bbox) for p in checked for r in drops[p]]
-        ocr_regions = getattr(self._ocr, "ocr_regions", None)
-        recovered = ocr_regions(self.pdf_path, wanted) if ocr_regions and wanted else []
-        recovered += [""] * (len(wanted) - len(recovered))
+        regions = [(p, r) for p in checked for r in drops[p]]
+        recovered = self._reocr(regions)
         for p, page in checked.items():
             mine, recovered = recovered[: len(drops[p])], recovered[len(drops[p]) :]
             result[p] = (repair(page.markdown, page.blocks, drops[p], mine), drops[p])
         return result
+
+    def _reocr(self, regions: list[tuple[int, Region]]) -> list[str]:
+        """Re-OCR each region; retry empty results on the region's prose-only crop."""
+        ocr_regions = getattr(self._ocr, "ocr_regions", None)
+        if not ocr_regions or not regions:
+            return [""] * len(regions)
+        texts = ocr_regions(self.pdf_path, [(p, r.bbox) for p, r in regions])
+        retry = [
+            i
+            for i, (text, (_, r)) in enumerate(zip(texts, regions))
+            if not text.strip() and r.core and r.core != r.bbox
+        ]
+        if retry:
+            again = ocr_regions(
+                self.pdf_path, [(regions[i][0], regions[i][1].core) for i in retry]
+            )
+            for i, text in zip(retry, again):
+                texts[i] = text
+        return texts
 
     def _repair_warnings(self, first: int, last: int) -> list[str]:
         warnings = []

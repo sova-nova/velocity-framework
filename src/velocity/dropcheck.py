@@ -49,6 +49,7 @@ class Block:
 class Line:
     bbox: tuple[float, float, float, float]
     text: str
+    prose: bool = True  # has a prose word; math-only lines (e.g. subscripts) don't
 
 
 @dataclass
@@ -58,6 +59,9 @@ class Region:
     bbox: tuple[float, float, float, float]
     text_layer: str  # the lines' text from the PDF text layer
     block: int | None  # index of the empty marker block they were in, if any
+    # The prose lines' bbox, before adjacent math lines were taken in. OCR of small crops
+    # is sensitive to the exact crop, so this one is tried when the full region gives nothing.
+    core: tuple[float, float, float, float] | None = None
     repaired_by: str = ""  # "ocr" or "text-layer"
     placed: bool = (
         False  # inserted after its preceding block (else appended to the page)
@@ -71,19 +75,21 @@ def block_text(html_text: str) -> str:
     return html.unescape(re.sub(r"<[^>]+>", " ", html_text or "")).strip()
 
 
-def prose_lines(page: pymupdf.Page) -> list[Line]:
-    """Horizontal text-layer lines with at least one prose word (not just math symbols)."""
+def text_lines(page: pymupdf.Page) -> list[Line]:
+    """Horizontal text-layer lines, each marked as prose if it has a prose word (spans in
+    math or symbol fonts don't count)."""
     lines = []
     for block in page.get_text("dict")["blocks"]:
         for line in block.get("lines", []):
-            if tuple(line["dir"]) != (1.0, 0.0):
+            text = "".join(s["text"] for s in line["spans"]).strip()
+            if tuple(line["dir"]) != (1.0, 0.0) or not text:
                 continue
             prose = " ".join(
                 s["text"] for s in line["spans"] if not _MATH_FONT.search(s["font"])
             )
-            if re.search(r"[A-Za-z]{2,}", prose):
-                text = "".join(s["text"] for s in line["spans"]).strip()
-                lines.append(Line(tuple(line["bbox"]), text))
+            lines.append(
+                Line(tuple(line["bbox"]), text, bool(re.search(r"[A-Za-z]{2,}", prose)))
+            )
     return lines
 
 
@@ -104,7 +110,9 @@ def _union(boxes) -> tuple[float, float, float, float]:
 
 
 def find_drops(lines: list[Line], blocks: list[Block]) -> list[Region]:
-    """Prose lines not covered by a block with output, grouped into regions."""
+    """Prose lines not covered by a block with output, grouped into regions. Each region
+    also takes in uncovered math-only lines next to it (a limit's subscript, the end of a
+    formula), so a re-OCR of the region sees the whole passage."""
     dropped: list[tuple[Line, int | None]] = []
     for line in lines:
         center = ((line.bbox[0] + line.bbox[2]) / 2, (line.bbox[1] + line.bbox[3]) / 2)
@@ -118,13 +126,37 @@ def find_drops(lines: list[Line], blocks: list[Block]) -> list[Region]:
 
     regions: list[Region] = []
     for line, block in dropped:
+        if not line.prose:
+            continue
         last = regions[-1] if regions else None
         if last and _same_region(last, line, block):
             last.bbox = _union([last.bbox, line.bbox])
             last.text_layer += " " + line.text
         else:
             regions.append(Region(line.bbox, line.text, block))
+
+    math = [line for line, _ in dropped if not line.prose]
+    for region in regions:
+        region.core = region.bbox
+        grew = True
+        while grew:
+            touching = [m for m in math if _touches(region.bbox, m.bbox)]
+            math = [m for m in math if m not in touching]
+            for m in touching:
+                region.bbox = _union([region.bbox, m.bbox])
+                region.text_layer += " " + m.text
+            grew = bool(touching)
     return regions
+
+
+def _touches(a, b, dx: float = 20, dy: float = 3) -> bool:
+    """Whether box b lies within dx points beside or dy points above/below box a."""
+    return (
+        b[0] <= a[2] + dx
+        and b[2] >= a[0] - dx
+        and b[1] <= a[3] + dy
+        and b[3] >= a[1] - dy
+    )
 
 
 def _same_region(region: Region, line: Line, block: int | None) -> bool:
@@ -182,8 +214,11 @@ def repair(
     regions: list[Region],
     recovered: list[str],
 ) -> str:
-    """Insert each region's recovered text (re-OCR output, or "" to use the text layer)."""
-    for region, ocr_text in zip(regions, recovered):
+    """Insert each region's recovered text (re-OCR output, or "" to use the text layer).
+
+    Regions are inserted last to first: each goes right after its anchor, so regions that
+    share an anchor end up in their original order."""
+    for region, ocr_text in reversed(list(zip(regions, recovered))):
         if ocr_text.strip():
             # OCR of a small crop can turn a bold label ("1 Definition") into a heading,
             # which read_section would take for a section boundary.

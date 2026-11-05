@@ -65,7 +65,7 @@ def _source(args: argparse.Namespace) -> int:
         print("\n".join(f"{s.name}: {s.path}" for s in sources) or "No sources.")
         return 0
     if args.source_command == "recheck":
-        return _recheck(config, load_subject(config, args.subject))
+        return _recheck(config, load_subject(config, args.subject), args.all)
 
     from velocity.outline import toc_size
 
@@ -87,8 +87,8 @@ def _source(args: argparse.Namespace) -> int:
     return 0
 
 
-def _recheck(config, subject) -> int:
-    """Re-OCR cached pages from before the dropped-text check, with the check."""
+def _recheck(config, subject, all_pages: bool = False) -> int:
+    """Re-OCR cached pages with the dropped-text check: those from before it, or all."""
     import json
 
     from velocity.pdf_source import PdfSource
@@ -99,7 +99,8 @@ def _recheck(config, subject) -> int:
         return 0
     todo = {}
     for ref in subject.sources:
-        pages = PdfSource(ref.path, ocr=None).unchecked_pages()
+        source = PdfSource(ref.path, ocr=None)
+        pages = source.cached_pages() if all_pages else source.unchecked_pages()
         if pages:
             todo[ref] = pages
         else:
@@ -113,7 +114,7 @@ def _recheck(config, subject) -> int:
             f"check (about {len(pages) * 8 // 60 + 1} min)..."
         )
         source = PdfSource(ref.path, ocr)
-        source.recheck()
+        source.recheck(all_pages)
         regions = [
             r
             for p in pages
@@ -204,6 +205,9 @@ def main(argv: list[str] | None = None) -> int:
         help="OCR cached pages again with the dropped-text check (pages cached before it)",
     )
     source_recheck.add_argument("subject")
+    source_recheck.add_argument(
+        "--all", action="store_true", help="all cached pages, not only unchecked ones"
+    )
 
     notes = commands.add_parser(
         "notes", help="manage which note folders the tutor may read"

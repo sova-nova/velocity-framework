@@ -12,8 +12,8 @@ from velocity.dropcheck import (
     find_drops,
     insert_after,
     preceding_block,
-    prose_lines,
     repair,
+    text_lines,
 )
 from velocity.ocr import OcrPage
 from velocity.outline import Section
@@ -24,14 +24,18 @@ def line(y, x0=50, x1=300, text="some prose words"):
     return Line((x0, y, x1, y + 10), text)
 
 
-def test_prose_lines_skip_math_fonts_and_rotated_text():
+def test_text_lines_mark_prose_and_skip_rotated_text():
     doc = pymupdf.open()
     page = doc.new_page()
     page.insert_text((50, 100), "A function is continuous here.", fontname="helv")
     page.insert_text((50, 130), "abcdef", fontname="symb")  # Symbol font: math
     page.insert_text((50, 160), "x = 2", fontname="helv")  # no prose word
     page.insert_text((300, 400), "Rotated margin text", fontname="helv", rotate=90)
-    assert [l.text for l in prose_lines(page)] == ["A function is continuous here."]
+    assert [(l.text, l.prose) for l in text_lines(page)] == [
+        ("A function is continuous here.", True),
+        ("abcdef", False),
+        ("x = 2", False),
+    ]
 
 
 def test_find_drops():
@@ -58,6 +62,38 @@ def test_find_drops():
         (None, 260, 270),
     ]
     assert regions[0].text_layer == "some prose words some prose words"
+
+
+def test_regions_take_in_adjacent_uncovered_math_lines():
+    # Stewart p. 135, exercise 38: "evaluate lim g(x)" with the "x->1" subscript on its
+    # own math-only line, and exercise 37's subscript just above (covered by its block).
+    blocks = [
+        Block("Text", (83, 628, 312, 646), "37. If 4x - 9 <= f(x) ..."),
+        Block("Text", (83, 645, 282, 658), ""),
+    ]
+    lines = [
+        Line((83, 645, 282, 658), "38. If 2x < g(x) ... evaluate lim"),
+        Line((270, 647, 303, 663), "x -> 1", prose=False),  # subscript: taken in
+        Line((278, 639, 292, 646), "x -> 4", prose=False),  # exercise 37's: covered
+        Line((400, 700, 420, 710), "y", prose=False),  # far away: not taken in
+    ]
+    (region,) = find_drops(lines, blocks)
+    assert region.bbox == (83, 645, 303, 663)
+    assert region.text_layer.endswith("evaluate lim x -> 1")
+
+
+def test_regions_with_the_same_anchor_keep_their_order():
+    # Stewart p. 135: exercises 38 and 39 were both dropped after exercise 37.
+    blocks = [
+        Block("Text", (40, 50, 400, 60), "37. First exercise."),
+        Block("Text", (40, 65, 400, 75), ""),
+        Block("Text", (40, 80, 400, 90), ""),
+    ]
+    regions = [Region((40, 65, 400, 75), "", 1), Region((40, 80, 400, 90), "", 2)]
+    out = repair(
+        "37. First exercise.\n\n40. Next.", blocks, regions, ["38. A.", "39. B."]
+    )
+    assert out == "37. First exercise.\n\n38. A.\n\n39. B.\n\n40. Next."
 
 
 def test_preceding_block_in_reading_order():
@@ -208,3 +244,36 @@ def test_recheck_reocrs_pages_cached_before_the_check(tmp_path, pdf):
     assert source.recheck() == [1, 2]
     assert source.unchecked_pages() == []
     assert "Dropped paragraph" in (cache / "pages/1.md").read_text()
+    (cache / "pages/1.md").write_text("changed")
+    assert source.recheck() == []  # all checked now
+    assert source.recheck(all_pages=True) == [1, 2]
+    assert "Dropped paragraph" in (cache / "pages/1.md").read_text()
+
+
+class CropSensitiveOcr:
+    """Like marker on Stewart p. 135: nothing for a crop that includes the subscript line,
+    the full text for the tight prose-only crop."""
+
+    def __init__(self):
+        self.calls = []
+
+    def ocr_regions(self, pdf_path, regions):
+        self.calls.append([bbox for _, bbox in regions])
+        return [
+            "" if bbox[3] > 681 else "Find the value of $c$." for _, bbox in regions
+        ]
+
+
+def test_empty_reocr_is_retried_on_the_prose_only_crop(tmp_path, pdf):
+    ocr = CropSensitiveOcr()
+    source = PdfSource(pdf, ocr, cache_dir=tmp_path, outline=OUTLINE)
+    grown = Region(
+        (350, 669, 505, 684), "Find the value of c", 1, core=(350, 669, 505, 680)
+    )
+    plain = Region((50, 100, 300, 110), "Another", 2, core=(50, 100, 300, 110))
+    assert source._reocr([(135, grown), (135, plain)]) == [
+        "Find the value of $c$.",
+        "Find the value of $c$.",
+    ]
+    # One call for both regions, then a retry for the grown one only.
+    assert ocr.calls == [[grown.bbox, plain.bbox], [grown.core]]
