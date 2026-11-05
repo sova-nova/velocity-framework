@@ -253,3 +253,69 @@ def test_claude_launch_args_isolate_the_tutor(tmp_path):
     assert args[args.index("--allowedTools") + 1] == "mcp__velocity"
     assert "--continue" not in args
     assert claude_args(tmp_path, resume=True)[-1] == "--continue"
+
+
+def test_skills_are_copied_into_the_workspace(config, subject):
+    ws = build_workspace(config, subject)
+    assert (
+        (ws / ".claude/skills/quiz/SKILL.md")
+        .read_text()
+        .startswith("---\nname: quiz\n")
+    )
+    assert (ws / ".claude/skills/end-session/SKILL.md").exists()
+
+
+def test_end_session_wraps_up_after_the_final_message(config, subject):
+    from velocity.tools import ToolError, TutorTools
+
+    tools = TutorTools(config, subject)
+    hook("session-start", config, subject, session_id="c1", source="startup")
+    first = active_session_id("calculus")
+    hook("user-prompt", config, subject, session_id="c1", prompt="/end-session")
+    tools.end_session("- **Covered:** limits\n- **Next time:** epsilon-delta")
+    with pytest.raises(ToolError, match="already"):
+        tools.end_session("again")
+    hook(
+        "stop",
+        config,
+        subject,
+        session_id="c1",
+        last_assistant_message="Great work today!",
+    )
+
+    log = (subject.sessions_dir / f"{first}.md").read_text()
+    assert "> [!summary] Session recap\n> - **Covered:** limits" in log
+    assert "**Tutor:** Great work today!" in log
+    assert log.endswith("*Session ended with /end-session.*\n")
+    assert active_session_id("calculus") is None
+    # Quitting afterwards changes nothing.
+    hook("session-end", config, subject, session_id="c1", reason="prompt_input_exit")
+    assert (subject.sessions_dir / f"{first}.md").read_text() == log
+
+    ctx = hook("session-start", config, subject, session_id="c2", source="startup")
+    text = ctx["hookSpecificOutput"]["additionalContext"]
+    assert f"Recap of the last session ({first}):\n- **Covered:** limits" in text
+
+
+def test_resume_after_quitting_reopens_the_same_log(config, subject):
+    hook("session-start", config, subject, session_id="c1", source="startup")
+    first = active_session_id("calculus")
+    hook("user-prompt", config, subject, session_id="c1", prompt="one")
+    hook("session-end", config, subject, session_id="c1", reason="prompt_input_exit")
+    hook("session-start", config, subject, session_id="c1", source="resume")
+    assert active_session_id("calculus") == first
+    hook("user-prompt", config, subject, session_id="c1", prompt="two")
+    log = (subject.sessions_dir / f"{first}.md").read_text()
+    assert log.index("**You:** one") < log.index("*Session ended without wrap-up.*")
+    assert log.index("*Session resumed.*") < log.index("**You:** two")
+
+
+def test_resume_after_wrap_up_starts_a_new_log(config, subject):
+    from velocity.tools import TutorTools
+
+    hook("session-start", config, subject, session_id="c1", source="startup")
+    first = active_session_id("calculus")
+    TutorTools(config, subject).end_session("recap")
+    hook("stop", config, subject, session_id="c1", last_assistant_message="bye")
+    hook("session-start", config, subject, session_id="c1", source="resume")
+    assert active_session_id("calculus") not in (None, first)

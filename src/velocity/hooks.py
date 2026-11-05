@@ -13,7 +13,13 @@ from pathlib import Path
 from typing import TextIO
 
 from velocity.config import Config, Subject
-from velocity.session import Session, active_session_id, record_dir, set_active
+from velocity.session import (
+    ENDED_WITH_WRAP_UP,
+    Session,
+    active_session_id,
+    record_dir,
+    set_active,
+)
 from velocity.state import StateError, load_state
 
 
@@ -38,8 +44,12 @@ def session_start(config: Config, subject: Subject, payload: dict) -> dict:
     session = None
     if payload.get("source") in ("resume", "compact") and mapping and mapping.exists():
         session = _session(subject, mapping.read_text().strip())
-        if session.ended:
-            session = None
+        if session.wrapped_up:
+            session = (
+                None  # wrapped up with /end-session: a resumed chat starts a new log
+            )
+        elif session.ended:
+            session.reopen()
     resumed = session is not None
     if session is None:
         session = Session.start(
@@ -74,6 +84,10 @@ def session_start(config: Config, subject: Subject, payload: dict) -> dict:
         + (" (use read_session to review the last one)." if previous else "."),
         "The conversation log is at " + session.log_path.as_posix() + ".",
     ]
+    if previous:
+        recap = _session(subject, previous[-1]).recap()
+        if recap:
+            context.append(f"Recap of the last session ({previous[-1]}):\n{recap}")
     try:
         context.append(load_state(subject.dir).summary(date.today()))
     except StateError as e:
@@ -144,9 +158,14 @@ def user_prompt(config: Config, subject: Subject, payload: dict) -> dict:
 def stop(config: Config, subject: Subject, payload: dict) -> dict:
     session = _active(subject)
     message = (payload.get("last_assistant_message") or "").strip()
-    if session and not session.ended and message:
+    if not session or session.ended:
+        return {}
+    if message:
         session.append("tutor", message)
         session.render()
+    if session.wrap_up_requested:
+        session.end(ENDED_WITH_WRAP_UP)
+        set_active(subject.slug, None)
     return {}
 
 

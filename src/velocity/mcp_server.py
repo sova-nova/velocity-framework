@@ -18,6 +18,7 @@ TOOL_NAMES = [
     "read_session",
     "check_log",
     "restore_log",
+    "end_session",
     "record_question",
     "set_topic_status",
     "open_thread",
