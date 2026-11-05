@@ -1703,10 +1703,13 @@ dependencies = [
     { name = "anthropic" },
     { name = "mcp" },
     { name = "pymupdf" },
+    { name = "starlette" },
+    { name = "uvicorn" },
 ]
 
 [package.dev-dependencies]
 dev = [
+    { name = "httpx" },
     { name = "pytest" },
     { name = "ruff" },
 ]
@@ -1723,10 +1726,13 @@ requires-dist = [
     { name = "anthropic", specifier = ">=0.125,<1" },
     { name = "mcp", specifier = ">=2.3" },
     { name = "pymupdf", specifier = ">=2.1" },
+    { name = "starlette", specifier = ">=1.10" },
+    { name = "uvicorn", specifier = ">=0.54" },
 ]
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "httpx", specifier = ">=0.28" },
     { name = "pytest", specifier = ">=9.2.0" },
     { name = "ruff", specifier = ">=0.17.3" },
 ]

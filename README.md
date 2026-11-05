@@ -7,6 +7,8 @@ It is built around one **MCP server** with two front ends:
 - **`velocity tutor`** runs the tutor inside [Claude Code](https://claude.com/claude-code), using your Claude plan or API key.
 - **`velocity chat`** is velocity's own agent loop on the Anthropic API, with the same tools, prompt and skills.
 
+A local web UI (`velocity web`) is in progress: it already shows your past sessions with math rendered; chat comes next.
+
 ## What a session looks like
 
 An excerpt from a real session log, as it appears in Obsidian (math renders there). The tutor had cited Stewart, *Calculus*, §2.3 earlier in the session. The unlabeled paragraph is an answer the learner typed straight into the log; the tutor picks up such annotations at its next turn.
@@ -112,6 +114,7 @@ The same tutor in your terminal, streamed from the Anthropic API. Type `/model` 
 | Command | What it does |
 |---|---|
 | `velocity subjects` | List subjects |
+| `velocity web [subject]` | Open the local web UI (session history so far) at http://127.0.0.1:8765 |
 | `velocity source list <subject>` | List a subject's sources |
 | `velocity source recheck <subject> [--all]` | OCR cached pages again with the dropped-text check (by default only pages cached before it) |
 | `velocity notes list <subject>` | List the notes the tutor may read |

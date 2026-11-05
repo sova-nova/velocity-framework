@@ -166,7 +166,7 @@ Linux is the primary platform (the developer's). macOS is supported. Windows is 
 5. **M5: Notes. Done 2026-11-04.** `read_notes` with per-subject folder lists and `private: true`; `/review-notes`; note-taking prompts.
 6. **M6: Own agent loop. Done 2026-11-05** (`velocity chat`, live-tested with an API key, merged in #13). Front end B on the `anthropic` SDK, with the same MCP server and skills.
 7. **M7: Polish and portfolio.** One PR each, in this order: fixes from the M6 live test (done, #15); README with a demo; teaching-quality evals (replaying session records); source improvements (drop-check repair, then non-PDF sources).
-8. **M8: Web front end.** A local web UI as a third front end on the same MCP core. Scope to be planned after M7. The MIT license is added after M8; ask the user then.
+8. **M8: Web front end.** A local web UI (`velocity web`) as a third front end on the same core, planned 2026-11-06 (see the decisions log). Four PRs: (1) server, subject picker and session history; (2) chat on the own agent loop; (3) chat on Claude Code (headless), selectable; (4) polish and a README demo. The MIT license is added after M8; ask the user then.
 
 ### M2 notes (2026-11-04)
 
@@ -277,6 +277,13 @@ Tested on all of Section 2.4 (PDF pp. 136–145, plus neighbouring 2.3 exercises
 - **Decision: marker with `--force_ocr`, plus a spatial dropped-text check (M7, built 2026-11-06; see "M7 notes: dropped-text check").** Every prose-font line in the PDF text layer (fonts `TimesLTStd-*` / `MyriadPro-*`, excluding the header strip) must fall inside a marker JSON block with non-empty output. On Section 2.4 this flagged all 5 drops with 0 false positives. Blind spot: partial drops inside a block that has some output. Repair: re-OCR the flagged block's cropped region; if still empty, fall back to the text-layer text with a "[math may be garbled]" marker. A vision-model repair is possible once front end B exists.
 
 ## 5. Decisions Log
+
+- **2026-11-06 (M8 planning):**
+  - The web UI drives both engines, selectable: the own agent loop (API key, billed per token) and Claude Code run headless (`claude -p --input-format stream-json --output-format stream-json --include-partial-messages`), which uses the learner's own plan through their own Claude Code install.
+  - v1 has chat and session history. Progress view and source reader may come later.
+  - Stack: Starlette and uvicorn (already installed through `mcp`, now listed directly) and a plain HTML/JS page with KaTeX, marked and DOMPurify from jsDelivr at pinned versions. No build step.
+  - For both daily use and as a portfolio demo.
+  - Safety: listens on 127.0.0.1 only; the Host must be the local server (against DNS rebinding); requests that change state must come from the page's own origin. The vault is only read by the history view.
 
 - **2026-11-05 (M7 planning):**
   - M7 covers the README, teaching-quality evals and source improvements, in that order, one PR each.
