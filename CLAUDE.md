@@ -18,7 +18,8 @@ M1, M2 and M3 done; M4 (skills: `/quiz`, `/end-session`, then the rest) is next.
 - OCR needs the `ocr` group (`uv run --group ocr ...`) and `LLAMA_CPP_BINARY=$HOME/.local/opt/llama.cpp/b12118/llama-b12118/llama-server`. The slow real-OCR test runs only with `VELOCITY_OCR_TESTS=1`.
 - Test book: `sources/mathematics/James Stewart - Calculus - Early transcendentals (8th Edition).pdf`.
 - M3: `state.py` (topics, question log, threads, review scheduling); state tools in `tools.py`; summary injected at session start; `progress.md` generated in the vault. The launcher isolates the tutor with `--strict-mcp-config` and pre-approves `mcp__velocity` (see `workspace.claude_args`).
-- Next: M4 skills (`/quiz`, `/end-session` first).
+- M4 in progress: skills live in `src/velocity/template/skills/<name>/SKILL.md` and are copied into the workspace. `/quiz` and `/end-session` (tool `end_session`) are done. Next: `/socratic`, `/explain-differently`, `/assign-problems` (`/review-notes` waits for M5).
+- To test with real Claude Code without touching the user's vault: use a throwaway `XDG_CONFIG_HOME`/`XDG_DATA_HOME` with a scratch vault, build the workspace, and run `claude -p "<prompt>" --model sonnet` plus `workspace.claude_args(...)` from inside it (put the prompt before `--mcp-config`, which takes several values). Haiku does not reliably call the state tools.
 
 ## Stack and Commands
 

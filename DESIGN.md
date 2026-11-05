@@ -60,7 +60,8 @@ The log has two forms:
 - The tutor only **appends**. It never rewrites earlier content, and it treats past sessions' logs as read-only.
 - The learner may annotate the markdown. Text in the markdown that is not in the record is treated as a **learner annotation** and passed to the tutor as such.
 - If the markdown has **lost** text compared to the record (an accidental deletion), the tutor says so and offers to restore it. It never silently overwrites the learner's edits.
-- `/end-session` does a proper wrap-up (summary, state update, a prompt to take notes). If the learner just quits, a session-end hook closes the log with an "ended without wrap-up" footer.
+- `/end-session` does a proper wrap-up: it catches up on progress, asks one retrieval question, writes a recap block (also shown to the tutor at the next session start), and closes the log after the tutor's final message. If the learner just quits, a session-end hook closes the log with an "ended without wrap-up" footer.
+- Resuming a session that ended without wrap-up reopens its log with a "*Session resumed.*" marker. A wrapped-up session is final; resuming the conversation starts a new log.
 
 ### 2.4 Learner state
 
@@ -160,7 +161,7 @@ Linux is the primary platform (the developer's). macOS is supported. Windows is 
 1. **M1: Source ingestion (minimum). Done 2026-11-04.** `get_outline` and a lazy `read_section` for the test book using marker, with a per-page cache shared between sections. A section runs from its heading to the next outline entry's heading, and warns if either is not found. No drop-check repair yet.
 2. **M2: Tutor in Claude Code. Done 2026-11-04 (PRs #1-#5).** Rename the package to `velocity`; CI (pytest, ruff). Config files, the MCP server with source and log tools, the workspace template and `velocity tutor <subject>`, logging hooks and the session record, notes write protection, the third-party reminder.
 3. **M3: Learner state. Done 2026-11-04.** Per-subject state, session-start summary, spaced-review scheduling.
-4. **M4: Skills.** `/quiz` and `/end-session`, then the rest.
+4. **M4: Skills.** `/quiz` and `/end-session` done 2026-11-04; `/quiz` and `/end-session`, then the rest.
 5. **M5: Notes.** `read_notes` with per-subject folder lists and `private: true`; `/review-notes`; note-taking prompts.
 6. **M6: Own agent loop.** Front end B on the `anthropic` SDK, with the same MCP server and skills.
 7. **M7: Polish and portfolio.** MIT license (added once the project is finished, decided 2026-11-04), README with a demo, teaching-quality evals (replaying session records), drop-check repair, non-PDF sources.

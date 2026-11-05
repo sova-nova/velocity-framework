@@ -19,6 +19,7 @@ Role = Literal["learner", "tutor", "block", "event"]
 
 ENDED_WITH_WRAP_UP = "end-session"
 ENDED_WITHOUT_WRAP_UP = "no-wrap-up"
+RECAP_TITLE = "Session recap"
 
 
 @dataclass(frozen=True)
@@ -51,6 +52,8 @@ def render_event(event: Event, annotations: bool = False) -> str:
         return "\n".join(lines) + "\n\n"
     if event.kind == "annotation" and annotations:
         return f"_(learner annotation)_ {event.text.strip()}\n\n"
+    if event.kind == "resume":
+        return "\n*Session resumed.*\n\n"
     if event.kind == "end":
         how = (
             "Session ended with /end-session."
@@ -169,9 +172,48 @@ class Session:
         self.append("event", how, kind="end", now=now)
         self.render()
 
+    def _last_end(self) -> Event | None:
+        """The end event, if the session is currently ended (not reopened since)."""
+        last = None
+        for e in self.events():
+            if e.kind == "end":
+                last = e
+            elif e.kind == "resume":
+                last = None
+        return last
+
     @property
     def ended(self) -> bool:
-        return any(e.kind == "end" for e in self.events())
+        return self._last_end() is not None
+
+    @property
+    def wrapped_up(self) -> bool:
+        """Ended with /end-session. A wrapped-up session is final and is never reopened."""
+        last = self._last_end()
+        return last is not None and last.text == ENDED_WITH_WRAP_UP
+
+    def reopen(self, now: datetime | None = None) -> None:
+        """Continue a session that ended without wrap-up (the learner resumed it)."""
+        if not self.ended or self.wrapped_up:
+            raise RuntimeError(f"session {self.id} cannot be reopened")
+        event = Event(
+            (now or datetime.now().astimezone()).isoformat(), "event", "", kind="resume"
+        )
+        self._write_record(event)
+        self.render()
+
+    @property
+    def wrap_up_requested(self) -> bool:
+        return any(e.kind == "wrap-up" for e in self.events()) and not self.wrapped_up
+
+    def recap(self) -> str | None:
+        """The recap written by /end-session, if the session was wrapped up."""
+        recaps = [
+            e.text
+            for e in self.events()
+            if e.role == "block" and e.kind == "summary" and e.title == RECAP_TITLE
+        ]
+        return recaps[-1] if recaps else None
 
     # -- reading -------------------------------------------------------------------
 

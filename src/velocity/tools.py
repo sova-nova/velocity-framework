@@ -10,7 +10,7 @@ from typing import Literal
 from velocity.config import Config, Subject
 from velocity.ocr import PageOcr
 from velocity.pdf_source import PdfSource
-from velocity.session import Session, active_session_id, record_dir
+from velocity.session import RECAP_TITLE, Session, active_session_id, record_dir
 from velocity.state import (
     LearnerState,
     Outcome,
@@ -185,6 +185,23 @@ class TutorTools:
         """
         self._active().restore_log()
         return "Restored the session log from the record."
+
+    def end_session(self, recap: str) -> str:
+        """Wrap up the session (used by /end-session).
+
+        recap: markdown summary for the learner's log: what was covered, how it went, what to
+        review next. It is added to the log, shown to you at the start of the next session,
+        and the log is closed after your final message this turn.
+        """
+        session = self._active()
+        if session.wrap_up_requested:
+            raise ToolError("This session is already being wrapped up.")
+        session.append("block", recap, title=RECAP_TITLE, kind="summary")
+        session.append("event", "requested", kind="wrap-up")
+        return (
+            "Recap added. The log closes after your final message this turn; anything after "
+            "that is not logged, so tell the learner they can exit (/exit or Ctrl+D)."
+        )
 
     # -- learner state -------------------------------------------------------------
 
