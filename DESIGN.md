@@ -212,6 +212,13 @@ Linux is the primary platform (the developer's). macOS is supported. Windows is 
 - **Code checks** per case: tools that must or must not be called (`load_skill:<name>` for skills), and regexes the reply must or must not match (reminders, citations, not giving away an answer). Each case also says what the LLM judge (PR 2) should look for.
 - **Runs:** Opus 5.5 and Sonnet 5.5 by default, with a spending limit (`--budget`, default $5; no new case starts once it is reached). Results go to `evals/runs/` (gitignored).
 
+### M7 notes: the judge (2026-11-06)
+
+- **Judge** (`evals/judge.py`): Opus 5.5 by default (`--judge sonnet` or `none`), effort `medium`, structured output (a JSON schema), refusal fallbacks. It sees what the tutor saw (conversation so far, annotations, the learner's message), the tool calls of the turn, and the reply.
+- **Rubric:** six criteria, each graded pass, fail or n/a, with the reason written before the verdict: asks before telling, hints before answers, correct, honest feedback, clear next step, and the case's own focus. Pass/fail rather than a 1–5 scale, because binary verdicts are more consistent and easier to check against human labels.
+- **Self-preference:** Opus judges Opus's own replies, which can bias it upward. The hand labels measure this: agreement is reported per model as well as overall.
+- **Labels** (`evals/label.py`): `export` samples replies from a run (alternating models, fixed seed) into a Markdown file for Obsidian, hiding the model and the judge's verdicts; `agree` reports agreement and Cohen's kappa per criterion and lists every disagreement with the judge's reason. Labels are committed in `evals/labels/`.
+
 ### M3 notes (2026-11-04)
 
 - **Decisions:** what is tracked, who writes it, format and location (see §2.4).

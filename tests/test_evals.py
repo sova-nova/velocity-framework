@@ -1,5 +1,6 @@
 import asyncio
 import json
+import re
 from datetime import date
 from types import SimpleNamespace as NS
 
@@ -329,7 +330,7 @@ def test_run_all_checks_reports_and_respects_the_budget(tmp_path):
     assert outcomes[2].detail == "budget reached"
     assert lines[0].startswith("PASS  a [claude-opus-5-5] 1/1 checks")
     table = summary(outcomes, ["claude-opus-5-5"])
-    assert "| claude-opus-5-5 | 1/1 | 1/1 | 2 | 0 | $0.01 |" in table
+    assert "| claude-opus-5-5 | 1/1 | 1/1 | 0/0 | 2 | 0 | $0.01 | $0.00 |" in table
 
 
 def test_failed_checks_are_listed():
@@ -401,3 +402,203 @@ def test_citation_pattern_accepts_words_between_name_and_section():
     assert re.search(cite, "Stewart covers limits in Chapter 2: §2.2 (the idea)")
     assert re.search(cite, "see Stewart §2.4")
     assert not re.search(cite, "Stewart covers limits in Chapter 2.")
+
+
+# -- judge ------------------------------------------------------------------------------
+
+
+def verdicts(**overrides):
+    from evals.judge import RUBRIC
+
+    return {
+        c: {"reason": f"{c} reason", "verdict": overrides.get(c, "pass")}
+        for c in RUBRIC
+    }
+
+
+class FakeCreate:
+    def __init__(self, *payloads, stop="end_turn"):
+        self.payloads = list(payloads)
+        self.stop = stop
+        self.requests = []
+
+    async def __call__(self, **params):
+        self.requests.append(params)
+        usage = NS(
+            input_tokens=2000,
+            output_tokens=500,
+            cache_read_input_tokens=0,
+            cache_creation_input_tokens=0,
+        )
+        return NS(
+            content=[NS(type="thinking"), text(json.dumps(self.payloads.pop(0)))],
+            stop_reason=self.stop,
+            usage=usage,
+        )
+
+
+def test_judge_prompt_shows_what_the_tutor_saw():
+    from evals.judge import judge_prompt
+
+    c = case(session="2026-11-05-1", turn=5, judge="Fixes 'undefined' to DNE.")
+    prompt = judge_prompt(
+        c, replay_input(c), "All four are right.", [("record_question", {"topic": "x"})]
+    )
+    assert "Subject: Calculus. Sources: Stewart." in prompt
+    assert "LEARNER: hi claude" in prompt
+    assert "[The learner typed into the session log:] That limit means" in prompt
+    assert "[Just before this, the learner typed into the session log:] a. 2" in prompt
+    assert '- record_question({"topic": "x"})' in prompt
+    assert "<tutor_reply>\nAll four are right.\n</tutor_reply>" in prompt
+    assert "Case focus: Fixes 'undefined' to DNE." in prompt
+    assert "- asks_before_telling (Asks before telling):" in prompt
+
+
+def test_judge_requests_structured_verdicts():
+    from evals.judge import judge
+
+    create = FakeCreate(verdicts(correct="fail"))
+    c = case(session="2026-11-04-1", turn=1)
+    result = asyncio.run(judge(create, c, replay_input(c), "Hi", [], "claude-opus-5-5"))
+    assert result.verdicts["correct"] == {"reason": "correct reason", "verdict": "fail"}
+    assert result.usage.cost("claude-opus-5-5") == pytest.approx(
+        (2000 * 4 + 500 * 20) / 1e6
+    )
+    params = create.requests[0]
+    schema = params["output_config"]["format"]["schema"]
+    assert schema["required"][0] == "asks_before_telling"
+    assert schema["properties"]["focus"]["properties"]["verdict"]["enum"] == [
+        "pass",
+        "fail",
+        "n/a",
+    ]
+    assert params["fallbacks"] == "default"
+
+    with pytest.raises(RuntimeError, match="declined"):
+        asyncio.run(
+            judge(FakeCreate({}, stop="refusal"), c, replay_input(c), "Hi", [], "m")
+        )
+
+
+def test_run_all_with_the_judge(tmp_path):
+    from evals.run import judge_table
+
+    cases = [case(id="a", session="2026-11-04-1", turn=1)]
+    create = FakeCreate(verdicts(asks_before_telling="fail", focus="n/a"))
+    lines = []
+    outcomes = asyncio.run(
+        run_all(
+            cases,
+            ["claude-sonnet-5-5"],
+            stream=FakeAPI(response(text("hello"))),
+            sources={},
+            sandbox=tmp_path,
+            budget=5,
+            concurrency=1,
+            effort="medium",
+            create=create,
+            judge_model="claude-opus-5-5",
+            report=lines.append,
+        )
+    )
+    o = outcomes[0]
+    assert o.verdicts("fail") == ["asks_before_telling"] and o.judge_cost > 0
+    assert "judge 4 pass, 1 fail" in lines[0]
+    assert "judge fail asks_before_telling: asks_before_telling reason" in lines[0]
+    table = judge_table(outcomes, ["claude-sonnet-5-5"])
+    assert "| Asks before telling | 0/1 |" in table
+    assert "| Case focus | 0/0 |" in table
+
+
+def test_judge_errors_are_reported_without_losing_the_case(tmp_path):
+    cases = [case(id="a", session="2026-11-04-1", turn=1)]
+    outcomes = asyncio.run(
+        run_all(
+            cases,
+            ["claude-sonnet-5-5"],
+            stream=FakeAPI(response(text("hello"))),
+            sources={},
+            sandbox=tmp_path,
+            budget=5,
+            concurrency=1,
+            effort="medium",
+            create=FakeCreate({}, stop="refusal"),
+            judge_model="claude-opus-5-5",
+            report=lambda _: None,
+        )
+    )
+    assert outcomes[0].status == "ok" and outcomes[0].reply == "hello"
+    assert "declined" in outcomes[0].judge_error
+
+
+# -- labels -----------------------------------------------------------------------------
+
+
+def judged(case_id, model, **overrides):
+    return {
+        "case": case_id,
+        "model": model,
+        "status": "ok",
+        "reply": "Reply with $x^2$.\n\nSecond line.",
+        "tool_calls": [["record_question", {"topic": "limits"}]],
+        "judge": verdicts(**overrides),
+    }
+
+
+def test_label_export_parse_and_agreement(tmp_path):
+    from evals.label import agreement, export, parse_labels
+
+    run = tmp_path / "run.json"
+    outcomes = [
+        judged("2026-11-05-1-t5", "opus", correct="fail"),
+        judged("2026-11-05-1-t5", "sonnet"),
+        judged("hand-own-error", "sonnet"),
+        {"case": "2026-11-04-1-t1", "model": "opus", "status": "error"},
+    ]
+    run.write_text(json.dumps({"outcomes": outcomes}))
+    path = export(run, 2, seed=1, out=tmp_path / "labels.md")
+    text = path.read_text()
+    assert text.count("## Reply") == 2 and "## Reply 1 of 2" in text
+    assert "> [!note]- Conversation so far" in text
+    assert "> Reply with $x^2$." in text and "`record_question(topic='limits')`" in text
+    assert "judge" not in text.split("**Criteria:**")[1].lower().split("---")[1]
+    assert '"model":' in text  # only in the hidden item comments
+    assert "opus" not in text.replace('"model": "opus"', "")
+
+    # Fill in: agree everywhere except "correct", which is labeled pass for every item.
+    filled = text.replace("(correct): _", "(correct): pass").replace(
+        "(focus): _", "(focus): N/A"
+    )
+    filled = re.sub(r"\((\w+)\): _", r"(\1): pass", filled)
+    run_path, items = parse_labels(filled)
+    assert run_path == run.as_posix() and len(items) == 2
+    assert all(len(i.labels) == 6 for i in items)
+    assert items[0].labels["focus"] == "n/a"
+
+    report = agreement(items, outcomes)
+    assert "| Asks before telling | 2 | 2 | 100% | 1.00 |" in report
+    for model in {i.model for i in items}:
+        assert f"| All, {model} | 6 |" in report
+    picked = {(i.case, i.model) for i in items}
+    if ("2026-11-05-1-t5", "opus") in picked:
+        assert "you pass, judge fail (correct reason)" in report
+
+
+def test_unfilled_labels_are_left_out():
+    from evals.label import parse_labels
+
+    text = (
+        '<!-- item {"case": "a", "model": "m"} -->\n**Your labels** (pass, fail, or n/a):\n'
+        "- Correct (correct): fail\n- Case focus (focus): _\n- Notes (optional): ok\n"
+    )
+    _, items = parse_labels(text)
+    assert items[0].labels == {"correct": "fail"}
+
+
+def test_cohen_kappa():
+    from evals.label import cohen_kappa
+
+    assert cohen_kappa([]) is None
+    assert cohen_kappa([("pass", "pass"), ("fail", "fail")]) == 1.0
+    assert cohen_kappa([("pass", "pass"), ("pass", "pass")]) == 1.0
+    assert cohen_kappa([("pass", "fail"), ("fail", "pass")]) == pytest.approx(-1.0)
