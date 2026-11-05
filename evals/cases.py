@@ -43,6 +43,11 @@ class ReplayInput:
         str, ...
     ]  # recorded sessions before this one, oldest first
     notes: dict[str, str] = field(default_factory=dict)  # vault path -> markdown
+    # This session's own state changes made before the message under test: the first N
+    # questions and threads it recorded (the record doesn't say when they were made).
+    session_id: str | None = None
+    session_questions: int = 0
+    session_threads: int = 0
 
 
 @dataclass(frozen=True)
@@ -150,29 +155,44 @@ def _from_record(raw: dict, data_dir: Path) -> ReplayInput:
         annotations=tuple(raw.get("annotations", pending)),
         message=message,
         previous_sessions=tuple(earlier),
+        session_id=session_id,
+        session_questions=raw.get("session_state", {}).get("questions", 0),
+        session_threads=raw.get("session_state", {}).get("threads", 0),
     )
 
 
 def state_before(
-    previous_sessions: tuple[str, ...], session_date: date, today: date, state_json: str
+    previous_sessions: tuple[str, ...],
+    session_date: date,
+    today: date,
+    state_json: str,
+    session: tuple[str | None, int, int] = (None, 0, 0),
 ) -> LearnerState:
     """Learner state as it was after `previous_sessions`, rebuilt from the final state.
 
-    Questions and threads from those sessions are replayed in order; topic status and source
-    come from the final state, since their history isn't recorded. Dates are shifted so the
-    session's own day becomes `today`, which keeps the same reviews due.
+    Questions and threads from those sessions are replayed in order, plus the first N
+    questions and threads of the current session (`session`: id, N questions, N threads).
+    Topic status and source come from the final state, since their history isn't recorded.
+    Dates are shifted so the session's own day becomes `today`, which keeps the same
+    reviews due. Threads opened in the current session stay open.
     """
     state = LearnerState()
-    if not previous_sessions:
+    session_id, n_questions, n_threads = session
+    if not previous_sessions and not (n_questions or n_threads):
         return state
     final = LearnerState.from_json(state_json)
+    current_questions = [q for q in final.questions if q.session == session_id]
+    current_threads = [t for t in final.threads if t.session == session_id]
+    if n_questions > len(current_questions) or n_threads > len(current_threads):
+        raise ValueError(f"session {session_id} recorded fewer questions or threads")
     shift = today - session_date
 
     def day(iso: str) -> date:
         return date.fromisoformat(iso) + shift
 
+    included = current_questions[:n_questions]
     for q in final.questions:
-        if q.session in previous_sessions:
+        if q.session in previous_sessions or q in included:
             topic = final.topics.get(q.topic)
             state.record_question(
                 topic.name if topic else q.topic,
@@ -187,7 +207,9 @@ def state_before(
         if topic_id in final.topics:
             topic.status = final.topics[topic_id].status
     for t in final.threads:
-        if t.session in previous_sessions:
+        if t in current_threads[:n_threads]:
+            state.open_thread(t.text, t.session, day(t.opened))
+        elif t.session in previous_sessions:
             opened = state.open_thread(t.text, t.session, day(t.opened))
             if t.closed and date.fromisoformat(t.closed) < session_date:
                 state.close_thread(opened.id, day(t.closed))

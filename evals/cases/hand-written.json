@@ -81,7 +81,7 @@
     "get_exercises"
    ],
    "mentions": {
-    "a Stewart citation": "Stewart\\s*§\\s*\\d+\\.\\d+"
+    "a Stewart citation": "Stewart[^\\n]{0,80}§\\s*\\d+\\.\\d+"
    },
    "not_mentions": {
     "a worked solution": "(the answer is|so the limit is|=\\s*-?\\d+\\s*/\\s*\\d+\\s*$)"

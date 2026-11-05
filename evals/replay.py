@@ -111,6 +111,7 @@ async def replay(
         inp.date,
         today,
         (data_dir / "state.json").read_text(encoding="utf-8"),
+        (inp.session_id, inp.session_questions, inp.session_threads),
     )
     save_state(state, subject_dir, subject.name, today)
 

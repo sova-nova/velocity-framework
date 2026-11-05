@@ -361,3 +361,43 @@ def test_root_cause_unwraps_single_exception_groups():
     assert root_cause(ExceptionGroup("g", [ExceptionGroup("h", [inner])])) is inner
     group = ExceptionGroup("g", [ValueError(), KeyError()])
     assert root_cause(group) is group
+
+
+def test_state_before_includes_this_sessions_earlier_changes():
+    state_json = (DATA_DIR / "state.json").read_text()
+    previous = tuple(f"2026-11-04-{n}" for n in range(1, 7))
+    state = state_before(
+        previous, date(2026, 11, 5), TODAY, state_json, ("2026-11-05-1", 1, 1)
+    )
+    assert [q.topic for q in state.questions][-1] == "limit-definition-intuitive"
+    assert len(state.questions) == 4
+    assert (
+        state.threads[-1].text.startswith("Stewart §2.3 #15")
+        and not state.threads[-1].closed
+    )
+    with pytest.raises(ValueError, match="fewer questions"):
+        state_before(
+            previous, date(2026, 11, 5), TODAY, state_json, ("2026-11-05-1", 3, 0)
+        )
+
+
+def test_case_session_state_reaches_the_replay_input():
+    inp = replay_input(
+        case(session="2026-11-05-1", turn=5, session_state={"questions": 1})
+    )
+    assert (inp.session_id, inp.session_questions, inp.session_threads) == (
+        "2026-11-05-1",
+        1,
+        0,
+    )
+
+
+def test_citation_pattern_accepts_words_between_name_and_section():
+    import re
+
+    cite = next(c for c in load_cases() if c.id == "2026-11-05-1-t1").expect[
+        "mentions"
+    ]["a Stewart citation"]
+    assert re.search(cite, "Stewart covers limits in Chapter 2: §2.2 (the idea)")
+    assert re.search(cite, "see Stewart §2.4")
+    assert not re.search(cite, "Stewart covers limits in Chapter 2.")

@@ -107,6 +107,10 @@
   "session": "2026-11-04-2",
   "turn": 2,
   "about": "Learner invokes /socratic.",
+  "session_state": {
+   "questions": 3,
+   "threads": 2
+  },
   "expect": {
    "mentions": {
     "a question": "\\?"
@@ -119,6 +123,10 @@
   "session": "2026-11-04-2",
   "turn": 5,
   "about": "In Socratic mode, learner slips: claims cancelling fails at -2 as well.",
+  "session_state": {
+   "questions": 3,
+   "threads": 2
+  },
   "expect": {},
   "judge": "Leads the learner to find the slip with a question, without stating the correction."
  },
@@ -127,6 +135,10 @@
   "session": "2026-11-04-2",
   "turn": 9,
   "about": "Learner states the full argument for why cancelling is allowed.",
+  "session_state": {
+   "questions": 3,
+   "threads": 2
+  },
   "expect": {
    "calls": [
     "record_question"
@@ -139,6 +151,10 @@
   "session": "2026-11-04-2",
   "turn": 10,
   "about": "Learner asks how to attach a textbook as a source.",
+  "session_state": {
+   "questions": 3,
+   "threads": 2
+  },
   "expect": {
    "mentions": {
     "the source add command": "velocity source add"
@@ -196,7 +212,7 @@
     "get_exercises"
    ],
    "mentions": {
-    "a Stewart citation": "Stewart\\s*§\\s*\\d+\\.\\d+"
+    "a Stewart citation": "Stewart[^\\n]{0,80}§\\s*\\d+\\.\\d+"
    }
   },
   "judge": "Picks a real exercise that fits what the learner practised, cites it, and doesn't solve it."
@@ -209,7 +225,7 @@
   "expect": {
    "mentions": {
     "third-party reminder": "third[- ]party",
-    "a Stewart citation": "Stewart\\s*§\\s*\\d+\\.\\d+"
+    "a Stewart citation": "Stewart[^\\n]{0,80}§\\s*\\d+\\.\\d+"
    },
    "calls": [
     "get_exercises"
@@ -225,7 +241,7 @@
   "expect": {
    "mentions": {
     "third-party reminder": "third[- ]party",
-    "a Stewart citation": "Stewart\\s*§\\s*\\d+\\.\\d+"
+    "a Stewart citation": "Stewart[^\\n]{0,80}§\\s*\\d+\\.\\d+"
    },
    "calls_any": [
     [
@@ -276,6 +292,9 @@
   "session": "2026-11-05-1",
   "turn": 5,
   "about": "Learner answered the one-sided limits question in the log (c: 'undefined').",
+  "session_state": {
+   "questions": 1
+  },
   "expect": {
    "calls": [
     "record_question"
@@ -291,6 +310,9 @@
   "session": "2026-11-05-1",
   "turn": 6,
   "about": "Learner invokes /end-session.",
+  "session_state": {
+   "questions": 2
+  },
   "expect": {
    "not_calls": [
     "end_session"
@@ -306,6 +328,10 @@
   "session": "2026-11-05-1",
   "turn": 7,
   "about": "Learner answers the closing retrieval question.",
+  "session_state": {
+   "questions": 2,
+   "threads": 1
+  },
   "expect": {
    "calls": [
     "end_session"
