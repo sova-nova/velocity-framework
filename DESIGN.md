@@ -167,8 +167,8 @@ Linux is the primary platform (the developer's). macOS is supported. Windows is 
 4. **M4: Skills. Done 2026-11-04** except `/review-notes`, which moves to M5 because it needs `read_notes`. `/quiz` and `/end-session`, then the rest.
 5. **M5: Notes. Done 2026-11-04.** `read_notes` with per-subject folder lists and `private: true`; `/review-notes`; note-taking prompts.
 6. **M6: Own agent loop. Done 2026-11-05** (`velocity chat`, live-tested with an API key, merged in #13). Front end B on the `anthropic` SDK, with the same MCP server and skills.
-7. **M7: Polish and portfolio.** One PR each, in this order: fixes from the M6 live test (done, #15); README with a demo; teaching-quality evals (replaying session records); source improvements (drop-check repair, then non-PDF sources).
-8. **M8: Web front end.** A local web UI (`velocity web`) as a third front end on the same core, planned 2026-11-06 (see the decisions log). Four PRs: (1) server, subject picker and session history; (2) chat on the own agent loop; (3) chat on Claude Code (headless), selectable; (4) polish and a README demo. The MIT license is added after M8; ask the user then.
+7. **M7: Polish and portfolio.** One PR each, in this order: fixes from the M6 live test (done, #15); README with a demo; teaching-quality evals (replaying session records); source improvements (drop-check repair, then non-PDF sources). All done except the eval full run, which the user postponed to limit spending.
+8. **M8: Web front end.** A local web UI (`velocity web`) as a third front end on the same core, planned 2026-11-06 (see the decisions log), with the PRs reordered after a design review the same day: (1) server, subject picker and session history (done, #24); (A) session titles and resume/continue for all front ends (done, #25); (B) chat on Claude Code headless (#26); (C) chat on the own agent loop, selectable; (D) polish and a README demo. The MIT license is added after M8; ask the user then.
 
 ### M2 notes (2026-11-04)
 
