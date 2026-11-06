@@ -200,6 +200,14 @@ Linux is the primary platform (the developer's). macOS is supported. Windows is 
 - **Dependency:** `anthropic` is pinned to `>=0.125,<1` because `marker-pdf` requires `<1`. 0.125 supports everything used here.
 - **Not yet:** resuming a chat (each `velocity chat` is a new session; the Claude Code front end supports resume), and context compaction for very long sessions.
 
+### M8 notes: web chat on Claude Code (2026-11-06)
+
+- **Experiment first** (two short messages on Sonnet in a scratch vault): one JSON line per message on stdin works; the `UserPromptSubmit` and `Stop` hooks fire for those messages, so the log is written exactly as in `velocity tutor`; `/quiz` works; closing stdin exits with 0 and runs `SessionEnd`; `--resume <claude id>` reattaches to the same velocity session.
+- **Engine** (`claude_engine.py`): one `claude -p --input-format stream-json --output-format stream-json --verbose --include-partial-messages --permission-prompts none` process per chat, in the generated workspace with `velocity tutor`'s arguments. Streamed text deltas become text events; complete assistant messages contribute only their tool calls (their text repeats the deltas); `result` ends a reply.
+- **Chats** (`chat.py`): at most one per subject, and none while another session of the subject is open (unless the learner closes it, e.g. after a crash). Pause, the 30-minute idle timeout and server shutdown close stdin, which ends the session without a wrap-up. After `/end-session` the chat stops once the session is wrapped up. Resume uses Claude Code's `--resume` when the session has a Claude Code conversation (found through the hook's id mapping); otherwise `VELOCITY_REOPEN` makes the SessionStart hook reopen the session and asks the tutor to read it first. Continue passes `VELOCITY_CONTINUE`.
+- **Page:** a Chat tab (model choice remembered in the browser, skill buttons, End session and Pause, a "?" popup explaining End session, Pause, Resume and Continue) and Resume/Continue buttons in History. Replies stream over server-sent events and are rendered with the same markdown and math code as History. Reloading the page redraws a running chat from the session record.
+- **Tests** use `tests/fake_claude.py`, which speaks the same protocol and runs velocity's real hooks at the same moments as Claude Code, so logging, resume, continue and wrap-up are tested without Claude Code.
+
 ### M7 notes: non-PDF sources (2026-11-06)
 
 - **`TextSource`** (`text_source.py`) reads Markdown, HTML and EPUB with the standard library only (`html.parser`, `zipfile`, `xml.etree`). The file becomes markdown in memory; no cache, since parsing a whole book takes well under a second. It has the same `outline()` / `read_section()` interface as `PdfSource`; sections have no page numbers, so the tools leave them out.

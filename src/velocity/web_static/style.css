@@ -135,6 +135,85 @@ pre { background: var(--panel); padding: 0.75rem; border-radius: 6px; overflow-x
 
 .katex-display { overflow-x: auto; overflow-y: hidden; }
 
+/* -- chat ------------------------------------------------------------------------------ */
+
+[hidden] { display: none !important; }
+
+.chat-view { display: flex; flex-direction: column; max-width: 52rem; margin: 0 auto; }
+
+.start-panel { padding: 2rem 1.25rem; }
+.start-panel label { display: block; margin: 1rem 0; }
+.actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+
+button.primary, .chat-bar button, .actions button, .skills button, .session-action, dialog button {
+  padding: 0.35rem 0.8rem;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  cursor: pointer;
+}
+
+button.primary { background: var(--accent); border-color: var(--accent); color: var(--bg); font-weight: 600; }
+button:disabled { opacity: 0.5; cursor: default; }
+
+#chat-live { display: flex; flex-direction: column; height: calc(100vh - 3.2rem); }
+
+.chat-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 1.25rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.chat-bar .spacer { flex: 1; }
+.chat-bar .help { border-radius: 50%; width: 1.9rem; padding: 0; }
+
+#messages { flex: 1; overflow-y: auto; padding: 1rem 1.25rem; }
+
+.message { margin: 0.75rem 0; }
+.message.learner {
+  margin-left: 20%;
+  padding: 0.5rem 0.8rem;
+  background: var(--panel);
+  border-radius: 10px;
+  white-space: pre-wrap;
+}
+
+.tool { margin: 0.25rem 0; font-size: 0.85rem; color: var(--muted); }
+.note { color: var(--muted); font-style: italic; }
+
+.skills { display: flex; gap: 0.4rem; flex-wrap: wrap; padding: 0.5rem 1.25rem 0; }
+.skills button { font-size: 0.85rem; padding: 0.2rem 0.6rem; }
+
+#composer { display: flex; gap: 0.5rem; padding: 0.5rem 1.25rem 1rem; }
+
+#input {
+  flex: 1;
+  resize: vertical;
+  font: inherit;
+  color: inherit;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.5rem 0.7rem;
+}
+
+.session-action { margin: 0 0 0.5rem 0.6rem; font-size: 0.8rem; padding: 0.15rem 0.6rem; }
+
+dialog {
+  max-width: 32rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg);
+  color: var(--text);
+}
+
+dialog dt { font-weight: 600; margin-top: 0.75rem; }
+dialog dd { margin: 0.2rem 0 0; color: var(--muted); }
+dialog form { margin-top: 1rem; text-align: right; }
+.dialog-actions { display: flex; flex-direction: column; gap: 0.5rem; margin-top: 1rem; }
+
 @media (max-width: 700px) {
   .view { grid-template-columns: 1fr; height: auto; }
   aside { border-right: none; border-bottom: 1px solid var(--border); }

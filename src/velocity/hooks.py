@@ -54,6 +54,22 @@ def _continues(subject: Subject, payload: dict) -> str | None:
     return session_id if earlier.record_path.exists() and earlier.ended else None
 
 
+# Set by the web UI to resume a paused session that has no Claude Code conversation to
+# resume (e.g. one from `velocity chat`): the session reopens, and the tutor reads it.
+REOPEN_ENV = "VELOCITY_REOPEN"
+
+
+def _reopen(subject: Subject, payload: dict) -> Session | None:
+    session_id = payload.get("reopen") or os.environ.get(REOPEN_ENV, "")
+    if not SESSION_ID.match(session_id):
+        return None
+    session = _session(subject, session_id)
+    if not session.record_path.exists() or not session.ended or session.wrapped_up:
+        return None
+    session.reopen()
+    return session
+
+
 def session_start(config: Config, subject: Subject, payload: dict) -> dict:
     claude_id = payload.get("session_id", "")
     mapping = _claude_map(subject) / claude_id if claude_id else None
@@ -66,6 +82,7 @@ def session_start(config: Config, subject: Subject, payload: dict) -> dict:
             )
         elif session.ended:
             session.reopen()
+    reopened = session is None and (session := _reopen(subject, payload)) is not None
     resumed = session is not None
     if session is None:
         session = Session.start(
@@ -110,6 +127,11 @@ def session_start(config: Config, subject: Subject, payload: dict) -> dict:
         + (" (use read_session to review the last one)." if previous else "."),
         "The conversation log is at " + session.log_path.as_posix() + ".",
     ]
+    if reopened:
+        context.append(
+            "This session was paused and is resumed here without its earlier conversation. "
+            f"Read it with read_session('{session.id}') first, then pick up where it left off."
+        )
     if session.title:
         context.append(f"Session title so far: {session.title}")
     else:
