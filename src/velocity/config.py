@@ -218,6 +218,7 @@ def add_source(
     toml.write_text(text.rstrip("\n") + "\n" + entry, encoding="utf-8")
     added = load_subject(config, slug).sources[-1]
     assert added.path == path
+    remember_library_file(path)
     return added
 
 
@@ -314,6 +315,9 @@ def delete_subject(config: Config, slug: str) -> None:
     folder = subject.dir.resolve()
     if folder.parent != config.tutor_dir.resolve():
         raise ConfigError(f"{folder} is not a subject folder in {TUTOR_DIR_NAME}/")
+    for ref in subject.sources:  # its books stay in the library
+        if ref.path.is_file():
+            remember_library_file(ref.path)
     shutil.rmtree(folder)
     for leftover in (data_dir() / "records" / slug, data_dir() / "workspaces" / slug):
         shutil.rmtree(leftover, ignore_errors=True)
@@ -324,6 +328,100 @@ def subject_toml(config: Config, slug: str) -> Path:
     if not path.is_file():
         raise ConfigError(f"no subject {slug!r}")
     return path
+
+
+def _library_index() -> Path:
+    return data_dir() / "library" / "index.json"
+
+
+def remember_library_file(path: Path) -> None:
+    """Keep a source file in the library (library.py) even when no subject uses it any
+    more, e.g. after it was removed or its subject deleted."""
+    files = library_files()
+    path = path.resolve()
+    if path in files:
+        return
+    index = _library_index()
+    index.parent.mkdir(parents=True, exist_ok=True)
+    index.write_text(
+        json.dumps([p.as_posix() for p in [*files, path]], indent=1), encoding="utf-8"
+    )
+
+
+def library_files() -> list[Path]:
+    """Every source file ever added to a subject (that the index remembers)."""
+    try:
+        return [
+            Path(p) for p in json.loads(_library_index().read_text(encoding="utf-8"))
+        ]
+    except (OSError, ValueError):
+        return []
+
+
+def _source_table(text: str, name: str) -> tuple[int, int]:
+    """(start, end) of the [[sources]] table for the source called `name` (its `name`,
+    or its file name when it has none), up to the next table."""
+    headers = list(re.finditer(r"^\[.*$", text, flags=re.MULTILINE))
+    for i, header in enumerate(headers):
+        if header.group().strip() != "[[sources]]":
+            continue
+        end = headers[i + 1].start() if i + 1 < len(headers) else len(text)
+        table = tomllib.loads(text[header.start() : end])["sources"][0]
+        own = table.get("name") or Path(table.get("path", "")).expanduser().stem
+        if own == name:
+            return header.start(), end
+    raise ConfigError(f"no source named {name!r}")
+
+
+def remove_source(config: Config, slug: str, name: str) -> None:
+    """Take a source out of a subject (subject.toml). The file itself is kept, so it stays
+    in the library, prepared pages included."""
+    toml = subject_toml(config, slug)
+    for ref in load_subject(config, slug).sources:
+        if ref.name == name and ref.path.is_file():
+            remember_library_file(ref.path)  # sources added before the index existed
+    text = toml.read_text(encoding="utf-8")
+    start, end = _source_table(text, name)
+    new = (
+        text[:start].rstrip("\n")
+        + "\n"
+        + ("\n" + text[end:].lstrip("\n") if text[end:].strip() else "")
+    )
+    tomllib.loads(new)
+    toml.write_text(new, encoding="utf-8")
+    if any(s.name == name for s in load_subject(config, slug).sources):
+        raise ConfigError(f"{toml}: the source was not removed; edit it by hand")
+
+
+def rename_source(config: Config, slug: str, name: str, new_name: str) -> SourceRef:
+    """Change the name a subject cites a source by (e.g. "Stewart"). Earlier session logs
+    keep citing the old name."""
+    new_name = new_name.strip()
+    if not new_name:
+        raise ConfigError("the source's name is empty")
+    subject = load_subject(config, slug)
+    if any(s.name == new_name for s in subject.sources if s.name != name):
+        raise ConfigError(f"{subject.name} already has a source named {new_name!r}")
+    toml = subject.dir / "subject.toml"
+    text = toml.read_text(encoding="utf-8")
+    start, end = _source_table(text, name)
+    table = text[start:end]
+    line = f"name = {_toml_string(new_name)}"
+    if re.search(r"^name[ \t]*=.*$", table, flags=re.MULTILINE):
+        table = re.sub(
+            r"^name[ \t]*=.*$", lambda _: line, table, count=1, flags=re.MULTILINE
+        )
+    else:
+        table = table.replace("[[sources]]", f"[[sources]]\n{line}", 1)
+    new = text[:start] + table + text[end:]
+    tomllib.loads(new)
+    toml.write_text(new, encoding="utf-8")
+    renamed = next(
+        (s for s in load_subject(config, slug).sources if s.name == new_name), None
+    )
+    if renamed is None:
+        raise ConfigError(f"{toml}: the source was not renamed; edit it by hand")
+    return renamed
 
 
 def add_note_folder(config: Config, slug: str, folder: str) -> Path:

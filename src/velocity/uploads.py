@@ -1,9 +1,11 @@
-"""Sources uploaded from the web page (M9, 2026-11-09).
+"""Sources uploaded from the web page (M9, 2026-11-09; the library, M10).
 
 A browser can't tell the server where a file is, so an upload is copied into velocity's
-data dir (`<data>/uploads/<subject>/`), outside the vault and the repo, and then added like
-`velocity source add` does. The file name is reduced to a safe base name (never a path
-from the request), and the content must match its type.
+library folder (`<data>/library/`), outside the vault and the repo, and then added like
+`velocity source add` does; other subjects can add it from the library without another
+upload (library.py). The file name is reduced to a safe base name (never a path from the
+request), and the content must match its type. Uploads from before the library went to
+`<data>/uploads/<subject>/`; they stay there and are part of the library too.
 """
 
 import re
@@ -21,13 +23,19 @@ class UploadError(Exception):
         self.status = status
 
 
-def uploads_dir(subject_slug: str) -> Path:
-    return data_dir() / "uploads" / subject_slug
+def library_dir() -> Path:
+    return data_dir() / "library"
 
 
-def upload_path(subject_slug: str, filename: str) -> Path:
+def legacy_upload_dirs() -> list[Path]:
+    """Per-subject upload folders from before the library (M9)."""
+    root = data_dir() / "uploads"
+    return sorted(p for p in root.iterdir() if p.is_dir()) if root.is_dir() else []
+
+
+def upload_path(filename: str) -> Path:
     """Where to keep an uploaded file: its base name with only safe characters, in the
-    subject's uploads folder, with "-2", "-3"... if the name is taken."""
+    library folder, with "-2", "-3"... if the name is taken."""
     base = Path(filename.replace("\\", "/")).name
     suffix = Path(base).suffix.lower()
     if suffix not in SOURCE_SUFFIXES:
@@ -35,7 +43,7 @@ def upload_path(subject_slug: str, filename: str) -> Path:
             f"{base or 'This file'}: unsupported file type (use PDF, EPUB, Markdown or HTML)."
         )
     stem = re.sub(r"[^A-Za-z0-9._ ()-]+", "_", Path(base).stem).strip(" ._") or "source"
-    folder = uploads_dir(subject_slug)
+    folder = library_dir()
     path = folder / f"{stem}{suffix}"
     n = 2
     while path.exists():

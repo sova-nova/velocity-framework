@@ -41,12 +41,16 @@ from velocity.config import (
     delete_subject,
     list_subjects,
     load_subject,
+    remove_source,
+    rename_source,
     set_archived,
     set_note_folders,
     set_persona,
     set_subject_name,
 )
 from velocity.engine import CLAUDE_CODE
+from velocity.library import find as find_in_library
+from velocity.library import library
 from velocity.pdf_source import PdfSource
 from velocity.prepare import (
     SECONDS_PER_PAGE,
@@ -148,6 +152,15 @@ def build_app(config: Config, chats: ChatManager | None = None) -> Starlette:
             ],
             "archived": subject.archived,
             "folder": subject.dir.as_posix(),
+            "sources": [
+                {
+                    "name": s.name,
+                    "kind": _source_kind(s),
+                    "filename": s.path.name,
+                    "missing": not s.path.is_file(),
+                }
+                for s in subject.sources
+            ],
         }
 
     async def subject_settings(request: Request) -> Response:
@@ -281,7 +294,7 @@ def build_app(config: Config, chats: ChatManager | None = None) -> Starlette:
                 {"error": f"{subject.name} already has a source named {name!r}."}, 409
             )
         try:
-            path = upload_path(subject.slug, filename)
+            path = upload_path(filename)
             await receive_upload(request, path)
             added = await asyncio.to_thread(
                 add_source, config, subject.slug, path, name
@@ -349,6 +362,56 @@ def build_app(config: Config, chats: ChatManager | None = None) -> Starlette:
             "sections": sections,
             "warning": warning,
         }
+
+    # -- the sources library (M10) -------------------------------------------------------
+
+    async def library_list(request: Request) -> Response:
+        entries = await asyncio.to_thread(library, config)
+        return JSONResponse([e.as_json() for e in entries])
+
+    async def source_from_library(request: Request) -> Response:
+        """Add a book from the library to a subject: the same file, no new upload."""
+        subject = subject_or_404(request.path_params["slug"])
+        if subject is None:
+            return JSONResponse({"error": "unknown subject"}, 404)
+        body = await _json(request)
+        name = str(body.get("name") or "").strip()
+        if not name:
+            return JSONResponse({"error": "Give the source a name."}, 400)
+        try:
+            entry = await asyncio.to_thread(
+                find_in_library, config, str(body.get("id"))
+            )
+            added = await asyncio.to_thread(
+                add_source, config, subject.slug, entry.path, name
+            )
+        except ConfigError as e:
+            return JSONResponse({"error": str(e)}, 400)
+        return JSONResponse(await asyncio.to_thread(describe_added, subject, added))
+
+    async def source_remove(request: Request) -> Response:
+        """Take a source out of a subject; the file stays in the library."""
+        subject = subject_or_404(request.path_params["slug"])
+        if subject is None:
+            return JSONResponse({"error": "unknown subject"}, 404)
+        try:
+            remove_source(config, subject.slug, request.path_params["name"])
+        except ConfigError as e:
+            return JSONResponse({"error": str(e)}, 400)
+        return JSONResponse({"removed": request.path_params["name"]})
+
+    async def source_rename(request: Request) -> Response:
+        subject = subject_or_404(request.path_params["slug"])
+        if subject is None:
+            return JSONResponse({"error": "unknown subject"}, 404)
+        new_name = str((await _json(request)).get("name") or "")
+        try:
+            renamed = rename_source(
+                config, subject.slug, request.path_params["name"], new_name
+            )
+        except ConfigError as e:
+            return JSONResponse({"error": str(e)}, 400)
+        return JSONResponse({"name": renamed.name})
 
     def reader_source(request: Request):
         """(subject, source ref) for a reader request, or an error response."""
@@ -554,6 +617,22 @@ def build_app(config: Config, chats: ChatManager | None = None) -> Starlette:
         Route("/api/subjects/{slug}/archive", subject_archive, methods=["POST"]),
         Route("/api/subjects/{slug}/delete", subject_delete, methods=["POST"]),
         Route("/api/vault/folders", vault_folders),
+        Route("/api/library", library_list),
+        Route(
+            "/api/subjects/{slug}/sources/library",
+            source_from_library,
+            methods=["POST"],
+        ),
+        Route(
+            "/api/subjects/{slug}/sources/{name}/remove",
+            source_remove,
+            methods=["POST"],
+        ),
+        Route(
+            "/api/subjects/{slug}/sources/{name}/rename",
+            source_rename,
+            methods=["POST"],
+        ),
         Route("/api/engines", engine_list),
         Route("/api/subjects/{slug}/sources", source_list),
         Route("/api/subjects/{slug}/sources", source_upload, methods=["POST"]),
