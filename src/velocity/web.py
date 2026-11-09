@@ -10,6 +10,7 @@ read here, through the session code.
 import asyncio
 import contextlib
 import json
+import os
 import re
 import subprocess
 import sys
@@ -36,8 +37,14 @@ from velocity.config import (
     Config,
     ConfigError,
     add_source,
+    create_subject,
+    delete_subject,
     list_subjects,
     load_subject,
+    set_archived,
+    set_note_folders,
+    set_persona,
+    set_subject_name,
 )
 from velocity.engine import CLAUDE_CODE
 from velocity.pdf_source import PdfSource
@@ -48,7 +55,13 @@ from velocity.prepare import (
     request_cancel,
     running,
 )
-from velocity.session import SESSION_ID, Session, record_dir, session_summaries
+from velocity.session import (
+    SESSION_ID,
+    Session,
+    active_session_id,
+    record_dir,
+    session_summaries,
+)
 from velocity.tools import ToolError, open_source, source_ref
 from velocity.uploads import MAX_UPLOAD_BYTES, UploadError, check_content, upload_path
 
@@ -102,9 +115,97 @@ def build_app(config: Config, chats: ChatManager | None = None) -> Starlette:
                     "slug": slug,
                     "name": subject.name,
                     "sources": [s.name for s in subject.sources],
+                    "archived": subject.archived,
+                    "sessions": len(list(record_dir(slug).glob("*.jsonl"))),
                 }
             )
         return JSONResponse(out)
+
+    # -- managing subjects (M10) ---------------------------------------------------------
+
+    async def subject_create(request: Request) -> Response:
+        name = str((await _json(request)).get("name") or "").strip()
+        if not name:
+            return JSONResponse({"error": "Give the subject a name."}, 400)
+        try:
+            subject = create_subject(config, name)
+        except ConfigError as e:
+            if "already exists" in str(e):
+                return JSONResponse(
+                    {"error": "There is already a subject with that name."}, 409
+                )
+            return JSONResponse({"error": str(e)}, 400)
+        return JSONResponse({"slug": subject.slug, "name": subject.name})
+
+    def settings_of(subject) -> dict:
+        return {
+            "slug": subject.slug,
+            "name": subject.name,
+            "persona": subject.persona.strip("\n"),
+            "note_folders": [
+                f.relative_to(config.vault_path).as_posix()
+                for f in subject.note_folders
+            ],
+            "archived": subject.archived,
+            "folder": subject.dir.as_posix(),
+        }
+
+    async def subject_settings(request: Request) -> Response:
+        subject = subject_or_404(request.path_params["slug"])
+        if subject is None:
+            return JSONResponse({"error": "unknown subject"}, 404)
+        if request.method == "GET":
+            return JSONResponse(settings_of(subject))
+        body = await _json(request)
+        try:
+            if "name" in body:
+                subject = set_subject_name(config, subject.slug, str(body["name"]))
+            if "persona" in body:
+                subject = set_persona(config, subject.slug, str(body["persona"]))
+            if "note_folders" in body:
+                folders = [str(f) for f in body["note_folders"] or []]
+                subject = set_note_folders(config, subject.slug, folders)
+        except ConfigError as e:
+            return JSONResponse({"error": str(e)}, 400)
+        return JSONResponse(settings_of(subject))
+
+    def session_open(subject) -> bool:
+        return (
+            subject.slug in chats.chats or active_session_id(subject.slug) is not None
+        )
+
+    async def subject_archive(request: Request) -> Response:
+        """Archive a subject (hidden, everything kept), or recover it."""
+        subject = subject_or_404(request.path_params["slug"])
+        if subject is None:
+            return JSONResponse({"error": "unknown subject"}, 404)
+        archived = bool((await _json(request)).get("archived", True))
+        if archived and session_open(subject):
+            return JSONResponse(
+                {"error": "A session of this subject is open. End or pause it first."},
+                409,
+            )
+        return JSONResponse(settings_of(set_archived(config, subject.slug, archived)))
+
+    async def subject_delete(request: Request) -> Response:
+        """Delete an archived subject, once the learner has typed its name."""
+        subject = subject_or_404(request.path_params["slug"])
+        if subject is None:
+            return JSONResponse({"error": "unknown subject"}, 404)
+        if str((await _json(request)).get("confirm") or "").strip() != subject.name:
+            return JSONResponse({"error": "Type the subject's name to delete it."}, 400)
+        if session_open(subject):
+            return JSONResponse({"error": "A session of this subject is open."}, 409)
+        try:
+            await asyncio.to_thread(delete_subject, config, subject.slug)
+        except ConfigError as e:
+            return JSONResponse({"error": str(e)}, 400)
+        return JSONResponse({"deleted": subject.slug})
+
+    async def vault_folders(request: Request) -> Response:
+        """Folders in the vault the tutor could be allowed to read (for the note folder
+        picker): not hidden, not inside Tutor/."""
+        return JSONResponse(await asyncio.to_thread(list_vault_folders, config))
 
     async def sessions(request: Request) -> Response:
         subject = subject_or_404(request.path_params["slug"])
@@ -446,6 +547,13 @@ def build_app(config: Config, chats: ChatManager | None = None) -> Starlette:
     routes = [
         Route("/", index),
         Route("/api/subjects", subjects),
+        Route("/api/subjects", subject_create, methods=["POST"]),
+        Route(
+            "/api/subjects/{slug}/settings", subject_settings, methods=["GET", "POST"]
+        ),
+        Route("/api/subjects/{slug}/archive", subject_archive, methods=["POST"]),
+        Route("/api/subjects/{slug}/delete", subject_delete, methods=["POST"]),
+        Route("/api/vault/folders", vault_folders),
         Route("/api/engines", engine_list),
         Route("/api/subjects/{slug}/sources", source_list),
         Route("/api/subjects/{slug}/sources", source_upload, methods=["POST"]),
@@ -481,6 +589,27 @@ def build_app(config: Config, chats: ChatManager | None = None) -> Starlette:
     app = Starlette(routes=routes, middleware=middleware, lifespan=lifespan)
     app.state.chats = chats
     return app
+
+
+MAX_VAULT_FOLDERS = 2000
+
+
+def list_vault_folders(config) -> list[str]:
+    """The vault's folders, relative to it, sorted; hidden folders (.obsidian, .trash)
+    and the tutor's own Tutor/ folder are left out."""
+    folders = []
+    vault = config.vault_path
+    for root, dirs, _ in os.walk(vault):
+        dirs[:] = sorted(
+            d
+            for d in dirs
+            if not d.startswith(".") and Path(root, d) != config.tutor_dir
+        )
+        for d in dirs:
+            folders.append(Path(root, d).relative_to(vault).as_posix())
+            if len(folders) >= MAX_VAULT_FOLDERS:
+                return folders
+    return folders
 
 
 def _source_kind(ref) -> str:

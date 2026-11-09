@@ -62,7 +62,13 @@ def test_page_and_static_files(client):
 
 def test_subjects(client):
     assert client.get("/api/subjects").json() == [
-        {"slug": "calculus", "name": "Calculus", "sources": []}
+        {
+            "slug": "calculus",
+            "name": "Calculus",
+            "sources": [],
+            "archived": False,
+            "sessions": 0,
+        }
     ]
 
 
@@ -114,7 +120,7 @@ def test_cross_origin_changes_are_rejected(client):
     response = client.post("/api/subjects", headers={"Origin": "http://evil.example"})
     assert response.status_code == 403
     same = client.post("/api/subjects", headers={"Origin": "http://127.0.0.1:8765"})
-    assert same.status_code == 405  # passes the check; there is no POST route yet
+    assert same.status_code == 400  # passes the check; then: a subject needs a name
 
 
 def test_cli_web_starts_uvicorn_on_localhost(config, monkeypatch, capsys):

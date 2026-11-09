@@ -7,7 +7,7 @@ It is built around one **MCP server** with two front ends:
 - **`velocity tutor`** runs the tutor inside [Claude Code](https://claude.com/claude-code), using your Claude plan or API key.
 - **`velocity chat`** is velocity's own agent loop on the Anthropic API, with the same tools, prompt and skills.
 
-A local web UI, **`velocity web`**, puts both in your browser: chat with the tutor through Claude Code (on your plan) or the API (with its cost shown as you go), with math rendered, and browse, resume or continue past sessions. A paused session can be resumed on either engine, whichever one started it. A reader beside the chat shows your sources (the tutor's citations are links into it); you can add a source there, and prepare a book ahead of time so reading it is instant.
+A local web UI, **`velocity web`**, puts both in your browser: chat with the tutor through Claude Code (on your plan) or the API (with its cost shown as you go), with math rendered, and browse, resume or continue past sessions. A paused session can be resumed on either engine, whichever one started it. A reader beside the chat shows your sources (the tutor's citations are links into it); you can add a source there, and prepare a book ahead of time so reading it is instant. Subjects are managed on the page too: create them, change their settings (name, extra instructions for the tutor, note folders), and archive, recover or delete them.
 
 ## What a session looks like
 
