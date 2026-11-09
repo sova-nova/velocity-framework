@@ -263,6 +263,40 @@ button.danger:disabled { opacity: 0.45; }
 .source-list .confirm { margin-top: 0.4rem; display: flex; gap: 0.4rem; align-items: center; flex-wrap: wrap; }
 .source-list .confirm input { flex: 1; }
 .source-list li.empty { border-style: dashed; color: var(--muted); }
+/* The Library tab (M10) */
+#workspace > .library-view { display: block; overflow-y: auto; }
+.library-panel { max-width: 52rem; margin: 0 auto; padding: 1.5rem 1.25rem 3rem; }
+.library-list { list-style: none; margin: 1rem 0 0; padding: 0; display: flex; flex-direction: column; gap: 0.6rem; }
+.library-list > li { border: 1px solid var(--border); border-radius: 10px; padding: 0.75rem 0.9rem; }
+.library-list .row { display: flex; align-items: flex-start; gap: 0.75rem; flex-wrap: wrap; }
+.library-list .what { flex: 1; min-width: 14rem; }
+.library-list .what strong { display: block; }
+.library-list .meta { font-size: 0.85rem; color: var(--muted); }
+.library-list .uses { font-size: 0.9rem; margin-top: 0.3rem; }
+.library-list .copy { font-size: 0.85rem; color: #8a5a00; margin-top: 0.3rem; }
+.library-list .actions button {
+  padding: 0.25rem 0.65rem;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  cursor: pointer;
+}
+.library-list .confirm {
+  margin-top: 0.6rem;
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  flex-wrap: wrap;
+  font-size: 0.9rem;
+}
+.library-list .confirm button {
+  padding: 0.2rem 0.6rem;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  cursor: pointer;
+}
+.library-list .confirm button.danger { background: #b3261e; border-color: #b3261e; color: #fff; }
 #add-source { max-width: 32rem; }
 #add-source .field { display: flex; flex-direction: column; gap: 0.25rem; margin: 0.75rem 0; }
 #add-source input[type="text"] {

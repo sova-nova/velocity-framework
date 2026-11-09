@@ -143,9 +143,11 @@ function showView(name) {
   }
   $("#chat").hidden = name !== "chat";
   $("#history").hidden = name !== "history";
+  $("#library").hidden = name !== "library";
   updateLayout();
   // Chats start, pause, and end while History is hidden: show the sessions as they are now.
   if (name === "history") loadSessions(subject());
+  if (name === "library") loadLibrary(); // books are added and removed in other views
 }
 
 // -- chat ------------------------------------------------------------------------------
