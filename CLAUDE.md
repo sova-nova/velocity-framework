@@ -12,7 +12,7 @@ Read `DESIGN.md` before making architectural decisions. It is the source of trut
 
 M1–M6 done and merged. M7 (polish and portfolio) is done except the postponed eval full run. M8 (web front end) is in progress. See `DESIGN.md` section 4.
 
-**Where we left off (2026-11-09):** PR C (web chat on the own loop) is built on branch `web-chat-own-loop`, with tests passing; the user still has to live-test it with their API key. After it's merged: PR D (polish + README demo), then ask about the MIT license.
+**Where we left off (2026-11-09):** PR C (web chat on the own loop) is open as #27 (branch `web-chat-own-loop`); the user live-tested it with their API key and it works. After it's merged: PR D (polish + README demo) from a fresh branch off `main`, then ask about the MIT license.
 
 **Earlier context:**
 
