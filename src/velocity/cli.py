@@ -132,6 +132,8 @@ def _source(args: argparse.Namespace) -> int:
         return 0
     if args.source_command == "recheck":
         return _recheck(config, load_subject(config, args.subject), args.all)
+    if args.source_command == "prepare":
+        return _prepare(config, load_subject(config, args.subject), args)
 
     from velocity.outline import toc_size
 
@@ -168,6 +170,97 @@ def _source(args: argparse.Namespace) -> int:
             + "."
         )
     return 0
+
+
+def prepare_scope(pdf, section: str | None, pages: str | None) -> tuple[int, int, str]:
+    """(first page, last page, label) for `source prepare`'s --section/--pages/--all."""
+    total = pdf.page_count
+    if section:
+        entry = next((s for s in pdf.outline() if s.id == section), None)
+        if entry is None:
+            raise ValueError(f"No section {section!r} in the outline.")
+        return entry.start_page, entry.end_page, entry.title
+    if pages:
+        first, _, last = pages.partition("-")
+        first, last = int(first), int(last or first)
+        if not 1 <= first <= last <= total:
+            raise ValueError(f"Pages must be within 1-{total}.")
+        return first, last, f"PDF pp. {first}-{last}"
+    return 1, total, "the whole book"
+
+
+def _prepare(config, subject, args: argparse.Namespace) -> int:
+    """OCR part of a PDF source ahead of time, showing progress (velocity source prepare)."""
+    import sys
+
+    from velocity.pdf_source import PdfSource
+    from velocity.prepare import (
+        PrepareError,
+        estimate_seconds,
+        format_duration,
+        run_job,
+    )
+    from velocity.tools import default_ocr
+
+    pdfs = [s for s in subject.sources if s.path.suffix.lower() == ".pdf"]
+    if args.source:
+        pdfs = [s for s in pdfs if s.name == args.source]
+    if len(pdfs) != 1:
+        names = ", ".join(s.name for s in subject.sources if s.path.suffix == ".pdf")
+        print(
+            "Name the PDF source with --source"
+            + (f" (one of: {names})." if names else "; this subject has none.")
+        )
+        return 1
+    ref = pdfs[0]
+    pdf = PdfSource(ref.path, default_ocr(config))
+    try:
+        first, last, label = prepare_scope(pdf, args.section, args.pages)
+    except ValueError as e:
+        print(e)
+        return 1
+    todo = len(pdf.missing_pages(first, last))
+    if not todo:
+        print(f"{ref.name}: {label} is already prepared.")
+        return 0
+    where = "" if label.startswith("PDF pp.") else f" (PDF pp. {first}-{last})"
+    print(
+        f"{ref.name}: preparing {label}{where}: {todo} pages to OCR, "
+        f"{format_duration(estimate_seconds(todo))}. This takes a while and keeps the "
+        "GPU busy; the tutor keeps working meanwhile. Stop with Ctrl+C: finished pages "
+        "are kept, and running this again continues where it stopped."
+    )
+    tty = sys.stdout.isatty()
+
+    def show(progress: dict) -> None:
+        done, total = progress["done"], progress["total"]
+        width = 30
+        bar = "#" * (width * done // max(total, 1))
+        line = (
+            f"[{bar:<{width}}] {done}/{total} pages ({100 * done // max(total, 1)}%)"
+            + (f", next {progress['next_section']}" if progress["next_section"] else "")
+            + (
+                f", {format_duration(progress['eta_seconds'])} left"
+                if progress["state"] == "running" and 0 < done < total
+                else ""
+            )
+        )
+        print(("\r" + line.ljust(110)) if tty else line, end="" if tty else "\n")
+        sys.stdout.flush()
+
+    try:
+        result = run_job(pdf, first, last, label, on_update=show)
+    except PrepareError as e:
+        print(e)
+        return 1
+    except KeyboardInterrupt:
+        print("\nStopped. Finished pages are kept; run this again to continue.")
+        return 130
+    print(
+        ("\n" if tty else "")
+        + f"{ref.name}: {result['state']}, {result['done']} pages OCR'd."
+    )
+    return 0 if result["state"] == "done" else 1
 
 
 def _recheck(config, subject, all_pages: bool = False) -> int:
@@ -317,6 +410,21 @@ def main(argv: list[str] | None = None) -> int:
     source_recheck.add_argument(
         "--all", action="store_true", help="all cached pages, not only unchecked ones"
     )
+    source_prepare = source_commands.add_parser(
+        "prepare",
+        help="OCR a chapter or the whole book ahead of time, so reading it is instant "
+        "(takes a while: about 6-7 s per page on a GPU)",
+    )
+    source_prepare.add_argument("subject")
+    source_prepare.add_argument(
+        "--source", help="which source (needed when the subject has several PDFs)"
+    )
+    scope = source_prepare.add_mutually_exclusive_group(required=True)
+    scope.add_argument(
+        "--section", help="an outline entry, e.g. ch14 or 14.3 (see get_outline)"
+    )
+    scope.add_argument("--pages", help="a PDF page range, e.g. 920-959")
+    scope.add_argument("--all", action="store_true", help="the whole book")
 
     notes = commands.add_parser(
         "notes", help="manage which note folders the tutor may read"

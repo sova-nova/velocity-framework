@@ -119,6 +119,7 @@ The same tutor in your terminal, streamed from the Anthropic API. Type `/model` 
 | `velocity web [subject]` | Open the local web UI at http://127.0.0.1:8765: chat (through Claude Code, or the API if `ANTHROPIC_API_KEY` is set) and session history |
 | `velocity source list <subject>` | List a subject's sources |
 | `velocity source recheck <subject> [--all]` | OCR cached pages again with the dropped-text check (by default only pages cached before it) |
+| `velocity source prepare <subject> --section ch14 \| --pages 920-959 \| --all` | OCR a chapter, a page range or the whole book ahead of time, with a progress bar, so reading it later is instant. It takes a while (about 6-7 s per page on a GPU; about 2.5 hours for a 1,400-page book). Also in the web reader (Prepare…), which runs it in the background |
 | `velocity notes list <subject>` | List the notes the tutor may read |
 
 ### Where things live

@@ -60,6 +60,7 @@ function closeReader() {
   $("#reader").hidden = true;
   $("#reader-divider").hidden = true;
   $("#book-button").classList.remove("open");
+  stopPrepareUpdates();
   updateLayout();
 }
 
@@ -195,6 +196,7 @@ async function showPdf(source, page) {
     return;
   }
   goToPage(page);
+  refreshPrepare();
 }
 
 function goToPage(page) {
@@ -226,6 +228,7 @@ function pageChanged(page) {
 
 async function showTextSection(source, sectionId) {
   $("#pdf-container").hidden = true;
+  hidePrepare(); // only PDFs are OCR'd
   const article = $("#reader-text");
   article.hidden = false;
   $("#reader-page").hidden = true; // text sources have no pages
@@ -336,6 +339,180 @@ function askAboutPage() {
   input.setSelectionRange(input.value.length, input.value.length);
 }
 
+// -- preparing ahead of time (OCR) -----------------------------------------------------
+
+// The open PDF's prepare status from the server: {pages, prepared: [page numbers],
+// progress: the job's prepare.json or null, starting, seconds_per_page, startup_seconds}.
+const prepare = { status: null, timer: null, dismissed: null, cancelling: false };
+
+const prepareUrl = (name, rest = "") =>
+  `/api/subjects/${subject()}/sources/${encodeURIComponent(name)}/prepare${rest}`;
+
+function formatDuration(seconds) {
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 1) return "under a minute";
+  if (minutes < 60) return `about ${minutes} min`;
+  return `about ${Math.floor(minutes / 60)} h ${String(minutes % 60).padStart(2, "0")} min`;
+}
+
+function stopPrepareUpdates() {
+  clearInterval(prepare.timer);
+  prepare.timer = null;
+}
+
+function hidePrepare() {
+  stopPrepareUpdates();
+  $("#reader-prepare").hidden = true;
+  $("#prepare-progress").hidden = true;
+}
+
+// Fetch the status, then update the ✓ marks and the progress strip. While a job runs,
+// this repeats every 3 seconds.
+async function refreshPrepare() {
+  const source = sourceNamed(reader.source);
+  if (!source || source.kind !== "pdf" || !readerOpen()) {
+    stopPrepareUpdates();
+    return;
+  }
+  try {
+    prepare.status = await getJSON(prepareUrl(source.name));
+  } catch {
+    return;
+  }
+  $("#reader-prepare").hidden = false;
+  markPrepared(source);
+  showPrepareProgress();
+  const state = prepare.status.progress?.state;
+  const active = prepare.status.starting || state === "running";
+  if (active && !prepare.timer) prepare.timer = setInterval(refreshPrepare, 3000);
+  if (!active) {
+    stopPrepareUpdates();
+    prepare.cancelling = false;
+  }
+}
+
+function missingIn(first, last) {
+  const prepared = new Set(prepare.status.prepared);
+  let missing = 0;
+  for (let p = first; p <= last; p++) if (!prepared.has(p)) missing++;
+  return missing;
+}
+
+// A ✓ after each section in the menu whose pages are all prepared (instant to read).
+function markPrepared(source) {
+  for (const option of $("#reader-section").options) {
+    const section = source.outline.find((s) => s.id === option.value);
+    if (!section?.start_page) continue;
+    option.dataset.label ??= option.textContent;
+    const ready = missingIn(section.start_page, section.end_page) === 0;
+    option.textContent = option.dataset.label + (ready ? " ✓" : "");
+  }
+}
+
+function showPrepareProgress() {
+  const { progress, starting } = prepare.status;
+  const strip = $("#prepare-progress");
+  const running = progress?.state === "running";
+  // A finished job's message stays for an hour, until dismissed.
+  const recent = progress && Date.now() / 1000 - progress.updated < 3600;
+  const show = starting || running || (recent && progress.started !== prepare.dismissed);
+  strip.hidden = !show;
+  if (!show) return;
+  strip.classList.toggle("failed", ["failed", "interrupted"].includes(progress?.state));
+  $("#prepare-cancel").hidden = !(starting || running) || prepare.cancelling;
+  $("#prepare-dismiss").hidden = starting || running;
+  const bar = $("#prepare-bar");
+  if (!running && starting) {
+    $("#prepare-title").textContent = "Starting…";
+    $("#prepare-detail").textContent = "loading the OCR models, about half a minute";
+    bar.removeAttribute("value"); // an indeterminate bar
+    return;
+  }
+  const { done, total, label, state } = progress;
+  bar.value = total ? done / total : 1;
+  const titles = {
+    running: `Preparing ${label}`,
+    done: `Prepared ${label}`,
+    cancelled: `Stopped preparing ${label}`,
+    failed: `Preparing ${label} failed`,
+    interrupted: `Preparing ${label} was interrupted`,
+  };
+  $("#prepare-title").textContent = titles[state] || label;
+  const parts = [`${done} of ${total} pages (${total ? Math.floor((100 * done) / total) : 100}%)`];
+  if (running && prepare.cancelling) {
+    parts.push("stopping after the current batch");
+  } else if (running) {
+    if (progress.next_section) parts.push(`now ${progress.next_section}`);
+    parts.push(`${formatDuration(progress.eta_seconds)} ${done ? "left" : "in all"}`);
+  } else if (state === "failed") {
+    parts.push(progress.error || "see prepare.log in the source's cache folder");
+  } else if (state !== "done") {
+    parts.push("finished pages are kept; Prepare again to continue");
+  }
+  $("#prepare-detail").textContent = parts.join(" · ");
+}
+
+// The chapter (top-level outline entry) a page is in.
+function chapterAt(source, page) {
+  return source.outline.find((s) => s.level === 1 && s.start_page <= page && page <= s.end_page);
+}
+
+function openPrepareDialog() {
+  const source = sourceNamed(reader.source);
+  const st = prepare.status;
+  if (!source || !st) return;
+  const estimate = (pages) => formatDuration(st.startup_seconds + pages * st.seconds_per_page);
+  const chapterChoice = document.querySelector('input[name="prepare-scope"][value="chapter"]');
+  const allChoice = document.querySelector('input[name="prepare-scope"][value="all"]');
+  $("#prepare-source").textContent = source.name;
+
+  const chapter = chapterAt(source, reader.page || 1);
+  const chapterLeft = chapter ? missingIn(chapter.start_page, chapter.end_page) : 0;
+  chapterChoice.closest("label").hidden = !chapter;
+  chapterChoice.disabled = !chapterLeft;
+  if (chapter) {
+    const pages = chapter.end_page - chapter.start_page + 1;
+    chapterChoice.dataset.section = chapter.id;
+    $("#prepare-chapter").textContent = chapterLeft
+      ? `This chapter, ${chapter.title} (pp. ${chapter.start_page}–${chapter.end_page}): ` +
+        `${chapterLeft} of ${pages} pages to go, ${estimate(chapterLeft)}`
+      : `This chapter, ${chapter.title}: already prepared`;
+  }
+  const allLeft = missingIn(1, st.pages);
+  allChoice.disabled = !allLeft;
+  $("#prepare-all").textContent = allLeft
+    ? `The whole book: ${allLeft.toLocaleString()} of ${st.pages.toLocaleString()} pages ` +
+      `to go, ${estimate(allLeft)}`
+    : "The whole book: already prepared";
+  (chapterLeft ? chapterChoice : allChoice).checked = true;
+  $("#prepare-go").disabled = !(chapterLeft || allLeft);
+  $("#prepare-dialog").showModal();
+}
+
+async function startPrepare() {
+  const choice = document.querySelector('input[name="prepare-scope"]:checked');
+  $("#prepare-dialog").close();
+  if (!choice) return;
+  const body = choice.value === "chapter" ? { section: choice.dataset.section } : {};
+  try {
+    prepare.status = await postJSON(prepareUrl(reader.source), body);
+  } catch (error) {
+    status(`Could not start preparing: ${error.message}`);
+    return;
+  }
+  prepare.dismissed = null;
+  prepare.cancelling = false;
+  showPrepareProgress();
+  refreshPrepare();
+}
+
+async function cancelPrepare() {
+  prepare.cancelling = true;
+  showPrepareProgress();
+  await postJSON(prepareUrl(reader.source, "/cancel")).catch(() => {});
+  refreshPrepare();
+}
+
 // -- set-up ----------------------------------------------------------------------------
 
 function setUpReader() {
@@ -351,6 +528,14 @@ function setUpReader() {
   });
   $("#reader-close").addEventListener("click", closeReader);
   $("#reader-ask").addEventListener("click", askAboutPage);
+  $("#reader-prepare").addEventListener("click", openPrepareDialog);
+  $("#prepare-go").addEventListener("click", startPrepare);
+  $("#prepare-close").addEventListener("click", () => $("#prepare-dialog").close());
+  $("#prepare-cancel").addEventListener("click", cancelPrepare);
+  $("#prepare-dismiss").addEventListener("click", () => {
+    prepare.dismissed = prepare.status?.progress?.started ?? null;
+    $("#prepare-progress").hidden = true;
+  });
   $("#reader-source").addEventListener("change", (event) => openAt(event.target.value));
   $("#reader-section").addEventListener("change", (event) =>
     openAt(reader.source, { section: event.target.value }),
@@ -397,6 +582,8 @@ function setUpDivider() {
 // Another subject: its own sources, and its own last place in the reader.
 async function resetReader(slug) {
   closeReader();
+  hidePrepare();
+  prepare.status = null;
   reader.source = reader.page = reader.section = null;
   if (pdf.doc) {
     await pdf.doc.destroy();

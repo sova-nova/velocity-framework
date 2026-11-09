@@ -1,7 +1,10 @@
 """A PDF textbook as a source: outline plus lazily OCR'd, cached section text."""
 
+import contextlib
+import fcntl
 import json
 import re
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -16,6 +19,9 @@ _HEADING = re.compile(r"^#{1,6}\s+(.+)$", re.MULTILINE)
 # 1,100 px a limit's subscript is barely legible; 1,400 px is clear. About 2,250 image
 # tokens per page (pixels / 750), well under the models' 2,576 px limit.
 PAGE_IMAGE_EDGE = 1400
+# Pages OCR'd per batch when preparing a source ahead of time (about a minute on the
+# user's GPU): a read_section waiting for the OCR lock waits at most this long.
+PREPARE_BATCH = 10
 _TITLE_PREFIX = re.compile(r"^(Ch \d+|\d+\.\d+|Appendix [A-Z]):\s*")
 
 
@@ -154,15 +160,22 @@ class PdfSource:
     def _page_dir(self) -> Path:
         return self.cache_dir / "pages"
 
-    def _pages(self, first: int, last: int) -> list[str]:
-        """Markdown of pages first..last, OCR'ing and caching any not yet cached."""
-        missing = [
+    def missing_pages(self, first: int, last: int) -> list[int]:
+        """Pages in first..last that aren't OCR'd yet."""
+        return [
             p
             for p in range(first, last + 1)
             if not (self._page_dir / f"{p}.md").exists()
         ]
-        for run_first, run_last in _runs(missing):
-            self._ocr_run(run_first, run_last)
+
+    def _pages(self, first: int, last: int) -> list[str]:
+        """Markdown of pages first..last, OCR'ing and caching any not yet cached. While
+        another process OCRs (a prepare job), this waits for its current batch, then
+        OCRs only what is still missing."""
+        if self.missing_pages(first, last):
+            with self.ocr_lock():
+                for run_first, run_last in _runs(self.missing_pages(first, last)):
+                    self._ocr_run(run_first, run_last)
         return [
             (self._page_dir / f"{p}.md").read_text(encoding="utf-8")
             for p in range(first, last + 1)
@@ -186,9 +199,52 @@ class PdfSource:
     def recheck(self, all_pages: bool = False) -> list[int]:
         """OCR cached pages again with the dropped-text check: the unchecked ones, or all."""
         pages = self.cached_pages() if all_pages else self.unchecked_pages()
-        for run_first, run_last in _runs(pages):
-            self._ocr_run(run_first, run_last)
+        with self.ocr_lock():
+            for run_first, run_last in _runs(pages):
+                self._ocr_run(run_first, run_last)
         return pages
+
+    def prepare(
+        self,
+        first: int,
+        last: int,
+        batch: int = PREPARE_BATCH,
+        on_batch: Callable[[list[int]], None] | None = None,
+        should_stop: Callable[[], bool] = lambda: False,
+    ) -> list[int]:
+        """OCR the pages in first..last that aren't cached yet, ahead of reading them.
+
+        Works in batches of up to `batch` consecutive pages, taking the OCR lock for one
+        batch at a time, so a `read_section` in another process waits at most one batch.
+        Calls `on_batch` with the pages of each finished batch, and stops between batches
+        when `should_stop()` is true. Returns the pages it OCR'd.
+        """
+        done: list[int] = []
+        for run_first, run_last in _runs(self.missing_pages(first, last)):
+            for start in range(run_first, run_last + 1, batch):
+                if should_stop():
+                    return done
+                end = min(start + batch - 1, run_last)
+                with self.ocr_lock():
+                    # Another process (the tutor) may have OCR'd some of them meanwhile.
+                    pages = self.missing_pages(start, end)
+                    for sub_first, sub_last in _runs(pages):
+                        self._ocr_run(sub_first, sub_last)
+                done += pages
+                if on_batch:
+                    on_batch(pages)
+        return done
+
+    @contextlib.contextmanager
+    def ocr_lock(self):
+        """Only one OCR at a time per source, across processes (the GPU can't run two)."""
+        self.cache_dir.mkdir(parents=True, exist_ok=True)
+        with open(self.cache_dir / "ocr.lock", "w") as handle:
+            fcntl.flock(handle, fcntl.LOCK_EX)
+            try:
+                yield
+            finally:
+                fcntl.flock(handle, fcntl.LOCK_UN)
 
     def _ocr_run(self, first: int, last: int) -> None:
         pages = self._ocr(self.pdf_path, first, last, self.cache_dir / "images")
