@@ -12,7 +12,7 @@ Read `DESIGN.md` before making architectural decisions. It is the source of trut
 
 M1–M6 done and merged. M7 (polish and portfolio) is done except the postponed eval full run. M8 (web front end) is in progress. See `DESIGN.md` section 4.
 
-**Where we left off (2026-11-09):** PR C merged as #27. PR D is open as #28 (branch `web-polish`): Stop, Retry, a thinking indicator, and the third-party reminder moved to the page for web chats (all built and tested; not yet tried in the browser by the user). Still to add to #28: the README demo, with two screenshots the user saves as `docs/images/web-chat.png` and `docs/images/web-history.png` (test vault) and a short video they upload to GitHub (a `user-attachments` link, pausable). Then ask about the MIT license.
+**Where we left off (2026-11-09):** PR C merged as #27. PR D is open as #28 (branch `web-polish`): Stop, Retry, a thinking indicator, and the third-party reminder moved to the page for web chats (all built and tested; not yet tried in the browser by the user). The README demo is **postponed** (2026-11-09) until the user can record it; it will be its own small PR: two screenshots the user saves as `docs/images/web-chat.png` and `docs/images/web-history.png` (test vault) and a short video they upload to GitHub (a `user-attachments` link, pausable). Next: ask about the MIT license.
 
 **Earlier context:**
 
