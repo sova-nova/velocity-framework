@@ -7,7 +7,7 @@ It is built around one **MCP server** with two front ends:
 - **`velocity tutor`** runs the tutor inside [Claude Code](https://claude.com/claude-code), using your Claude plan or API key.
 - **`velocity chat`** is velocity's own agent loop on the Anthropic API, with the same tools, prompt and skills.
 
-A local web UI, **`velocity web`**, puts both in your browser: chat with the tutor through Claude Code (on your plan), with math rendered, and browse, resume or continue past sessions. Chat through the API engine comes next.
+A local web UI, **`velocity web`**, puts both in your browser: chat with the tutor through Claude Code (on your plan) or the API (with its cost shown as you go), with math rendered, and browse, resume or continue past sessions. A paused session can be resumed on either engine, whichever one started it.
 
 ## What a session looks like
 
@@ -116,7 +116,7 @@ The same tutor in your terminal, streamed from the Anthropic API. Type `/model` 
 | `velocity subjects` | List subjects |
 | `velocity sessions <subject>` | List a subject's sessions with their titles |
 | `velocity tutor <subject> --continue <session>` | Start a new session that picks up from a finished one (also for `velocity chat`) |
-| `velocity web [subject]` | Open the local web UI at http://127.0.0.1:8765: chat (through Claude Code) and session history |
+| `velocity web [subject]` | Open the local web UI at http://127.0.0.1:8765: chat (through Claude Code, or the API if `ANTHROPIC_API_KEY` is set) and session history |
 | `velocity source list <subject>` | List a subject's sources |
 | `velocity source recheck <subject> [--all]` | OCR cached pages again with the dropped-text check (by default only pages cached before it) |
 | `velocity notes list <subject>` | List the notes the tutor may read |

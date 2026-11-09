@@ -26,14 +26,12 @@
     <section id="chat-start" class="start-panel">
       <h2>Start a session</h2>
       <p id="chat-notice" class="hint"></p>
-      <label>Model
-        <select id="model">
-          <option value="sonnet">Sonnet (default)</option>
-          <option value="opus">Opus</option>
-        </select>
-      </label>
-      <p class="hint">Runs Claude Code with your Claude plan. To resume or continue an earlier
-        session, use its button in History.</p>
+      <div class="pickers">
+        <label>Engine <select id="engine"></select></label>
+        <label>Model <select id="model"></select></label>
+      </div>
+      <p id="engine-hint" class="hint"></p>
+      <p class="hint">To resume or continue an earlier session, use its button in History.</p>
       <div class="actions">
         <button id="start-new" class="primary">Start a new session</button>
         <button id="close-other" hidden>Close the open session</button>
@@ -43,6 +41,7 @@
       <div class="chat-bar">
         <strong id="chat-title"></strong>
         <span id="chat-meta" class="hint"></span>
+        <span id="chat-cost" class="cost" title="Estimated API cost of this session so far" hidden></span>
         <span class="spacer"></span>
         <button id="help-button" class="help" title="What do these buttons do?">?</button>
         <button id="pause">Pause</button>
@@ -72,10 +71,15 @@
       <dd>Stop for now without a wrap-up. The session stays unfinished and can be resumed.
         A chat with no messages for 30 minutes is paused automatically.</dd>
       <dt>Resume</dt>
-      <dd>Carry on with a paused session, in the same log.</dd>
+      <dd>Carry on with a paused session, in the same log. It uses the engine and model that
+        ran the session last unless you pick others.</dd>
       <dt>Continue</dt>
       <dd>Start a new session that picks up from a finished one. The tutor reads the earlier
         session first; the new learning goes into a new log, linked to the old one.</dd>
+      <dt>Engines</dt>
+      <dd>Claude Code runs on your Claude plan. The API engine uses your
+        <code>ANTHROPIC_API_KEY</code> and is billed per token: the chat bar shows the
+        session's estimated cost so far, and each reply shows its own.</dd>
     </dl>
     <form method="dialog"><button class="primary">Got it</button></form>
   </dialog>
@@ -86,6 +90,18 @@
       <button id="switch-pause" class="primary"></button>
       <button id="switch-back">Go back and end it properly</button>
       <button id="switch-cancel">Cancel</button>
+    </div>
+  </dialog>
+  <dialog id="resume">
+    <h2 id="resume-title"></h2>
+    <div class="pickers">
+      <label>Engine <select id="resume-engine"></select></label>
+      <label>Model <select id="resume-model"></select></label>
+    </div>
+    <p id="resume-note" class="hint"></p>
+    <div class="dialog-actions">
+      <button id="resume-go" class="primary">Resume</button>
+      <button id="resume-cancel">Cancel</button>
     </div>
   </dialog>
   <main id="history" class="view" hidden>

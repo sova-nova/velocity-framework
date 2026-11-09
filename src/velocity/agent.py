@@ -16,12 +16,14 @@ import json
 import re
 import uuid
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from typing import Any, Protocol, TextIO
 
 from velocity import hooks
 from velocity.config import Config, Subject
-from velocity.session import active_session_id
+from velocity.engine import ChatEvent
+from velocity.history import rebuild_messages
+from velocity.session import Session, active_session_id, record_dir
 from velocity.skills import Skill, parse_slash_command
 from velocity.workspace import render_claude_md
 
@@ -133,6 +135,16 @@ class UsageByModel:
         return "\n".join(lines)
 
 
+def recorded_cost(session: Session) -> float:
+    """The estimated cost of a session's own-loop turns so far, from its record (turns on
+    models without a known price count as 0)."""
+    return sum(
+        (e.meta or {}).get("cost") or 0.0
+        for e in session.events()
+        if e.role == "event" and e.kind == "usage"
+    )
+
+
 CHAT_COMMANDS = ("model", "exit", "quit")
 
 
@@ -205,7 +217,8 @@ class TutorAgent:
     call_tool: ToolCaller
     tools: list[dict]
     skills: dict[str, Skill]
-    out: TextIO
+    out: TextIO | None = None  # the terminal (velocity chat)
+    on_event: Callable[[ChatEvent], None] | None = None  # the web page (api_engine.py)
     model: str = DEFAULT_MODEL
     effort: str = DEFAULT_EFFORT
     messages: list[dict] = field(default_factory=list)
@@ -214,12 +227,24 @@ class TutorAgent:
     # Every tool call as (name, arguments), including load_skill; read by the evals.
     tool_log: list[tuple[str, dict]] = field(default_factory=list)
     continues: str | None = None  # a finished session this one picks up from
+    reopen: str | None = None  # a paused session to resume, with its history rebuilt
+    last_turn_usage: Usage = field(default_factory=Usage)
     _pending_context: list[str] = field(default_factory=list)
 
     # -- lifecycle -----------------------------------------------------------------
 
     def start(self) -> None:
-        """Open the session log (like Claude Code's SessionStart hook)."""
+        """Open the session log (like Claude Code's SessionStart hook). To resume a paused
+        session, its conversation is first rebuilt from the session record."""
+        if self.reopen:
+            session = Session(
+                self.subject.slug,
+                self.reopen,
+                record_dir(self.subject.slug),
+                self.subject.sessions_dir,
+            )
+            tool_names = {t["name"] for t in self.tools}
+            self.messages = rebuild_messages(session, tool_names)
         result = hooks.session_start(
             self.config,
             self.subject,
@@ -227,6 +252,8 @@ class TutorAgent:
                 "session_id": self.session_id,
                 "source": "startup",
                 "continues": self.continues,
+                "reopen": self.reopen,
+                "history": bool(self.reopen),
             },
         )
         self._pending_context.append(result["hookSpecificOutput"]["additionalContext"])
@@ -292,19 +319,43 @@ class TutorAgent:
         for context in contexts:
             self.messages.append({"role": "system", "content": context})
 
+        self.last_turn_usage = Usage()
         try:
             reply, completed = await self._run_until_done()
         except BaseException:
             self._roll_back(start, contexts)
+            self._record_usage()
             raise
         if not completed:
             self._roll_back(start, contexts)
+        # Before the Stop hook, which closes the session after a wrap-up.
+        self._record_usage()
         hooks.stop(
             self.config,
             self.subject,
             {"session_id": self.session_id, "last_assistant_message": reply},
         )
         return reply
+
+    def _record_usage(self) -> None:
+        """Keep this turn's token usage and cost estimate in the session record, so the
+        web page can show a session total across reloads and resumes."""
+        usage = self.last_turn_usage
+        session_id = active_session_id(self.subject.slug)
+        if not usage.requests or not session_id:
+            return
+        session = Session(
+            self.subject.slug,
+            session_id,
+            record_dir(self.subject.slug),
+            self.subject.sessions_dir,
+        )
+        session.append(
+            "event",
+            "usage",
+            kind="usage",
+            meta={**asdict(usage), "model": self.model, "cost": usage.cost(self.model)},
+        )
 
     def _roll_back(self, start: int, contexts: list[str]) -> None:
         """Drop an unanswered turn from the history (it was never accepted by the API), so the
@@ -327,9 +378,13 @@ class TutorAgent:
                 continue
             json_retries = 0
             self.usage.add(self.model, response.usage)
+            self.last_turn_usage.add(response.usage)
 
             if response.stop_reason == "refusal":
-                self.out.write("\n[The model declined to continue this turn.]\n")
+                self._write("\n[The model declined to continue this turn.]\n")
+                self._emit(
+                    ChatEvent("error", text="The model declined to continue this turn.")
+                )
                 return "\n\n".join(texts), False
             self.messages.append(
                 {"role": "assistant", "content": echo_content(response.content)}
@@ -373,14 +428,26 @@ class TutorAgent:
             async for event in stream:
                 if event.type == "text":
                     if not started:
-                        self.out.write("\n")
+                        self._write("\n")
                         started = True
-                    self.out.write(event.text)
-                    self.out.flush()
+                    self._write(event.text)
+                    self._emit(ChatEvent("text", text=event.text))
             response = await stream.get_final_message()
         if started:
-            self.out.write("\n")
+            self._write("\n")
+            # Text blocks of one reply that are separated by tool calls are joined by
+            # a blank line in the logged reply; keep the page's text the same.
+            self._emit(ChatEvent("text", text="\n\n"))
         return response
+
+    def _write(self, text: str) -> None:
+        if self.out:
+            self.out.write(text)
+            self.out.flush()
+
+    def _emit(self, event: ChatEvent) -> None:
+        if self.on_event:
+            self.on_event(event)
 
     async def _run_tool(self, block: Any) -> dict:
         args = block.input if isinstance(block.input, dict) else None
@@ -403,9 +470,10 @@ class TutorAgent:
 
     async def _call(self, block: Any, args: dict) -> dict:
         self.tool_log.append((block.name, args))
-        self.out.write(
+        self._write(
             f"  · {block.name}({', '.join(f'{k}={v!r}'[:60] for k, v in args.items())})\n"
         )
+        self._emit(ChatEvent("tool", name=block.name, input=args))
         if block.name == "load_skill":
             skill = self.skills.get(str(args.get("name", "")))
             if skill is None:

@@ -15,7 +15,7 @@ from pathlib import Path
 from mcp import Client
 
 from evals.cases import DATA_DIR, ReplayInput, Turn, state_before
-from velocity import hooks
+from velocity import history, hooks
 from velocity.agent import (
     DEFAULT_EFFORT,
     StreamFactory,
@@ -25,6 +25,7 @@ from velocity.agent import (
     mcp_tool_params,
 )
 from velocity.config import Config, SourceRef, Subject
+from velocity.history import HistoryBuilder
 from velocity.mcp_server import build_server
 from velocity.session import Session, active_session_id, record_dir
 from velocity.skills import load_skills
@@ -55,7 +56,7 @@ def _no_ocr(*args) -> dict[int, str]:
 
 def block_note(turn: Turn) -> str:
     """How a block the tutor added to the log appears in its own message history."""
-    return f"[Added to the session log: {turn.title or 'note'}]\n{turn.text}"
+    return history.block_note(turn.title, turn.text)
 
 
 async def replay(
@@ -163,10 +164,9 @@ def _seed_history(
     the markdown log, the way it would be after those turns had run. Recorded calls that
     change learner state are run again, so the state matches too."""
     session = _active_session(slug, subject)
-    messages = agent.messages
+    builder = HistoryBuilder(agent.messages)
     annotations: list[str] = []
-    blocks: list[str] = []
-    for n, turn in enumerate(history):
+    for turn in history:
         if turn.role == "annotation":
             session.render()
             with session.log_path.open("a", encoding="utf-8") as f:
@@ -175,7 +175,6 @@ def _seed_history(
             annotations.append(turn.text.strip())
         elif turn.role == "learner":
             session.append("learner", turn.text)
-            messages.append({"role": "user", "content": turn.text})
             # Context the agent would have added with this message: the session start
             # context (first message only), then log annotations.
             context = list(agent._pending_context)
@@ -183,10 +182,10 @@ def _seed_history(
             if annotations:
                 context.append(hooks.log_changes_context(annotations, []))
                 annotations = []
-            messages += [{"role": "system", "content": c} for c in context]
+            builder.learner(turn.text, context)
         elif turn.role == "block":
             session.append("block", turn.text, title=turn.title, kind="example")
-            blocks.append(block_note(turn))
+            builder.block(turn.text, turn.title)
         elif turn.role == "tool":
             # The call as the tutor made it. The result wasn't recorded (it can hold
             # source text), so the tutor sees a placeholder.
@@ -198,40 +197,10 @@ def _seed_history(
                     getattr(tools, turn.text)(**(turn.args or {}))
                 except (ToolError, TypeError):
                     pass  # it failed (or was malformed) the first time too
-            call_id = f"replayed_{n}"
-            messages.append(
-                {
-                    "role": "assistant",
-                    "content": [
-                        {
-                            "type": "tool_use",
-                            "id": call_id,
-                            "name": turn.text,
-                            "input": turn.args or {},
-                        }
-                    ],
-                }
-            )
-            messages.append(
-                {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "tool_result",
-                            "tool_use_id": call_id,
-                            "content": "(Result not recorded. The call succeeded.)",
-                        }
-                    ],
-                }
-            )
+            builder.tool(turn.text, turn.args or {})
         elif turn.role == "tutor":
             session.append("tutor", turn.text)
-            text = "\n\n".join([*blocks, turn.text])
-            blocks = []
-            if messages and messages[-1]["role"] == "assistant":
-                messages[-1]["content"] += "\n\n" + text
-            else:
-                messages.append({"role": "assistant", "content": text})
+            builder.tutor(turn.text)
         else:
             raise ValueError(f"unknown history role {turn.role!r}")
     session.render()

@@ -1,4 +1,5 @@
-"""Front end C: a local web UI (M8): session history, and chat on Claude Code (chat.py).
+"""Front end C: a local web UI (M8): session history, and chat (chat.py) on Claude Code or
+the own agent loop.
 
 The server only listens on 127.0.0.1. Requests must name the local server as their host
 (against DNS rebinding), and requests that change anything must come from the page itself
@@ -28,8 +29,9 @@ from starlette.routing import Mount, Route
 from starlette.staticfiles import StaticFiles
 from starlette.types import ASGIApp, Receive, Scope, Send
 
-from velocity.chat import ChatError, ChatManager
+from velocity.chat import ChatError, ChatManager, engines, last_engine
 from velocity.config import Config, ConfigError, list_subjects, load_subject
+from velocity.engine import CLAUDE_CODE
 from velocity.session import SESSION_ID, Session, record_dir, session_summaries
 
 HOST = "127.0.0.1"
@@ -119,6 +121,9 @@ def build_app(config: Config, chats: ChatManager | None = None) -> Starlette:
 
     # -- chat --------------------------------------------------------------------------
 
+    async def engine_list(request: Request) -> Response:
+        return JSONResponse(engines())
+
     async def chat_status(request: Request) -> Response:
         subject = subject_or_404(request.path_params["slug"])
         if subject is None:
@@ -137,6 +142,7 @@ def build_app(config: Config, chats: ChatManager | None = None) -> Starlette:
                 resume=body.get("resume") or None,
                 continues=body.get("continues") or None,
                 close_other=bool(body.get("close_other")),
+                engine=str(body.get("engine") or CLAUDE_CODE),
             )
         except ChatError as e:
             return JSONResponse({"error": str(e)}, e.status)
@@ -182,6 +188,7 @@ def build_app(config: Config, chats: ChatManager | None = None) -> Starlette:
     routes = [
         Route("/", index),
         Route("/api/subjects", subjects),
+        Route("/api/engines", engine_list),
         Route("/api/subjects/{slug}/sessions", sessions),
         Route("/api/subjects/{slug}/sessions/{session_id}", session_log),
         Route("/api/subjects/{slug}/chat", chat_status),
@@ -208,5 +215,15 @@ async def _json(request: Request) -> dict:
 
 
 def session_list(subject) -> list[dict]:
-    """The subject's sessions, newest first, with a short summary of each."""
-    return [asdict(s) for s in session_summaries(subject.slug, subject.sessions_dir)]
+    """The subject's sessions, newest first, with a short summary of each. Paused sessions
+    also say which engine and model ran them last, the defaults for resuming them."""
+    out = []
+    for s in session_summaries(subject.slug, subject.sessions_dir):
+        item = asdict(s)
+        if s.ended == "no-wrap-up":
+            session = Session(
+                subject.slug, s.id, record_dir(subject.slug), subject.sessions_dir
+            )
+            item["last_engine"] = last_engine(subject, session)
+        out.append(item)
+    return out

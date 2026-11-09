@@ -127,7 +127,14 @@ def session_start(config: Config, subject: Subject, payload: dict) -> dict:
         + (" (use read_session to review the last one)." if previous else "."),
         "The conversation log is at " + session.log_path.as_posix() + ".",
     ]
-    if reopened:
+    if reopened and payload.get("history"):
+        # The own loop rebuilt the conversation from the record (history.py).
+        context.append(
+            "This session was paused and is resumed here. Its earlier conversation is "
+            "restored above, except tool results, which aren't kept: read a section or "
+            "note again if you need its text. Pick up where it left off."
+        )
+    elif reopened:
         context.append(
             "This session was paused and is resumed here without its earlier conversation. "
             f"Read it with read_session('{session.id}') first, then pick up where it left off."
