@@ -10,6 +10,7 @@
   <script defer src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
   <link rel="stylesheet" href="/static/style.css">
   <script defer src="/static/app.js"></script>
+  <script defer src="/static/reader.js"></script>
 </head>
 <body>
   <header>
@@ -20,8 +21,10 @@
     <nav>
       <button class="tab active" data-view="chat">Chat</button>
       <button class="tab" data-view="history">History</button>
+      <button id="book-button" class="tab" title="Open the source reader beside the chat">Book</button>
     </nav>
   </header>
+  <div id="workspace">
   <main id="chat" class="view chat-view">
     <section id="chat-start" class="start-panel">
       <h2>Start a session</h2>
@@ -119,5 +122,22 @@
       <p class="hint">Pick a session to read its log.</p>
     </article>
   </main>
+  <div id="reader-divider" title="Drag to resize" hidden></div>
+  <section id="reader" hidden>
+    <div class="reader-bar">
+      <select id="reader-source" aria-label="Source"></select>
+      <select id="reader-section" aria-label="Section"></select>
+      <span class="spacer"></span>
+      <span id="reader-page" class="hint"></span>
+      <button id="reader-ask" title="Start a message to the tutor about the page you're on">Ask about this page</button>
+      <button id="reader-close" title="Close the reader">×</button>
+    </div>
+    <div id="reader-body">
+      <div id="pdf-container"><div id="pdf-viewer" class="pdfViewer"></div></div>
+      <article id="reader-text" hidden></article>
+    </div>
+    <p id="reader-status" class="hint" hidden></p>
+  </section>
+  </div>
 </body>
 </html>

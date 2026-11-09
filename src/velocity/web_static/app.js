@@ -125,6 +125,7 @@ async function showSession(slug, id, button) {
     article.append(note);
   }
   article.append(renderMarkdown(log.markdown));
+  linkifyCitations(article);
 }
 
 // -- views -----------------------------------------------------------------------------
@@ -297,10 +298,12 @@ function addMessage(role, text, title) {
   div.className = `message ${role}`;
   if (role === "block") {
     div.append(renderMarkdown(`> [!example] ${title || ""}\n> ${text.split("\n").join("\n> ")}`));
+    linkifyCitations(div);
   } else if (role === "learner") {
     div.textContent = text;
   } else {
     div.append(renderMarkdown(text));
+    linkifyCitations(div);
   }
   $("#messages").append(div);
   return div;
@@ -368,6 +371,7 @@ async function send(text, retry = false) {
   const redraw = () => {
     pending = false;
     reply.replaceChildren(renderMarkdown(replyText));
+    linkifyCitations(reply);
     scrollToEnd();
   };
   setBusy(true);
@@ -580,8 +584,12 @@ async function start() {
   const wanted = new URLSearchParams(location.search).get("subject");
   if (wanted && subjects.some((s) => s.slug === wanted)) select.value = wanted;
   engines = await getJSON("/api/engines");
+  // Before the chat and History draw anything, so citations in them become links.
+  await loadReaderSources(select.value);
   setUpChat();
-  select.addEventListener("change", () => {
+  setUpReader();
+  select.addEventListener("change", async () => {
+    await resetReader(select.value);
     loadSessions(select.value);
     loadChat();
   });

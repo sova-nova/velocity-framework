@@ -9,7 +9,7 @@ from collections.abc import Callable
 from datetime import date
 from typing import Literal
 
-from velocity.config import Config, Subject
+from velocity.config import Config, SourceRef, Subject
 from velocity.notes import NotesError
 from velocity.notes import list_notes as _list_notes
 from velocity.notes import read_note as _read_note
@@ -56,6 +56,31 @@ def default_ocr(config: Config) -> PageOcr:
     return MarkerOcr()
 
 
+def source_ref(subject: Subject, name: str) -> SourceRef:
+    """A subject's source by name, if its file is there. Files are only ever found
+    through `subject.toml`, never from a path given by a caller."""
+    ref = next((s for s in subject.sources if s.name == name), None)
+    if ref is None:
+        names = ", ".join(s.name for s in subject.sources) or "none"
+        raise ToolError(f"Unknown source {name!r}. Available: {names}.")
+    if not ref.path.is_file():
+        raise ToolError(f"Source file for {name!r} not found at {ref.path}.")
+    return ref
+
+
+def open_source(
+    subject: Subject, name: str, ocr: PageOcr | None = None
+) -> PdfSource | TextSource:
+    """A subject's source by name, as a PdfSource or TextSource. Without `ocr`, a PDF's
+    outline, text layer and cached pages can be read, but uncached pages can't be OCR'd."""
+    ref = source_ref(subject, name)
+    if ref.path.suffix.lower() in TEXT_SUFFIXES:
+        return TextSource(ref.path)
+    if ref.path.suffix.lower() != ".pdf":
+        raise ToolError(f"Source {name!r} has an unsupported file type.")
+    return PdfSource(ref.path, ocr)
+
+
 class TutorTools:
     def __init__(
         self,
@@ -69,7 +94,7 @@ class TutorTools:
         self.subject = subject
         self._ocr_factory = ocr_factory or (lambda: default_ocr(config))
         self._ocr: PageOcr | None = None
-        self._sources: dict[str, PdfSource] = {}
+        self._sources: dict[str, PdfSource | TextSource] = {}
 
     # -- sources -------------------------------------------------------------------
 
@@ -79,27 +104,15 @@ class TutorTools:
             return "This subject has no sources. Teach from general knowledge and say so once."
         return "\n".join(f"- {s.name} ({s.path.name})" for s in self.subject.sources)
 
-    def _source(self, name: str) -> PdfSource:
-        if name in self._sources:
-            return self._sources[name]
-        ref = next((s for s in self.subject.sources if s.name == name), None)
-        if ref is None:
-            names = ", ".join(s.name for s in self.subject.sources) or "none"
-            raise ToolError(f"Unknown source {name!r}. Available: {names}.")
-        if not ref.path.is_file():
-            raise ToolError(f"Source file for {name!r} not found at {ref.path}.")
-        if ref.path.suffix.lower() in TEXT_SUFFIXES:
-            self._sources[name] = TextSource(ref.path)
-            return self._sources[name]
-        if ref.path.suffix.lower() != ".pdf":
-            raise ToolError(f"Source {name!r} has an unsupported file type.")
+    def _source(self, name: str) -> PdfSource | TextSource:
+        if name not in self._sources:
 
-        def ocr(*args):
-            if self._ocr is None:
-                self._ocr = self._ocr_factory()
-            return self._ocr(*args)
+            def ocr(*args):
+                if self._ocr is None:
+                    self._ocr = self._ocr_factory()
+                return self._ocr(*args)
 
-        self._sources[name] = PdfSource(ref.path, ocr)
+            self._sources[name] = open_source(self.subject, name, ocr)
         return self._sources[name]
 
     def get_outline(self, source: str) -> str:
