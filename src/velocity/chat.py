@@ -28,8 +28,15 @@ from velocity.agent import MODEL_ALIASES, recorded_cost
 from velocity.api_engine import ApiChat, api_available
 from velocity.claude_engine import ClaudeCodeChat
 from velocity.config import Config, Subject
-from velocity.engine import CLAUDE_CODE, OWN_LOOP, ChatEvent, Engine, EngineError
-from velocity.hooks import CONTINUE_ENV, REOPEN_ENV
+from velocity.engine import (
+    CLAUDE_CODE,
+    OWN_LOOP,
+    STOPPED_MARK,
+    ChatEvent,
+    Engine,
+    EngineError,
+)
+from velocity.hooks import CONTINUE_ENV, REMINDER_SHOWN_ENV, REOPEN_ENV
 from velocity.session import (
     SESSION_ID,
     Session,
@@ -200,6 +207,7 @@ class ChatManager:
         env = dict(os.environ)
         env.pop(CONTINUE_ENV, None)
         env.pop(REOPEN_ENV, None)
+        env[REMINDER_SHOWN_ENV] = "1"  # the page shows the third-party reminder
         resume_id = None
         if resume:
             # Claude Code's own conversation is complete only if Claude Code ran the
@@ -237,8 +245,13 @@ class ChatManager:
             raise ChatError("No chat is open for this subject.", 409)
         chat.busy = True
         chat.last_activity = self.clock()
+        streamed = []
         try:
             async for event in chat.engine.send(text):
+                if event.type == "text":
+                    streamed.append(event.text)
+                elif event.type == "stopped" and chat.engine_name == CLAUDE_CODE:
+                    self._log_stopped(subject, "".join(streamed))
                 yield event
         finally:
             chat.busy = False
@@ -252,6 +265,26 @@ class ChatManager:
             # /end-session finished: the hooks closed the log, so stop the engine.
             await self.pause(subject)
             yield ChatEvent("ended", text="wrapped-up")
+
+    async def stop_reply(self, subject: Subject) -> None:
+        """Stop the reply being streamed; what the tutor said so far is kept."""
+        chat = self.chats.get(subject.slug)
+        if chat and chat.busy:
+            await chat.engine.interrupt()
+
+    @staticmethod
+    def _log_stopped(subject: Subject, partial: str) -> None:
+        """Log a stopped Claude Code reply (its Stop hook doesn't run on an interrupt;
+        the own loop logs its own)."""
+        session_id = active_session_id(subject.slug)
+        if not session_id:
+            return
+        session = _session(subject, session_id)
+        if session.ended:
+            return
+        partial = partial.strip()
+        session.append("tutor", (partial + "\n\n" if partial else "") + STOPPED_MARK)
+        session.render()
 
     async def pause(self, subject: Subject) -> None:
         """Stop the engine without a wrap-up; the session can be resumed later."""

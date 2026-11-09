@@ -85,7 +85,7 @@ Learning benefits from effortful retrieval and from restating ideas in one's own
 - The tutor reads notes only through `list_notes` and `read_note`. These see only markdown files inside the subject's note folders, skip hidden folders (`.trash`), refuse paths that escape a folder (`../`, symlinks), and never return private notes.
 - The tutor has **read-only** access to notes. It writes only in `<vault>/Tutor/`. This is **enforced**, not just requested in the prompt: Claude Code permission rules deny Write/Edit on the vault outside `Tutor/`, a hook blocks writes to note paths as a second layer, and a test checks the generated settings.
 - Notes with `private: true` in their front matter are never read.
-- Every session starts with a reminder that notes and logs the tutor reads are sent to a third-party API.
+- Every session starts with a reminder that notes and logs the tutor reads are sent to a third-party API. In the terminal front ends the tutor gives it; in the web UI the page shows it where sessions start, and the tutor is told not to repeat it (decided 2026-11-09).
 - The tutor prompts note-taking at natural moments, and **critiques** notes on request (gaps, misconceptions, missing connections).
 - Optional flashcards, ideally written by the learner and reviewed by the tutor.
 
@@ -168,7 +168,7 @@ Linux is the primary platform (the developer's). macOS is supported. Windows is 
 5. **M5: Notes. Done 2026-11-04.** `read_notes` with per-subject folder lists and `private: true`; `/review-notes`; note-taking prompts.
 6. **M6: Own agent loop. Done 2026-11-05** (`velocity chat`, live-tested with an API key, merged in #13). Front end B on the `anthropic` SDK, with the same MCP server and skills.
 7. **M7: Polish and portfolio.** One PR each, in this order: fixes from the M6 live test (done, #15); README with a demo; teaching-quality evals (replaying session records); source improvements (drop-check repair, then non-PDF sources). All done except the eval full run, which the user postponed to limit spending.
-8. **M8: Web front end.** A local web UI (`velocity web`) as a third front end on the same core, planned 2026-11-06 (see the decisions log), with the PRs reordered after a design review the same day: (1) server, subject picker and session history (done, #24); (A) session titles and resume/continue for all front ends (done, #25); (B) chat on Claude Code headless (done, #26); (C) chat on the own agent loop, selectable (in progress, branch `web-chat-own-loop`); (D) polish and a README demo. The MIT license is added after M8; ask the user then.
+8. **M8: Web front end.** A local web UI (`velocity web`) as a third front end on the same core, planned 2026-11-06 (see the decisions log), with the PRs reordered after a design review the same day: (1) server, subject picker and session history (done, #24); (A) session titles and resume/continue for all front ends (done, #25); (B) chat on Claude Code headless (done, #26); (C) chat on the own agent loop, selectable (done, #27); (D) polish: Stop, Retry, a thinking indicator, the reminder on the page (#28). The README demo (screenshots and a video) is postponed until the user can record it (2026-11-09). The license is postponed too (2026-11-09): the user wants the application more fleshed out before publishing one.
 
 ### M2 notes (2026-11-04)
 
@@ -296,6 +296,14 @@ Tested on all of Section 2.4 (PDF pp. 136–145, plus neighbouring 2.3 exercises
 
 ## 5. Decisions Log
 
+- **2026-11-09 (M8, PR D: web polish):**
+  - In the web UI the third-party reminder moves from the tutor to the page: it shows where sessions start (the start panel, and before Continue), and the session-start context tells the tutor the learner has seen it. The terminal front ends keep the tutor's reminder.
+  - A Stop button ends a streaming reply. The partial reply is kept: it is logged with a *(stopped)* mark and stays in the tutor's history. Claude Code is stopped with a stream-json `interrupt` control request (verified 2026-11-09; its Stop hook doesn't run, so velocity logs the partial reply). The own loop cancels the request.
+  - A "thinking…" indicator until the first text or tool call, and a Retry button on a failed reply. A retried message is not logged a second time.
+  - Messages can't be sent while a reply streams (unchanged).
+  - The README demo uses screenshots plus a short video (GitHub plays uploaded videos with controls, so it can be paused; a GIF can't).
+  - A phone-width layout is not needed yet; it is noted under future directions.
+
 - **2026-11-09 (M8, PR C: web chat on the own loop):**
   - The web page offers both engines: Claude Code (the default; the learner's plan) and the own loop (API key, billed per token). The page remembers the last engine and model for new sessions. Without `ANTHROPIC_API_KEY` the own loop is greyed out with a hint.
   - The own loop resumes any paused session, whichever front end started it, by **rebuilding its history from the session record**: learner and tutor messages, blocks, and tool calls with a placeholder result (results aren't recorded because they can hold source text). The rebuild code moves from the evals into the core, and the evals use it from there. Claude Code can't take a rebuilt history, so it keeps `--resume` or the reopen path.
@@ -341,6 +349,8 @@ Tested on all of Section 2.4 (PDF pp. 136–145, plus neighbouring 2.3 exercises
 - None at the moment.
 
 ## 7. Future Directions
+
+- **Web UI on a phone:** a layout for narrow screens, so `velocity web` works from a phone on the same network. This needs more than CSS: the server listens only on 127.0.0.1, so reaching it from another device would need an explicit opt-in and some form of authentication.
 
 - **Rubicon:** a separate future project, a knowledge-base overseer that finds connections and tensions in notes, quizzes recall, and suggests vault restructuring. It would reuse the notes MCP tools from this project, and would only ever **propose** changes for the learner to approve, never edit notes directly.
 - Name alternatives considered: Marginalia, Whetstone, Lantern, Maieutic.

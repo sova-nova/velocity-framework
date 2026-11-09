@@ -9,6 +9,7 @@ Claude Code runs velocity's hooks, so the session log is written exactly as in
 """
 
 import asyncio
+import itertools
 import json
 import shutil
 from collections.abc import AsyncIterator
@@ -21,6 +22,7 @@ __all__ = ["MODELS", "ChatEvent", "ClaudeCodeChat", "EngineError", "parse_event"
 
 MODELS = {"sonnet": "Sonnet", "opus": "Opus"}
 STOP_TIMEOUT = 30  # seconds to wait for Claude Code (and its SessionEnd hook) to exit
+_REQUEST_IDS = itertools.count(1)
 
 
 def claude_command(
@@ -102,6 +104,7 @@ class ClaudeCodeChat:
         self.claude_session_id: str | None = resume_id
         self._process: asyncio.subprocess.Process | None = None
         self._turn = asyncio.Lock()
+        self._interrupted = False  # the current reply was interrupted
 
     @property
     def running(self) -> bool:
@@ -124,9 +127,10 @@ class ClaudeCodeChat:
             if not self.running:
                 yield ChatEvent("error", text="The tutor process is not running.")
                 return
-            line = {"type": "user", "message": {"role": "user", "content": text}}
-            self._process.stdin.write((json.dumps(line) + "\n").encode())
-            await self._process.stdin.drain()
+            self._interrupted = False
+            await self._write(
+                {"type": "user", "message": {"role": "user", "content": text}}
+            )
             while True:
                 raw = await self._process.stdout.readline()
                 if not raw:
@@ -140,9 +144,33 @@ class ClaudeCodeChat:
                 decoded = raw.decode(errors="replace")
                 self._note_session_id(decoded)
                 for event in parse_event(decoded):
+                    if event.type == "error" and self._interrupted:
+                        # An interrupted reply ends with an error result.
+                        yield ChatEvent("stopped")
+                        return
                     yield event
                     if event.type in ("done", "error"):
                         return
+
+    async def interrupt(self) -> None:
+        """Stop the reply being streamed (verified 2026-11-09): Claude Code acknowledges
+        an interrupt control request, ends the reply with an error result, and waits
+        for the next message. Its Stop hook doesn't run, so the caller logs the partial
+        reply."""
+        if not self.running or not self._turn.locked() or self._interrupted:
+            return
+        self._interrupted = True
+        await self._write(
+            {
+                "type": "control_request",
+                "request_id": f"interrupt-{next(_REQUEST_IDS)}",
+                "request": {"subtype": "interrupt"},
+            }
+        )
+
+    async def _write(self, message: dict) -> None:
+        self._process.stdin.write((json.dumps(message) + "\n").encode())
+        await self._process.stdin.drain()
 
     def _note_session_id(self, line: str) -> None:
         if self.claude_session_id is None and '"session_id"' in line:

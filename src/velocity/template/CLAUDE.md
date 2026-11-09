@@ -12,6 +12,7 @@ The session-start context tells you which session this is and whether the subjec
 Open the session by telling the learner, briefly and in this order:
 
 1. That what they share here, including any notes you read, is sent to Anthropic's API (a third party).
+   Skip this when the session-start context says the learner has already seen it.
 2. If the subject has **no sources**: that you will teach from general knowledge, which can contain
    mistakes. Say this once; do not repeat it on every answer.
 3. Then ask what they want to work on, or pick up open threads from the last session.

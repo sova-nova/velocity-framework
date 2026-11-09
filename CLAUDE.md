@@ -12,7 +12,7 @@ Read `DESIGN.md` before making architectural decisions. It is the source of trut
 
 M1–M6 done and merged. M7 (polish and portfolio) is done except the postponed eval full run. M8 (web front end) is in progress. See `DESIGN.md` section 4.
 
-**Where we left off (2026-11-09):** PR C (web chat on the own loop) is open as #27 (branch `web-chat-own-loop`); the user live-tested it with their API key and it works. After it's merged: PR D (polish + README demo) from a fresh branch off `main`, then ask about the MIT license.
+**Where we left off (2026-11-09):** PR C merged as #27. PR D is open as #28 (branch `web-polish`): Stop, Retry, a thinking indicator, and the third-party reminder moved to the page for web chats (all built and tested; not yet tried in the browser by the user). The README demo is **postponed** (2026-11-09) until the user can record it; it will be its own small PR: two screenshots the user saves as `docs/images/web-chat.png` and `docs/images/web-history.png` (test vault) and a short video they upload to GitHub (a `user-attachments` link, pausable). The license is postponed too (2026-11-09): the user wants the application more fleshed out first, so don't propose it again until then. Next: decide with the user what to build next.
 
 **Earlier context:**
 
@@ -33,12 +33,12 @@ M1–M6 done and merged. M7 (polish and portfolio) is done except the postponed 
 3. PR B (merged as #26; PR A merged as #25), web chat on Claude Code headless. Tested live: skills, titles, the "?" popup, reload, pause/resume, end/continue, and the switch dialog (Resume/Continue in History while another session is open offers to pause it first). History reloads each time its tab opens. The experiment confirmed: one JSON line per message (`{"type":"user","message":{"role":"user","content":...}}`); the UserPromptSubmit/Stop hooks log stdin messages; `/quiz` works; closing stdin exits 0 and runs SessionEnd; `--resume <claude id>` reattaches to the same velocity session. Decisions: one process per chat; one open session per subject; End session (prominent) + Pause buttons with a "?" help popup; 30-minute idle timeout = pause; reopening the page continues a running chat; model picked at start (default Sonnet, last choice remembered); tool calls as grey lines; no dollar amounts; `--permission-prompts none`; resuming a `velocity chat` session attaches a new Claude Code conversation that reads the log first.
 4. PR C (branch `web-chat-own-loop`), web chat on the own loop (`api_engine.py` behind the same `ChatManager`), selectable next to Claude Code, with the cost shown (the "no dollar amounts" decision applies only to the Claude Code engine). Decided 2026-11-09 (see `DESIGN.md` decisions log): Claude Code is the default engine, and the last engine and model are remembered; the own loop resumes any paused session by rebuilding its history from the record; Resume preselects the engine and model that ran the session last; a session total plus a small per-reply cost. The user exports `ANTHROPIC_API_KEY` in their own terminal and runs any paid tests themselves.
 5. PR D, polish + README demo (incl. a stop button for long replies).
-Ask about the MIT license after M8.
+The license is postponed until the application is more fleshed out (user, 2026-11-09).
 
 *How the user works (see also memory):*
 - One branch and PR per change, based on `main`. The user reviews and merges on GitHub with a merge commit and deletes the branch.
 - Don't stack PRs; that went wrong once (#2–#5, fixed by #6).
-- Merged so far: #1–#26.
+- Merged so far: #1–#27.
 - Edit one file at a time with Edit or Write; the user rejected a large multi-file edit script as too big to review.
 - To try the web UI: `uv run velocity web --no-browser --port 8799` (127.0.0.1 only). Page files are read from disk, so changes to the page only need a browser reload.
 

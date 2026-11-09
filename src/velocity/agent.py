@@ -12,6 +12,7 @@ The same tutor as the Claude Code front end, without Claude Code:
 The loop owns the conversation history and only ever appends to it.
 """
 
+import asyncio
 import json
 import re
 import uuid
@@ -21,7 +22,7 @@ from typing import Any, Protocol, TextIO
 
 from velocity import hooks
 from velocity.config import Config, Subject
-from velocity.engine import ChatEvent
+from velocity.engine import STOPPED_MARK, ChatEvent
 from velocity.history import rebuild_messages
 from velocity.session import Session, active_session_id, record_dir
 from velocity.skills import Skill, parse_slash_command
@@ -228,7 +229,10 @@ class TutorAgent:
     tool_log: list[tuple[str, dict]] = field(default_factory=list)
     continues: str | None = None  # a finished session this one picks up from
     reopen: str | None = None  # a paused session to resume, with its history rebuilt
+    reminder_shown: bool = False  # the web page showed the third-party reminder
     last_turn_usage: Usage = field(default_factory=Usage)
+    stop_requested: bool = False  # the learner stopped the running turn
+    _streamed: str = ""  # the running turn's text so far
     _pending_context: list[str] = field(default_factory=list)
 
     # -- lifecycle -----------------------------------------------------------------
@@ -254,6 +258,7 @@ class TutorAgent:
                 "continues": self.continues,
                 "reopen": self.reopen,
                 "history": bool(self.reopen),
+                "reminder_shown": self.reminder_shown,
             },
         )
         self._pending_context.append(result["hookSpecificOutput"]["additionalContext"])
@@ -320,8 +325,18 @@ class TutorAgent:
             self.messages.append({"role": "system", "content": context})
 
         self.last_turn_usage = Usage()
+        self._streamed = ""
+        self.stop_requested = False
         try:
             reply, completed = await self._run_until_done()
+        except asyncio.CancelledError:
+            if not self.stop_requested:
+                self._roll_back(start, contexts)
+                self._record_usage()
+                raise
+            # The learner pressed Stop: keep the reply so far, in the log and history.
+            asyncio.current_task().uncancel()
+            reply, completed = self._keep_stopped(start + 1 + len(contexts)), True
         except BaseException:
             self._roll_back(start, contexts)
             self._record_usage()
@@ -336,6 +351,26 @@ class TutorAgent:
             {"session_id": self.session_id, "last_assistant_message": reply},
         )
         return reply
+
+    def stop_reply(self) -> None:
+        """Mark the running turn as stopped by the learner; the caller then cancels it.
+        Unlike an error, a stopped turn is kept (decided 2026-11-09)."""
+        self.stop_requested = True
+
+    def _keep_stopped(self, reply_start: int) -> str:
+        """End a stopped turn: the text streamed so far replaces whatever the turn had
+        added after the learner's message (tool calls in it are in the session record,
+        not in the history). Returns the reply as logged, with the stopped mark."""
+        del self.messages[reply_start:]
+        partial = self._streamed.strip()
+        self.messages.append(
+            {
+                "role": "assistant",
+                "content": (partial + "\n\n" if partial else "")
+                + "[The learner stopped this reply here.]",
+            }
+        )
+        return (partial + "\n\n" if partial else "") + STOPPED_MARK
 
     def _record_usage(self) -> None:
         """Keep this turn's token usage and cost estimate in the session record, so the
@@ -432,12 +467,14 @@ class TutorAgent:
                         started = True
                     self._write(event.text)
                     self._emit(ChatEvent("text", text=event.text))
+                    self._streamed += event.text
             response = await stream.get_final_message()
         if started:
             self._write("\n")
             # Text blocks of one reply that are separated by tool calls are joined by
             # a blank line in the logged reply; keep the page's text the same.
             self._emit(ChatEvent("text", text="\n\n"))
+            self._streamed += "\n\n"
         return response
 
     def _write(self, text: str) -> None:

@@ -1,25 +1,28 @@
 """Web chat on the own agent loop (api_engine.py): a scripted API stands in for Claude,
 and velocity's real tools run in an in-process MCP server."""
 
+import asyncio
 import contextlib
 import json
 import sys
 from pathlib import Path
+from types import SimpleNamespace as NS
 
 import pytest
 from mcp import Client
 from starlette.testclient import TestClient
 
 from tests.test_agent import FakeAPI, response, text, tool_use
+from velocity import hooks
 from velocity.agent import mcp_tool_caller, mcp_tool_params
 from velocity.api_engine import ApiChat
 from velocity.chat import ChatManager, last_engine
 from velocity.claude_engine import ClaudeCodeChat
 from velocity.config import create_subject, load_config, load_subject
 from velocity.history import RESULT_NOT_RECORDED, rebuild_messages
-from velocity.hooks import REOPEN_ENV
+from velocity.hooks import REMINDER_SHOWN_ENV, REOPEN_ENV
 from velocity.mcp_server import build_server
-from velocity.session import Session, record_dir
+from velocity.session import Session, active_session_id, record_dir
 from velocity.tools import TutorTools
 from velocity.web import build_app
 
@@ -61,6 +64,7 @@ def client(config, api):
 
     def claude_engine(workspace, model, resume_id, env):
         c.claude_starts.append((resume_id, env.get(REOPEN_ENV)))
+        c.claude_env = env
         command = [sys.executable, str(FAKE)] + (
             ["--resume", resume_id] if resume_id else []
         )
@@ -266,3 +270,126 @@ def test_last_engine_is_inferred_for_older_sessions(config):
     mapping.mkdir()
     (mapping / "some-claude-id").write_text(other.id)
     assert last_engine(subject, other) == {"engine": "claude-code", "model": None}
+
+
+# -- stopping a reply, retrying, and the third-party reminder (PR D) ---------------------
+
+
+class Hanging:
+    """A reply that streams "Once upon" and then never finishes (until cancelled)."""
+
+
+class HangingStream:
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *exc):
+        return False
+
+    async def _events(self):
+        yield NS(type="text", text="Once upon")
+        await asyncio.Event().wait()
+
+    def __aiter__(self):
+        return self._events()
+
+
+@pytest.fixture
+def hanging_api(api, monkeypatch):
+    plain = FakeAPI.__call__
+
+    def call(self, **params):
+        if self.results and isinstance(self.results[0], Hanging):
+            self.requests.append({**params, "messages": list(params["messages"])})
+            self.results.pop(0)
+            return HangingStream()
+        return plain(self, **params)
+
+    monkeypatch.setattr(FakeAPI, "__call__", call)
+    return api
+
+
+def stop_after_first_text(client, config, message) -> list:
+    """Send a message and press Stop as soon as the reply starts."""
+    manager = client.app.state.chats
+    subject = load_subject(config, "calculus")
+
+    async def run():
+        events = []
+        async for event in manager.send(subject, message):
+            events.append(event)
+            if event.type == "text":
+                await manager.stop_reply(subject)
+        return events
+
+    return client.portal.call(run)
+
+
+def log_of(client, config) -> str:
+    session_id = client.get("/api/subjects/calculus/chat").json()["session"]
+    return session(config, session_id).log_path.read_text()
+
+
+def test_stop_keeps_the_partial_reply_on_claude_code(client, config):
+    post(client, "start", {"model": "sonnet"})
+    say(client, "hi")
+    events = stop_after_first_text(client, config, "write at length")
+    assert [e.type for e in events] == ["text", "stopped"]
+    assert "**Tutor:** Once upon\n\n*(stopped)*" in log_of(client, config)
+    # The process is still there for the next message.
+    assert "".join(e["text"] for e in say(client, "next")) == "You said: next"
+
+
+def test_stop_keeps_the_partial_reply_on_the_own_loop(client, config, hanging_api):
+    post(client, "start", {"engine": "api", "model": "sonnet"})
+    hanging_api.results += [Hanging()]
+    events = stop_after_first_text(client, config, "write at length")
+    assert [e.type for e in events] == ["text", "stopped"]
+    assert events[-1].cost is not None
+    assert "**Tutor:** Once upon\n\n*(stopped)*" in log_of(client, config)
+
+    hanging_api.results += [response(text("Sure."))]
+    say(client, "go on")
+    messages = hanging_api.requests[-1]["messages"]
+    # The stopped reply stays in the history, right before the next message.
+    assert messages[-2:] == [
+        {
+            "role": "assistant",
+            "content": "Once upon\n\n[The learner stopped this reply here.]",
+        },
+        {"role": "user", "content": "go on"},
+    ]
+
+
+def test_a_retried_message_is_logged_once(config):
+    subject = load_subject(config, "calculus")
+    hooks.session_start(config, subject, {"session_id": "c1", "source": "startup"})
+    for _ in range(2):  # the first reply failed, so the learner retries
+        hooks.user_prompt(config, subject, {"prompt": "What is a limit?"})
+    hooks.stop(config, subject, {"last_assistant_message": "A value approached."})
+    hooks.user_prompt(config, subject, {"prompt": "What is a limit?"})  # asked again
+    s = session(config, active_session_id("calculus"))
+    learner = [e.text for e in s.events() if e.role == "learner"]
+    assert learner == ["What is a limit?", "What is a limit?"]
+
+
+def test_web_chats_tell_the_tutor_the_reminder_was_shown(client, config, api):
+    subject = load_subject(config, "calculus")
+    context = hooks.session_start(
+        config, subject, {"session_id": "c1", "source": "startup"}
+    )["hookSpecificOutput"]["additionalContext"]
+    assert "Open with the third-party reminder" in context
+    hooks.session_end(config, subject, {"reason": "other"})
+
+    post(client, "start", {"model": "sonnet"})
+    assert client.claude_env[REMINDER_SHOWN_ENV] == "1"
+    post(client, "pause")
+
+    post(client, "start", {"engine": "api", "model": "sonnet"})
+    api.results += [response(text("Hello!"))]
+    say(client, "hi")
+    system = [
+        m["content"] for m in api.requests[-1]["messages"] if m["role"] == "system"
+    ]
+    assert any("already seen the third-party reminder" in s for s in system)
+    assert not any("Open with the third-party reminder" in s for s in system)

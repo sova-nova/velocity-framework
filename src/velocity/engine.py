@@ -7,13 +7,15 @@ from typing import Protocol
 
 CLAUDE_CODE = "claude-code"
 OWN_LOOP = "api"
+# Ends a reply the learner stopped, in the log (the partial text before it is kept).
+STOPPED_MARK = "*(stopped)*"
 
 
 @dataclass(frozen=True)
 class ChatEvent:
     """What the web page sees: streamed text, a tool call, the end of a reply, an error."""
 
-    type: str  # "text", "tool", "done", "error", "ended"
+    type: str  # "text", "tool", "done", "stopped", "error", "ended"
     text: str = ""
     name: str = ""
     input: dict | None = None
@@ -32,7 +34,12 @@ class Engine(Protocol):
     async def start(self) -> None: ...
 
     def send(self, text: str) -> AsyncIterator[ChatEvent]:
-        """Send one learner message; stream the reply, ending with "done" or "error"."""
+        """Send one learner message; stream the reply, ending with "done", "stopped"
+        (after interrupt) or "error"."""
+        ...
+
+    async def interrupt(self) -> None:
+        """Stop the reply being streamed, if any; `send` then ends with "stopped"."""
         ...
 
     async def stop(self) -> None:

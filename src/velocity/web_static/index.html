@@ -25,6 +25,8 @@
   <main id="chat" class="view chat-view">
     <section id="chat-start" class="start-panel">
       <h2>Start a session</h2>
+      <p id="reminder" class="reminder">What you share in a session, including any notes the
+        tutor reads, is sent to Anthropic's API (a third party).</p>
       <p id="chat-notice" class="hint"></p>
       <div class="pickers">
         <label>Engine <select id="engine"></select></label>
@@ -58,6 +60,7 @@
       <form id="composer">
         <textarea id="input" rows="2" placeholder="Message the tutor (Enter to send, Shift+Enter for a new line)"></textarea>
         <button id="send" class="primary" type="submit">Send</button>
+        <button id="stop" type="button" title="Stop this reply; what the tutor said so far is kept" hidden>Stop</button>
       </form>
     </section>
   </main>
@@ -70,6 +73,9 @@
       <dt>Pause</dt>
       <dd>Stop for now without a wrap-up. The session stays unfinished and can be resumed.
         A chat with no messages for 30 minutes is paused automatically.</dd>
+      <dt>Stop</dt>
+      <dd>Appears while the tutor is replying. It ends the reply where it is; what the
+        tutor said so far stays in the chat and the log, marked as stopped.</dd>
       <dt>Resume</dt>
       <dd>Carry on with a paused session, in the same log. It uses the engine and model that
         ran the session last unless you pick others.</dd>
