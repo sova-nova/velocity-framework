@@ -98,7 +98,7 @@ Naive chunk-and-embed RAG is a poor fit for teaching, because textbooks have str
 3. Later: extract problem sets separately so the tutor can assign exercises; ingest a solution manual if available.
 4. Non-PDF sources (Markdown, HTML, EPUB) behind the same interface: built in M7 (see "M7 notes: non-PDF sources").
 
-Source tools: `get_outline()`, `read_section(id)`, and `get_exercises(section_id)`, which returns the section text from its EXERCISES heading on. `search(query)` comes later.
+Source tools: `get_outline()`, `read_section(id)`, and `get_exercises(section_id)`, which returns the section text from its EXERCISES heading on. `search_source(query, source?)` finds the sections and pages that cover a topic (added 2026-11-09; see "Notes: source search").
 
 OCR (marker, torch, llama.cpp) is an **optional install extra**, so the base install stays light.
 
@@ -132,7 +132,7 @@ One core, two front ends.
                     velocity MCP server (FastMCP)
                                |
          plain typed functions (unit-tested without a server)
-           source:  get_outline, read_section, (search, get_exercises)
+           source:  get_outline, search_source, read_section, get_exercises
            log:     append_log, read_log
            state:   read_state, update_state
            notes:   read_notes (read-only)
@@ -169,6 +169,7 @@ Linux is the primary platform (the developer's). macOS is supported. Windows is 
 6. **M6: Own agent loop. Done 2026-11-05** (`velocity chat`, live-tested with an API key, merged in #13). Front end B on the `anthropic` SDK, with the same MCP server and skills.
 7. **M7: Polish and portfolio.** One PR each, in this order: fixes from the M6 live test (done, #15); README with a demo; teaching-quality evals (replaying session records); source improvements (drop-check repair, then non-PDF sources). All done except the eval full run, which the user postponed to limit spending.
 8. **M8: Web front end.** A local web UI (`velocity web`) as a third front end on the same core, planned 2026-11-06 (see the decisions log), with the PRs reordered after a design review the same day: (1) server, subject picker and session history (done, #24); (A) session titles and resume/continue for all front ends (done, #25); (B) chat on Claude Code headless (done, #26); (C) chat on the own agent loop, selectable (done, #27); (D) polish: Stop, Retry, a thinking indicator, the reminder on the page (#28). The README demo (screenshots and a video) is postponed until the user can record it (2026-11-09). The license is postponed too (2026-11-09): the user wants the application more fleshed out before publishing one.
+9. **M9: Fleshing out (planned 2026-11-09).** One PR each, in this order: a `search_source` tool (in progress, branch `source-search`); a source reader beside the web chat (the PDF in the browser's own viewer at the cited page, text sources rendered, citations clickable); uploading a source from the web page (a copy kept in velocity's data dir, sent as raw bytes so no new dependency is needed); compaction for long own-loop chats (check the API's built-in compaction first). A tester guide and feedback template come later, when the user invites testers.
 
 ### M2 notes (2026-11-04)
 
@@ -207,6 +208,16 @@ Linux is the primary platform (the developer's). macOS is supported. Windows is 
 - **Chats** (`chat.py`): at most one per subject, and none while another session of the subject is open (unless the learner closes it, e.g. after a crash). Pause, the 30-minute idle timeout and server shutdown close stdin, which ends the session without a wrap-up. After `/end-session` the chat stops once the session is wrapped up. Resume uses Claude Code's `--resume` when the session has a Claude Code conversation (found through the hook's id mapping); otherwise `VELOCITY_REOPEN` makes the SessionStart hook reopen the session and asks the tutor to read it first. Continue passes `VELOCITY_CONTINUE`.
 - **Page:** a Chat tab (model choice remembered in the browser, skill buttons, End session and Pause, a "?" popup explaining End session, Pause, Resume and Continue) and Resume/Continue buttons in History. Replies stream over server-sent events and are rendered with the same markdown and math code as History. Reloading the page redraws a running chat from the session record.
 - **Tests** use `tests/fake_claude.py`, which speaks the same protocol and runs velocity's real hooks at the same moments as Claude Code, so logging, resume, continue and wrap-up are tested without Claude Code.
+
+### Notes: source search (2026-11-09)
+
+- **Why:** the tutor used to guess section numbers or read whole sections to find a topic (thousands of tokens). `search_source` runs locally and returns about 100–450 tokens; one search plus one targeted `read_section` is cheaper than guessing.
+- **What is searched** (`search.py`, `search_chunks()` on both source types): for PDFs, the text layer of every page, mapped to the outline entry the page falls under (pages before the first entry are skipped). It is cached as `text-layer.json` in the source's cache dir, since extracting it takes about 3.5 s for a 1,400-page book; later searches take about 0.15 s. Pages without a text layer (scans) use their OCR'd text if cached. Text sources are searched section by section.
+- **Matching:** keywords, case-insensitive, substrings ("limit" finds "limits"); words under 3 letters are dropped. A section matches if its pages together contain every word; otherwise the best partial matches are returned and labelled so. No embeddings (they would need a model and new dependencies).
+- **Text-layer flaws found in Stewart:** math is garbled (`f(x)` is `fsxd`), so formulas can't be searched for. The fonts lose the "f" of ligatures ("definition" is "deinition", "flux" is "lux", "coefficient" both "coeficient" and "coeicient"), so each query word is also tried in those forms; Unicode ligature characters (ﬁ) are normalized with NFKC.
+- **Ranking:** occurrences capped at 3 per word per page (so index pages don't dominate), the whole phrase weighted 10x, and a boost when the section title contains the query. On 12 test queries on Stewart, the top result was the section that teaches the topic every time; the index still appears lower down.
+- **Result format:** one line per section, with the best page (the snippet's) first: `Stewart §2.3: … (best match PDF p. 133; also on pp. 129, 131, …): <snippet>`. Before the best page was named, the tutor said it couldn't give an exact page.
+- **Live check** (Claude Code, Sonnet): asked where the squeeze theorem is explained, the tutor made one `search_source` call and answered §2.3, PDF p. 133, plus §11.1 and Appendix F.
 
 ### M8 notes: web chat on the own loop (2026-11-09)
 
