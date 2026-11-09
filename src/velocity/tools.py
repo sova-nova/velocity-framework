@@ -15,6 +15,7 @@ from velocity.notes import list_notes as _list_notes
 from velocity.notes import read_note as _read_note
 from velocity.ocr import PageOcr
 from velocity.pdf_source import PdfSource
+from velocity.search import format_hits, query_terms, search
 from velocity.session import (
     RECAP_TITLE,
     Session,
@@ -129,6 +130,31 @@ class TutorTools:
             header += f" (PDF pp. {text.first_page}-{text.last_page})"
         warnings = "".join(f"\nWARNING: {w}" for w in text.warnings)
         return f"{header}{warnings}\n\n{text.markdown}"
+
+    def search_source(self, query: str, source: str = "") -> str:
+        """Find which sections of a source cover a topic, by keywords (e.g. 'squeeze
+        theorem'), before reading them. Searches every source if none is given. Fast and
+        cheap; returns sections, PDF pages and short snippets. Words work well, formulas
+        don't (math in PDF text layers is garbled)."""
+        if not query_terms(query):
+            raise ToolError("Give some words to search for.")
+        if source:
+            names = [source]
+        else:
+            names = [s.name for s in self.subject.sources]
+            if not names:
+                raise ToolError("This subject has no sources to search.")
+        results = []
+        for name in names:
+            src = self._source(name)
+            chunks = src.search_chunks()
+            note = (
+                ""
+                if chunks
+                else " It has no searchable text (no outline, or a scan not yet OCR'd)."
+            )
+            results.append(format_hits(name, query, search(chunks, query), note))
+        return "\n\n".join(results)
 
     def get_exercises(self, source: str, section_id: str) -> str:
         """The exercise set at the end of a section (everything after its EXERCISES heading)."""

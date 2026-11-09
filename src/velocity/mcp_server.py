@@ -12,6 +12,7 @@ from velocity.tools import ToolError, TutorTools
 TOOL_NAMES = [
     "list_sources",
     "get_outline",
+    "search_source",
     "read_section",
     "get_exercises",
     "append_log",

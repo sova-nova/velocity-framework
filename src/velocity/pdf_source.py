@@ -9,6 +9,7 @@ from velocity.config import data_dir
 from velocity.dropcheck import Region, find_drops, repair, text_lines
 from velocity.ocr import OcrPage, PageOcr
 from velocity.outline import Section, get_outline
+from velocity.search import Chunk, section_at
 
 _HEADING = re.compile(r"^#{1,6}\s+(.+)$", re.MULTILINE)
 _TITLE_PREFIX = re.compile(r"^(Ch \d+|\d+\.\d+|Appendix [A-Z]):\s*")
@@ -54,6 +55,7 @@ class PdfSource:
         self.cache_dir = cache_dir or default_cache_dir(self.pdf_path)
         self._ocr = ocr
         self._outline = outline
+        self._pages_text: list[str] | None = None
 
     def outline(self) -> list[Section]:
         if self._outline is None:
@@ -93,6 +95,37 @@ class PdfSource:
             markdown[start:end].strip(),
             warnings,
         )
+
+    def search_chunks(self) -> list[Chunk]:
+        """Every page's text for search, under the section it belongs to: the text layer,
+        or the OCR'd text where a page has no text layer (scans) and it is cached."""
+        outline = self.outline()
+        chunks = []
+        for page, text in enumerate(self._text_layer(), start=1):
+            if len(text.strip()) < 20:
+                cached = self._page_dir / f"{page}.md"
+                text = cached.read_text(encoding="utf-8") if cached.exists() else ""
+            section = section_at(outline, page)
+            if section and text.strip():
+                chunks.append(Chunk(section.id, section.title, page, text))
+        return chunks
+
+    def _text_layer(self) -> list[str]:
+        """The PDF's text layer, page by page, cached on disk after the first read (a
+        1,400-page textbook takes a few seconds)."""
+        if self._pages_text is not None:
+            return self._pages_text
+        cached = self.cache_dir / "text-layer.json"
+        if cached.exists():
+            self._pages_text = json.loads(cached.read_text(encoding="utf-8"))
+            return self._pages_text
+        import pymupdf
+
+        with pymupdf.open(self.pdf_path) as doc:
+            self._pages_text = [page.get_text() for page in doc]
+        self.cache_dir.mkdir(parents=True, exist_ok=True)
+        cached.write_text(json.dumps(self._pages_text), encoding="utf-8")
+        return self._pages_text
 
     @property
     def _page_dir(self) -> Path:

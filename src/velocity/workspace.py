@@ -93,8 +93,9 @@ def render_claude_md(subject: Subject) -> str:
     if subject.sources:
         names = ", ".join(s.name for s in subject.sources)
         sources_section = (
-            f"This subject has sources: {names}. Ground explanations in them: use `get_outline` "
-            "and `read_section`, and cite sections as `<source> §<id>` (e.g. "
+            f"This subject has sources: {names}. Ground explanations in them: find where a "
+            "topic is covered with `search_source` (or `get_outline`), read it with "
+            "`read_section`, and cite sections as `<source> §<id>` (e.g. "
             f"`{subject.sources[0].name} §2.4`). Say so when an answer goes beyond the sources."
         )
     else:

@@ -17,6 +17,7 @@ from xml.etree import ElementTree
 
 from velocity.outline import Section
 from velocity.pdf_source import SectionText
+from velocity.search import Chunk
 
 TEXT_SUFFIXES = {".md", ".markdown", ".html", ".htm", ".xhtml", ".epub"}
 
@@ -69,6 +70,15 @@ class TextSource:
         end = entries[index + 1].offset if index + 1 < len(entries) else len(text)
         section = outline[index]
         return SectionText(section.id, section.title, 0, 0, text[start:end].strip())
+
+    def search_chunks(self) -> list[Chunk]:
+        """Each section's own text (up to the next outline entry), for search."""
+        text, entries = self._load()
+        ends = [e.offset for e in entries[1:]] + [len(text)]
+        return [
+            Chunk(s.id, s.title, 0, text[e.offset : end])
+            for s, e, end in zip(self.outline(), entries, ends)
+        ]
 
 
 # -- outline -----------------------------------------------------------------------------
