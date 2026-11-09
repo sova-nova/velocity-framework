@@ -229,7 +229,7 @@ class TutorAgent:
     tool_log: list[tuple[str, dict]] = field(default_factory=list)
     continues: str | None = None  # a finished session this one picks up from
     reopen: str | None = None  # a paused session to resume, with its history rebuilt
-    reminder_shown: bool = False  # the web page showed the third-party reminder
+    web_ui: bool = False  # in the web UI (it shows the reminder, and a source reader)
     last_turn_usage: Usage = field(default_factory=Usage)
     stop_requested: bool = False  # the learner stopped the running turn
     _streamed: str = ""  # the running turn's text so far
@@ -258,7 +258,7 @@ class TutorAgent:
                 "continues": self.continues,
                 "reopen": self.reopen,
                 "history": bool(self.reopen),
-                "reminder_shown": self.reminder_shown,
+                "web_ui": self.web_ui,
             },
         )
         self._pending_context.append(result["hookSpecificOutput"]["additionalContext"])

@@ -55,6 +55,8 @@ def test_page_and_static_files(client):
     assert page.status_code == 200 and "<title>velocity</title>" in page.text
     assert "katex@0.16.11" in page.text  # pinned CDN versions
     assert client.get("/static/app.js").status_code == 200
+    reader = client.get("/static/reader.js")
+    assert reader.status_code == 200 and "pdfjs-dist@6.4.299" in reader.text
     assert client.get("/static/style.css").status_code == 200
 
 
@@ -126,3 +128,72 @@ def test_cli_web_starts_uvicorn_on_localhost(config, monkeypatch, capsys):
     assert cli.main(["web", "calculus", "--no-browser", "--port", "9000"]) == 0
     assert calls["host"] == "127.0.0.1" and calls["port"] == 9000
     assert "http://127.0.0.1:9000/?subject=calculus" in capsys.readouterr().out
+
+
+# -- the source reader (M9) --------------------------------------------------------------
+
+
+@pytest.fixture
+def with_sources(tmp_path, config):
+    import pymupdf
+
+    from velocity.config import add_source
+
+    book = tmp_path / "book.pdf"
+    doc = pymupdf.open()
+    for text in ["Intro", "Limits", "Continuity"]:
+        doc.new_page().insert_text((72, 72), text)
+    doc.set_toc(
+        [[1, "Ch 1: Limits", 1], [2, "1.1: Limits", 2], [2, "1.2: Continuity", 3]]
+    )
+    doc.save(book)
+    notes = tmp_path / "notes.md"
+    notes.write_text("# Limits\n\nNear, not at.\n\n# Continuity\n\nNo gaps.\n")
+    add_source(config, "calculus", book, "Book")
+    add_source(config, "calculus", notes, "Notes")
+    return book
+
+
+def test_reader_lists_sources_with_outlines(client, with_sources):
+    sources = {
+        s["name"]: s for s in client.get("/api/subjects/calculus/sources").json()
+    }
+    assert sources["Book"]["kind"] == "pdf"
+    assert [(e["id"], e["start_page"]) for e in sources["Book"]["outline"]] == [
+        ("ch1", 1),
+        ("1.1", 2),
+        ("1.2", 3),
+    ]
+    assert sources["Notes"]["kind"] == "text"
+    assert [e["id"] for e in sources["Notes"]["outline"]] == ["limits", "continuity"]
+
+
+def test_reader_sends_pdfs_in_ranges_and_text_sections(client, with_sources):
+    base = "/api/subjects/calculus/sources"
+    whole = client.get(f"{base}/Book/file")
+    assert whole.status_code == 200
+    assert whole.headers["content-type"] == "application/pdf"
+    assert whole.content == with_sources.read_bytes()
+    part = client.get(f"{base}/Book/file", headers={"Range": "bytes=0-99"})
+    assert part.status_code == 206 and len(part.content) == 100
+
+    section = client.get(f"{base}/Notes/sections/continuity").json()
+    assert section["title"] == "Continuity" and "No gaps." in section["markdown"]
+    assert client.get(f"{base}/Notes/sections/nope").status_code == 404
+    assert client.get(f"{base}/Notes/file").status_code == 400  # text: no file
+    assert client.get(f"{base}/Book/sections/1.1").status_code == 400  # PDF: pages
+
+
+def test_reader_only_sends_files_listed_as_sources(client, with_sources, tmp_path):
+    base = "/api/subjects/calculus/sources"
+    (tmp_path / "secret.pdf").write_bytes(b"%PDF-1.4 PRIVATE-CONTENTS")
+    for name in [
+        "secret",
+        "secret.pdf",
+        "..%2Fsecret.pdf",
+        "Book%2F..%2F..%2Fsecret.pdf",
+    ]:
+        response = client.get(f"{base}/{name}/file")
+        assert response.status_code == 404, name
+        assert b"PRIVATE-CONTENTS" not in response.content
+    assert client.get("/api/subjects/nope/sources").status_code == 404

@@ -33,6 +33,7 @@ from velocity.chat import ChatError, ChatManager, engines, last_engine
 from velocity.config import Config, ConfigError, list_subjects, load_subject
 from velocity.engine import CLAUDE_CODE
 from velocity.session import SESSION_ID, Session, record_dir, session_summaries
+from velocity.tools import ToolError, open_source, source_ref
 
 HOST = "127.0.0.1"
 DEFAULT_PORT = 8765
@@ -119,6 +120,74 @@ def build_app(config: Config, chats: ChatManager | None = None) -> Starlette:
             }
         )
 
+    # -- source reader -----------------------------------------------------------------
+
+    outlines: dict[tuple[str, float], list[dict]] = {}  # (path, mtime) -> outline
+
+    def outline_of(subject, ref) -> list[dict]:
+        key = (ref.path.as_posix(), ref.path.stat().st_mtime)
+        if key not in outlines:
+            source = open_source(subject, ref.name)
+            outlines[key] = [asdict(s) for s in source.outline()]
+        return outlines[key]
+
+    async def source_list(request: Request) -> Response:
+        """The subject's sources with their outlines, for the reader's picker."""
+        subject = subject_or_404(request.path_params["slug"])
+        if subject is None:
+            return JSONResponse({"error": "unknown subject"}, 404)
+        out = []
+        for ref in subject.sources:
+            item = {"name": ref.name, "kind": _source_kind(ref), "outline": []}
+            try:
+                item["outline"] = await asyncio.to_thread(outline_of, subject, ref)
+            except ToolError as e:
+                item["error"] = str(e)
+            except (OSError, ValueError, KeyError) as e:
+                item["error"] = f"Could not read {ref.name}: {e}"
+            out.append(item)
+        return JSONResponse(out)
+
+    def reader_source(request: Request):
+        """(subject, source ref) for a reader request, or an error response."""
+        subject = subject_or_404(request.path_params["slug"])
+        if subject is None:
+            return None, JSONResponse({"error": "unknown subject"}, 404)
+        try:
+            # By name only: the path comes from subject.toml, never from the request.
+            return (subject, source_ref(subject, request.path_params["name"])), None
+        except ToolError as e:
+            return None, JSONResponse({"error": str(e)}, 404)
+
+    async def source_file(request: Request) -> Response:
+        """A PDF source's file, for PDF.js (which fetches it in ranges)."""
+        found, error = reader_source(request)
+        if error:
+            return error
+        _, ref = found
+        if _source_kind(ref) != "pdf":
+            return JSONResponse({"error": "only PDF sources are sent as files"}, 400)
+        return FileResponse(ref.path, media_type="application/pdf")
+
+    async def source_section(request: Request) -> Response:
+        """A text source's section as markdown (PDFs are shown as pages instead)."""
+        found, error = reader_source(request)
+        if error:
+            return error
+        subject, ref = found
+        if _source_kind(ref) != "text":
+            return JSONResponse({"error": "PDF sources are shown as pages"}, 400)
+        try:
+            section = await asyncio.to_thread(
+                open_source(subject, ref.name).read_section,
+                request.path_params["section_id"],
+            )
+        except KeyError:
+            return JSONResponse({"error": "unknown section"}, 404)
+        return JSONResponse(
+            {"id": section.id, "title": section.title, "markdown": section.markdown}
+        )
+
     # -- chat --------------------------------------------------------------------------
 
     async def engine_list(request: Request) -> Response:
@@ -196,6 +265,12 @@ def build_app(config: Config, chats: ChatManager | None = None) -> Starlette:
         Route("/", index),
         Route("/api/subjects", subjects),
         Route("/api/engines", engine_list),
+        Route("/api/subjects/{slug}/sources", source_list),
+        Route("/api/subjects/{slug}/sources/{name}/file", source_file),
+        Route(
+            "/api/subjects/{slug}/sources/{name}/sections/{section_id}",
+            source_section,
+        ),
         Route("/api/subjects/{slug}/sessions", sessions),
         Route("/api/subjects/{slug}/sessions/{session_id}", session_log),
         Route("/api/subjects/{slug}/chat", chat_status),
@@ -212,6 +287,10 @@ def build_app(config: Config, chats: ChatManager | None = None) -> Starlette:
     app = Starlette(routes=routes, middleware=middleware, lifespan=lifespan)
     app.state.chats = chats
     return app
+
+
+def _source_kind(ref) -> str:
+    return "pdf" if ref.path.suffix.lower() == ".pdf" else "text"
 
 
 async def _json(request: Request) -> dict:

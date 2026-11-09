@@ -125,16 +125,21 @@ async function showSession(slug, id, button) {
     article.append(note);
   }
   article.append(renderMarkdown(log.markdown));
+  linkifyCitations(article);
 }
 
 // -- views -----------------------------------------------------------------------------
 
+let activeView = "chat";
+
 function showView(name) {
-  for (const tab of document.querySelectorAll(".tab")) {
+  activeView = name;
+  for (const tab of document.querySelectorAll(".tab[data-view]")) {
     tab.classList.toggle("active", tab.dataset.view === name);
   }
   $("#chat").hidden = name !== "chat";
   $("#history").hidden = name !== "history";
+  updateLayout();
   // Chats start, pause, and end while History is hidden: show the sessions as they are now.
   if (name === "history") loadSessions(subject());
 }
@@ -259,6 +264,7 @@ function showChat(status, notice = "") {
     : "";
   showCost(status.open ? status.cost : null);
   setBusy(status.busy);
+  updateLayout();
 }
 
 // Start a chat. The engine and model come from `options` (Resume's dialog) or else from
@@ -297,10 +303,12 @@ function addMessage(role, text, title) {
   div.className = `message ${role}`;
   if (role === "block") {
     div.append(renderMarkdown(`> [!example] ${title || ""}\n> ${text.split("\n").join("\n> ")}`));
+    linkifyCitations(div);
   } else if (role === "learner") {
     div.textContent = text;
   } else {
     div.append(renderMarkdown(text));
+    linkifyCitations(div);
   }
   $("#messages").append(div);
   return div;
@@ -368,6 +376,7 @@ async function send(text, retry = false) {
   const redraw = () => {
     pending = false;
     reply.replaceChildren(renderMarkdown(replyText));
+    linkifyCitations(reply);
     scrollToEnd();
   };
   setBusy(true);
@@ -556,7 +565,8 @@ function setUpChat() {
       $("#composer").requestSubmit();
     }
   });
-  for (const tab of document.querySelectorAll(".tab")) {
+  // Only the view tabs: the Book button looks like a tab but opens the reader instead.
+  for (const tab of document.querySelectorAll(".tab[data-view]")) {
     tab.addEventListener("click", () => showView(tab.dataset.view));
   }
 }
@@ -580,8 +590,12 @@ async function start() {
   const wanted = new URLSearchParams(location.search).get("subject");
   if (wanted && subjects.some((s) => s.slug === wanted)) select.value = wanted;
   engines = await getJSON("/api/engines");
+  // Before the chat and History draw anything, so citations in them become links.
+  await loadReaderSources(select.value);
   setUpChat();
-  select.addEventListener("change", () => {
+  setUpReader();
+  select.addEventListener("change", async () => {
+    await resetReader(select.value);
     loadSessions(select.value);
     loadChat();
   });
