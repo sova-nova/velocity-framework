@@ -134,7 +134,7 @@ let activeView = "chat";
 
 function showView(name) {
   activeView = name;
-  for (const tab of document.querySelectorAll(".tab")) {
+  for (const tab of document.querySelectorAll(".tab[data-view]")) {
     tab.classList.toggle("active", tab.dataset.view === name);
   }
   $("#chat").hidden = name !== "chat";
@@ -565,7 +565,8 @@ function setUpChat() {
       $("#composer").requestSubmit();
     }
   });
-  for (const tab of document.querySelectorAll(".tab")) {
+  // Only the view tabs: the Book button looks like a tab but opens the reader instead.
+  for (const tab of document.querySelectorAll(".tab[data-view]")) {
     tab.addEventListener("click", () => showView(tab.dataset.view));
   }
 }

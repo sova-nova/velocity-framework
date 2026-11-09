@@ -158,6 +158,17 @@ async function loadPdfJs() {
     pdf.pending = null;
   });
   pdf.eventBus.on("pagechanging", ({ pageNumber }) => pageChanged(pageNumber));
+  // Fit the page to the panel's width again whenever the panel changes size (the
+  // divider, or the book moving between the middle and the side).
+  let fitting = false;
+  new ResizeObserver(() => {
+    if (fitting || !pdf.ready || !$("#pdf-container").clientWidth) return;
+    fitting = true;
+    requestAnimationFrame(() => {
+      fitting = false;
+      pdf.viewer.currentScaleValue = "page-width";
+    });
+  }).observe($("#pdf-container"));
   pdf.lib = lib;
 }
 
