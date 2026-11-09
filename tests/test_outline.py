@@ -72,11 +72,42 @@ def test_last_entry_runs_to_end_of_book(outline):
     assert outline["index"].end_page == 1397
 
 
-def test_duplicate_ids_rejected():
-    with pytest.raises(ValueError, match="duplicate"):
-        build_outline(
-            [(1, "Ch 1: A", 1), (2, "Review", 2), (2, "Review", 3)], page_count=5
-        )
+def test_repeated_ids_get_a_number_instead_of_failing_the_book():
+    # Ids stay unique (citations are unambiguous), but the book stays readable.
+    outline = build_outline(
+        [(1, "Ch 1: A", 1), (2, "Review", 2), (2, "Review", 3), (2, "Review", 4)],
+        page_count=5,
+    )
+    assert [s.id for s in outline] == ["ch1", "1.review", "1.review-2", "1.review-3"]
+    outline = build_outline([(1, "Summary", 1), (1, "Summary", 3)], page_count=5)
+    assert [s.id for s in outline] == ["summary", "summary-2"]
+
+
+def test_chapter_styles_of_other_publishers():
+    # O'Reilly: "Chapter 1. Title" with unnumbered sections; each chapter has a Summary.
+    outline = build_outline(
+        [
+            (1, "Preface", 1),
+            (1, "Chapter 1. Introduction to Building AI Applications", 3),
+            (2, "Coding", 4),
+            (2, "Summary", 5),
+            (1, "Chapter 2: Understanding Foundation Models", 6),
+            (2, "Summary", 7),
+            (1, "CHAPTER 3 Evaluation", 8),
+            (2, "Summary", 9),
+        ],
+        page_count=10,
+    )
+    assert [s.id for s in outline] == [
+        "preface",
+        "ch1",
+        "1.coding",
+        "1.summary",
+        "ch2",
+        "2.summary",
+        "ch3",
+        "3.summary",
+    ]
 
 
 STEWART = next(Path("sources/mathematics").glob("*.pdf"), None)

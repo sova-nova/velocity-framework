@@ -101,6 +101,25 @@
       <button id="switch-cancel">Cancel</button>
     </div>
   </dialog>
+  <dialog id="add-source">
+    <h2>Add a source</h2>
+    <p class="hint">A PDF, EPUB, Markdown or HTML file. velocity keeps a copy in its own data
+      folder, not in your vault.</p>
+    <label class="field">File
+      <input type="file" id="add-file" accept=".pdf,.epub,.md,.markdown,.html,.htm,.xhtml">
+    </label>
+    <label class="field">Name
+      <input type="text" id="add-name" maxlength="40" placeholder="e.g. Stewart">
+    </label>
+    <p class="hint">The tutor cites it as “<span id="add-cite">Name</span> §2.4”, so a short
+      name works best.</p>
+    <p id="add-status" class="hint" hidden></p>
+    <div class="dialog-actions">
+      <button id="add-go" class="primary">Add</button>
+      <button id="add-prepare" hidden>Prepare it now…</button>
+      <button id="add-close">Close</button>
+    </div>
+  </dialog>
   <dialog id="prepare-dialog">
     <h2>Prepare <span id="prepare-source"></span> ahead of time</h2>
     <p>Preparing reads the pages now (OCR), so that reading them later is instant.
@@ -145,6 +164,7 @@
   <section id="reader" hidden>
     <div class="reader-bar">
       <select id="reader-source" aria-label="Source"></select>
+      <button id="reader-add" title="Add a source: PDF, EPUB, Markdown or HTML">＋</button>
       <select id="reader-section" aria-label="Section"></select>
       <span class="spacer"></span>
       <label id="reader-page" class="hint" hidden>p.
@@ -167,6 +187,12 @@
     <div id="reader-body">
       <div id="pdf-container"><div id="pdf-viewer" class="pdfViewer"></div></div>
       <article id="reader-text" hidden></article>
+      <div id="reader-empty" class="reader-empty" hidden>
+        <h2>No sources yet</h2>
+        <p>Add a textbook or your own notes (PDF, EPUB, Markdown or HTML). The tutor then
+          teaches from it, cites it, and shows it here.</p>
+        <button id="reader-empty-add" class="primary">Add a source…</button>
+      </div>
     </div>
     <p id="reader-status" class="hint" hidden></p>
   </section>
