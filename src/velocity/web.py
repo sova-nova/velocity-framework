@@ -11,6 +11,8 @@ import asyncio
 import contextlib
 import json
 import re
+import subprocess
+import sys
 from dataclasses import asdict
 from importlib.resources import files
 from pathlib import Path
@@ -32,6 +34,14 @@ from starlette.types import ASGIApp, Receive, Scope, Send
 from velocity.chat import ChatError, ChatManager, engines, last_engine
 from velocity.config import Config, ConfigError, list_subjects, load_subject
 from velocity.engine import CLAUDE_CODE
+from velocity.pdf_source import PdfSource
+from velocity.prepare import (
+    SECONDS_PER_PAGE,
+    STARTUP_SECONDS,
+    read_progress,
+    request_cancel,
+    running,
+)
 from velocity.session import SESSION_ID, Session, record_dir, session_summaries
 from velocity.tools import ToolError, open_source, source_ref
 
@@ -188,6 +198,87 @@ def build_app(config: Config, chats: ChatManager | None = None) -> Starlette:
             {"id": section.id, "title": section.title, "markdown": section.markdown}
         )
 
+    # -- preparing a PDF ahead of time (OCR) --------------------------------------------
+
+    prepare_processes: dict[
+        str, subprocess.Popen
+    ] = {}  # source path -> job just started
+
+    def reader_pdf(request: Request):
+        """(subject, ref, PdfSource) for a PDF source, or an error response."""
+        found, error = reader_source(request)
+        if error:
+            return None, error
+        subject, ref = found
+        if _source_kind(ref) != "pdf":
+            return None, JSONResponse({"error": "only PDFs are prepared"}, 400)
+        return (subject, ref, PdfSource(ref.path, ocr=None)), None
+
+    def prepare_status(ref, pdf: PdfSource) -> dict:
+        process = prepare_processes.get(ref.path.as_posix())
+        progress = read_progress(pdf)
+        starting = (
+            process is not None
+            and process.poll() is None
+            and not (progress and progress["state"] == "running")
+        )
+        return {
+            "pages": pdf.page_count,
+            "prepared": pdf.cached_pages(),
+            "progress": progress,
+            "starting": starting,  # launched, still loading before its first update
+            "seconds_per_page": SECONDS_PER_PAGE,
+            "startup_seconds": STARTUP_SECONDS,
+        }
+
+    async def prepare_get(request: Request) -> Response:
+        found, error = reader_pdf(request)
+        if error:
+            return error
+        _, ref, pdf = found
+        return JSONResponse(await asyncio.to_thread(prepare_status, ref, pdf))
+
+    async def prepare_start(request: Request) -> Response:
+        """Start `velocity source prepare` for a chapter or the whole book, detached, so
+        it keeps running if the page closes or the server stops."""
+        found, error = reader_pdf(request)
+        if error:
+            return error
+        subject, ref, pdf = found
+        body = await _json(request)
+        process = prepare_processes.get(ref.path.as_posix())
+        if running(pdf) or (process is not None and process.poll() is None):
+            return JSONResponse({"error": "Already preparing this source."}, 409)
+        scope = ["--all"]
+        if body.get("section"):
+            section = str(body["section"])
+            if not any(s.id == section for s in pdf.outline()):
+                return JSONResponse({"error": "unknown section"}, 404)
+            scope = ["--section", section]
+        await asyncio.to_thread(launch_prepare, subject, ref, pdf, scope)
+        return JSONResponse(await asyncio.to_thread(prepare_status, ref, pdf))
+
+    def launch_prepare(subject, ref, pdf: PdfSource, scope: list[str]) -> None:
+        pdf.cache_dir.mkdir(parents=True, exist_ok=True)
+        with open(pdf.cache_dir / "prepare.log", "w") as log:
+            prepare_processes[ref.path.as_posix()] = subprocess.Popen(
+                [sys.executable, "-m", "velocity.cli", "source", "prepare"]
+                + [subject.slug, "--source", ref.name, *scope],
+                stdin=subprocess.DEVNULL,
+                stdout=log,
+                stderr=subprocess.STDOUT,
+                start_new_session=True,  # not stopped with the server
+            )
+
+    async def prepare_cancel(request: Request) -> Response:
+        """Ask the job to stop after its current batch (finished pages are kept)."""
+        found, error = reader_pdf(request)
+        if error:
+            return error
+        _, ref, pdf = found
+        request_cancel(pdf)
+        return JSONResponse(prepare_status(ref, pdf))
+
     # -- chat --------------------------------------------------------------------------
 
     async def engine_list(request: Request) -> Response:
@@ -270,6 +361,17 @@ def build_app(config: Config, chats: ChatManager | None = None) -> Starlette:
         Route(
             "/api/subjects/{slug}/sources/{name}/sections/{section_id}",
             source_section,
+        ),
+        Route("/api/subjects/{slug}/sources/{name}/prepare", prepare_get),
+        Route(
+            "/api/subjects/{slug}/sources/{name}/prepare",
+            prepare_start,
+            methods=["POST"],
+        ),
+        Route(
+            "/api/subjects/{slug}/sources/{name}/prepare/cancel",
+            prepare_cancel,
+            methods=["POST"],
         ),
         Route("/api/subjects/{slug}/sessions", sessions),
         Route("/api/subjects/{slug}/sessions/{session_id}", session_log),

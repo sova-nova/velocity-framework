@@ -101,6 +101,25 @@
       <button id="switch-cancel">Cancel</button>
     </div>
   </dialog>
+  <dialog id="prepare-dialog">
+    <h2>Prepare <span id="prepare-source"></span> ahead of time</h2>
+    <p>Preparing reads the pages now (OCR), so that reading them later is instant.
+      <strong>This takes a while:</strong> about 6–7 seconds per page, and your GPU is busy
+      the whole time.</p>
+    <p>The tutor keeps working meanwhile. If it needs a page that isn't prepared yet, it
+      waits for the batch in progress (about a minute). Looking at pages and searching
+      never wait.</p>
+    <div class="prepare-choices">
+      <label><input type="radio" name="prepare-scope" value="chapter"> <span id="prepare-chapter"></span></label>
+      <label><input type="radio" name="prepare-scope" value="all"> <span id="prepare-all"></span></label>
+    </div>
+    <p class="hint">It keeps going if you close this page or stop velocity web. You can cancel
+      any time: finished pages are kept, and starting again continues where it stopped.</p>
+    <div class="dialog-actions">
+      <button id="prepare-go" class="primary">Start preparing</button>
+      <button id="prepare-close">Cancel</button>
+    </div>
+  </dialog>
   <dialog id="resume">
     <h2 id="resume-title"></h2>
     <div class="pickers">
@@ -132,7 +151,18 @@
         <input id="reader-page-input" type="number" min="1" inputmode="numeric" title="Type a PDF page number and press Enter">
         of <span id="reader-pages"></span></label>
       <button id="reader-ask" title="Start a message to the tutor about the page you're on">Ask about this page</button>
+      <button id="reader-prepare" title="OCR a chapter or the whole book ahead of time, so reading it is instant" hidden>Prepare…</button>
       <button id="reader-close" title="Close the reader">×</button>
+    </div>
+    <div id="prepare-progress" class="prepare-progress" hidden>
+      <div class="prepare-line">
+        <strong id="prepare-title"></strong>
+        <span id="prepare-detail" class="hint"></span>
+        <span class="spacer"></span>
+        <button id="prepare-cancel" title="Stop after the current batch; finished pages are kept">Cancel</button>
+        <button id="prepare-dismiss" title="Hide this message" hidden>×</button>
+      </div>
+      <progress id="prepare-bar" max="1" value="0"></progress>
     </div>
     <div id="reader-body">
       <div id="pdf-container"><div id="pdf-viewer" class="pdfViewer"></div></div>
