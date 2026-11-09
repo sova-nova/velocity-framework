@@ -15,7 +15,7 @@ let readerSources = [];
 // What the reader shows: the source, and the page (PDFs) or section (text sources).
 const reader = { source: null, page: null, section: null };
 // PDF.js state: the library, one viewer, and the open document.
-const pdf = { lib: null, viewer: null, eventBus: null, links: null, doc: null, name: null, ready: false, pending: null };
+const pdf = { lib: null, viewer: null, eventBus: null, links: null, task: null, doc: null, name: null, ready: false, pending: null };
 
 // -- sources ---------------------------------------------------------------------------
 
@@ -45,11 +45,19 @@ function remembered(slug) {
   }
 }
 
+// Saved per subject: the source last shown, and where each source was left
+// ({source, page, section, places: {name: {page, section}}}), so switching between
+// books returns to the same place in each.
 function remember() {
+  const saved = remembered(subject());
+  const places = { ...(saved.places || {}) };
+  if (reader.source) places[reader.source] = { page: reader.page, section: reader.section };
   try {
-    localStorage.setItem(READER_KEY(subject()), JSON.stringify(reader));
+    localStorage.setItem(READER_KEY(subject()), JSON.stringify({ ...reader, places }));
   } catch {}
 }
+
+const placeOf = (name) => remembered(subject()).places?.[name] || {};
 
 // -- opening and closing ---------------------------------------------------------------
 
@@ -195,11 +203,11 @@ async function showPdf(source, page) {
     if (pdf.name !== source.name) {
       status(`Opening ${source.name}…`);
       await loadPdfJs();
-      pdf.ready = false;
-      if (pdf.doc) await pdf.doc.destroy();
+      await closePdf();
       const url = `/api/subjects/${subject()}/sources/${encodeURIComponent(source.name)}/file`;
       // Fetched in ranges as pages are shown, not all at once.
-      pdf.doc = await pdf.lib.getDocument({ url, disableAutoFetch: true, disableStream: true }).promise;
+      pdf.task = pdf.lib.getDocument({ url, disableAutoFetch: true, disableStream: true });
+      pdf.doc = await pdf.task.promise;
       pdf.name = source.name;
       pdf.viewer.setDocument(pdf.doc);
       pdf.links.setDocument(pdf.doc, null);
@@ -212,6 +220,19 @@ async function showPdf(source, page) {
   }
   goToPage(page);
   refreshPrepare();
+}
+
+// Close the open PDF, if any, before opening another. In PDF.js 6, destroy() is on the
+// loading task, not on the document.
+async function closePdf() {
+  pdf.ready = false;
+  pdf.pending = null;
+  if (!pdf.task) return;
+  pdf.viewer.setDocument(null);
+  pdf.links.setDocument(null, null);
+  const task = pdf.task;
+  pdf.task = pdf.doc = pdf.name = null;
+  await task.destroy();
 }
 
 function goToPage(page) {
@@ -641,7 +662,9 @@ function setUpReader() {
     prepare.dismissed = prepare.status?.progress?.started ?? null;
     $("#prepare-progress").hidden = true;
   });
-  $("#reader-source").addEventListener("change", (event) => openAt(event.target.value));
+  $("#reader-source").addEventListener("change", (event) =>
+    openAt(event.target.value, placeOf(event.target.value)),
+  );
   $("#reader-section").addEventListener("change", (event) =>
     openAt(reader.source, { section: event.target.value }),
   );
@@ -690,12 +713,7 @@ async function resetReader(slug) {
   hidePrepare();
   prepare.status = null;
   reader.source = reader.page = reader.section = null;
-  if (pdf.doc) {
-    await pdf.doc.destroy();
-    pdf.doc = null;
-    pdf.name = null;
-    pdf.ready = false;
-  }
+  await closePdf();
   await loadReaderSources(slug);
   fillSources();
 }
