@@ -11,6 +11,7 @@
   <link rel="stylesheet" href="/static/style.css">
   <script defer src="/static/app.js"></script>
   <script defer src="/static/reader.js"></script>
+  <script defer src="/static/subjects.js"></script>
 </head>
 <body>
   <header>
@@ -18,6 +19,7 @@
     <label>Subject
       <select id="subject"></select>
     </label>
+    <button id="subject-settings-button" class="icon-button" title="Settings for this subject">⚙</button>
     <nav>
       <button class="tab active" data-view="chat">Chat</button>
       <button class="tab" data-view="history">History</button>
@@ -26,6 +28,12 @@
   </header>
   <div id="workspace">
   <main id="chat" class="view chat-view">
+    <section id="no-subjects" class="start-panel" hidden>
+      <h2>Create your first subject</h2>
+      <p>A subject is anything you want to learn: a course, a book, a language. It keeps its
+        own books, sessions and progress.</p>
+      <div class="actions"><button id="first-subject" class="primary">New subject…</button></div>
+    </section>
     <section id="chat-start" class="start-panel">
       <h2>Start a session</h2>
       <p id="reminder" class="reminder">What you share in a session, including any notes the
@@ -99,6 +107,58 @@
       <button id="switch-pause" class="primary"></button>
       <button id="switch-back">Go back and end it properly</button>
       <button id="switch-cancel">Cancel</button>
+    </div>
+  </dialog>
+  <dialog id="new-subject">
+    <h2>New subject</h2>
+    <p class="hint">Anything you want to learn: a course, a book, a language. It keeps its own
+      books, sessions and progress.</p>
+    <label class="field">Name
+      <input type="text" id="new-subject-name" maxlength="60" placeholder="e.g. AI Engineering">
+    </label>
+    <p id="new-subject-status" class="hint" hidden></p>
+    <div class="dialog-actions">
+      <button id="new-subject-go" class="primary">Create</button>
+      <button id="new-subject-close">Cancel</button>
+    </div>
+  </dialog>
+  <dialog id="subject-settings">
+    <h2>Subject settings</h2>
+    <label class="field">Name
+      <input type="text" id="settings-name" maxlength="60">
+    </label>
+    <label class="field">Extra instructions for the tutor
+      <textarea id="settings-persona" rows="4" placeholder="e.g. Use SI units. Ask me to explain my reasoning."></textarea>
+    </label>
+    <div class="field">
+      <span>Note folders the tutor may read</span>
+      <ul id="settings-folders" class="chips"></ul>
+      <div class="inline">
+        <input type="text" id="settings-folder" list="vault-folders" placeholder="A folder in your vault">
+        <button id="settings-folder-add">Add</button>
+      </div>
+      <datalist id="vault-folders"></datalist>
+      <span class="hint">Read only: the tutor never changes your notes. Notes with
+        <code>private: true</code> are skipped.</span>
+    </div>
+    <p id="settings-status" class="hint" hidden></p>
+    <div class="dialog-actions">
+      <button id="settings-save" class="primary">Save</button>
+      <button id="settings-close">Close</button>
+    </div>
+    <hr>
+    <div class="field">
+      <button id="settings-archive">Archive this subject</button>
+      <span class="hint">Hides it from the menu. Everything is kept, and you can recover it
+        any time from Archived.</span>
+    </div>
+  </dialog>
+  <dialog id="archived-subjects">
+    <h2>Archived subjects</h2>
+    <ul id="archived-list" class="archived-list"></ul>
+    <p id="archived-status" class="hint" hidden></p>
+    <div class="dialog-actions">
+      <button id="archived-close">Close</button>
     </div>
   </dialog>
   <dialog id="add-source">

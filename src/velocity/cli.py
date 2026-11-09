@@ -479,7 +479,14 @@ def main(argv: list[str] | None = None) -> int:
         elif args.command == "notes":
             return _notes(args)
         elif args.command == "subjects":
-            print("\n".join(list_subjects(load_config())) or "No subjects yet.")
+            config = load_config()
+            subjects = [load_subject(config, slug) for slug in list_subjects(config)]
+            print(
+                "\n".join(
+                    s.slug + (" (archived)" if s.archived else "") for s in subjects
+                )
+                or "No subjects yet."
+            )
         elif args.command == "mcp":
             from velocity.mcp_server import serve
 

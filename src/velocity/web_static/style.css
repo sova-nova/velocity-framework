@@ -200,6 +200,52 @@ pre { background: var(--panel); padding: 0.75rem; border-radius: 6px; overflow-x
 .prepare-choices { display: flex; flex-direction: column; gap: 0.5rem; margin: 1rem 0; }
 .prepare-choices label { display: flex; gap: 0.5rem; align-items: baseline; }
 #prepare-dialog { max-width: 36rem; }
+/* Subjects (M10) */
+.icon-button {
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 0.15rem 0.45rem;
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 1.05rem;
+}
+.icon-button:hover { background: var(--panel); color: var(--text); }
+#new-subject, #subject-settings, #archived-subjects { width: min(34rem, 92vw); }
+dialog .field { display: flex; flex-direction: column; gap: 0.3rem; margin: 0.75rem 0; }
+dialog input[type="text"], dialog textarea {
+  font: inherit;
+  color: var(--text);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.35rem 0.5rem;
+}
+dialog textarea { resize: vertical; }
+dialog .inline { display: flex; gap: 0.4rem; }
+dialog .inline input { flex: 1; }
+dialog hr { border: none; border-top: 1px solid var(--border); margin: 1rem 0 0.25rem; }
+.chips { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 0.35rem; }
+.chips li {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.1rem 0.25rem 0.1rem 0.6rem;
+  font-size: 0.9rem;
+}
+.chips li button { border: none; background: none; cursor: pointer; color: var(--muted); padding: 0 0.3rem; }
+.chips li.empty { border-style: dashed; color: var(--muted); padding-right: 0.6rem; }
+.archived-list { list-style: none; margin: 0.5rem 0; padding: 0; }
+.archived-list > li { border: 1px solid var(--border); border-radius: 8px; padding: 0.6rem 0.75rem; margin-bottom: 0.5rem; }
+.archived-list .row { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+.archived-list .row strong { flex: 1; }
+.archived-list .confirm { margin-top: 0.6rem; display: flex; flex-direction: column; gap: 0.4rem; }
+button.danger { background: #b3261e; border-color: #b3261e; color: #fff; }
+button.danger:disabled { opacity: 0.45; }
+.status-error { color: #b3261e; }
 #add-source { max-width: 32rem; }
 #add-source .field { display: flex; flex-direction: column; gap: 0.25rem; margin: 0.75rem 0; }
 #add-source input[type="text"] {

@@ -20,6 +20,10 @@ const pdf = { lib: null, viewer: null, eventBus: null, links: null, task: null, 
 // -- sources ---------------------------------------------------------------------------
 
 async function loadReaderSources(slug) {
+  if (!slug) {
+    readerSources = [];
+    return readerSources;
+  }
   try {
     readerSources = await getJSON(`/api/subjects/${slug}/sources`);
   } catch {

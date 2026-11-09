@@ -65,6 +65,10 @@ async function loadSessions(slug) {
   const list = $("#sessions");
   list.innerHTML = "";
   $("#log").innerHTML = '<p class="hint">Pick a session to read its log.</p>';
+  if (!slug) {
+    list.innerHTML = '<li class="hint">No subject yet.</li>';
+    return;
+  }
   const sessions = await getJSON(`/api/subjects/${slug}/sessions`);
   if (!sessions.length) {
     list.innerHTML = '<li class="hint">No sessions yet.</li>';
@@ -146,7 +150,8 @@ function showView(name) {
 
 // -- chat ------------------------------------------------------------------------------
 
-const subject = () => $("#subject").value;
+// The subject in use (subjects.js); the menu also holds "New subject…" and "Archived".
+const subject = () => currentSlug;
 const ENGINE_KEY = "velocity.engine";
 // The last model per engine ("velocity.model" was Claude Code's before there were two).
 const modelKey = (engine) => (engine === "claude-code" ? "velocity.model" : `velocity.model.${engine}`);
@@ -232,6 +237,7 @@ async function postJSON(url, body) {
 }
 
 async function loadChat() {
+  if (!subject()) return; // no subject yet: the page offers to create one
   const status = await getJSON(`/api/subjects/${subject()}/chat`);
   showChat(status);
   if (status.open) {
@@ -580,32 +586,16 @@ function setUpChat() {
 // -- start -----------------------------------------------------------------------------
 
 async function start() {
-  const subjects = await getJSON("/api/subjects");
-  const select = $("#subject");
-  if (!subjects.length) {
-    $("#log").innerHTML =
-      '<p class="hint">No subjects yet. Create one with <code>velocity new "Calculus"</code>.</p>';
-    return;
-  }
-  for (const s of subjects) {
-    const option = document.createElement("option");
-    option.value = s.slug;
-    option.textContent = s.name;
-    select.append(option);
-  }
   const wanted = new URLSearchParams(location.search).get("subject");
-  if (wanted && subjects.some((s) => s.slug === wanted)) select.value = wanted;
+  const slug = await loadSubjects(wanted);
   engines = await getJSON("/api/engines");
   // Before the chat and History draw anything, so citations in them become links.
-  await loadReaderSources(select.value);
+  await loadReaderSources(slug);
   setUpChat();
   setUpReader();
-  select.addEventListener("change", async () => {
-    await resetReader(select.value);
-    loadSessions(select.value);
-    loadChat();
-  });
-  await Promise.all([loadSessions(select.value), loadChat()]);
+  setUpSubjects();
+  await Promise.all([loadSessions(slug), loadChat()]);
+  if (!slug) openNewSubject();
 }
 
 window.addEventListener("DOMContentLoaded", () => {
