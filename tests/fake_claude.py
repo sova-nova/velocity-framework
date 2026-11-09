@@ -9,6 +9,10 @@ Messages it understands:
 - "/end-session": records a recap (as the end_session tool would), so Stop wraps up.
 - "use a tool": the reply includes a tool call.
 - "crash": exits without a result.
+- "write at length": streams "Once upon", then waits for the next stdin line, which
+  must be an interrupt control request; it answers as Claude Code did in the
+  2026-11-09 experiment (control_response, the partial message, an error result, and
+  no Stop hook).
 Anything else gets the reply "You said: <message>", streamed in two pieces.
 """
 
@@ -36,8 +40,37 @@ def hook(name: str, payload: dict) -> None:
     getattr(hooks, name)(config, subject, {"session_id": session_id, **payload})
 
 
+def text_delta(piece: str) -> dict:
+    return {
+        "type": "stream_event",
+        "event": {
+            "type": "content_block_delta",
+            "delta": {"type": "text_delta", "text": piece},
+        },
+    }
+
+
+def write_until_interrupted() -> None:
+    emit(text_delta("Once upon"))
+    request = json.loads(sys.stdin.readline())
+    assert request["request"]["subtype"] == "interrupt", request
+    emit(
+        {
+            "type": "control_response",
+            "response": {"subtype": "success", "request_id": request["request_id"]},
+        }
+    )
+    emit(
+        {
+            "type": "assistant",
+            "message": {"content": [{"type": "text", "text": "Once upon"}]},
+        }
+    )
+    emit({"type": "result", "subtype": "error_during_execution", "is_error": True})
+
+
 started = False
-for line in sys.stdin:
+while line := sys.stdin.readline():
     text = json.loads(line)["message"]["content"]
     if not started:
         hook("session_start", {"source": "resume" if resume else "startup"})
@@ -46,6 +79,9 @@ for line in sys.stdin:
         sys.exit(1)
     hook("user_prompt", {"prompt": text})
     emit({"type": "system", "subtype": "init"})
+    if text == "write at length":
+        write_until_interrupted()
+        continue
     if text == "/end-session":
         TutorTools(config, subject).end_session("Covered: testing.")
         reply = "Session wrapped up."
@@ -67,15 +103,7 @@ for line in sys.stdin:
             }
         )
     for piece in (reply[:5], reply[5:]):
-        emit(
-            {
-                "type": "stream_event",
-                "event": {
-                    "type": "content_block_delta",
-                    "delta": {"type": "text_delta", "text": piece},
-                },
-            }
-        )
+        emit(text_delta(piece))
     emit(
         {"type": "assistant", "message": {"content": [{"type": "text", "text": reply}]}}
     )

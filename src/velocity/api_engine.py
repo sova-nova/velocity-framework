@@ -83,6 +83,7 @@ class ApiChat:
         self._closing = asyncio.Event()
         self._connection: asyncio.Task | None = None
         self._turn = asyncio.Lock()
+        self._running_turn: asyncio.Task | None = None
 
     @property
     def running(self) -> bool:
@@ -119,6 +120,7 @@ class ApiChat:
             effort=self.config.api_effort or DEFAULT_EFFORT,
             continues=self.continues,
             reopen=self.reopen,
+            reminder_shown=True,  # the page shows the third-party reminder
         )
         self.agent.start()
         self.session_id = active_session_id(self.subject.slug)
@@ -149,6 +151,7 @@ class ApiChat:
             events: asyncio.Queue[ChatEvent | None] = asyncio.Queue()
             self.agent.on_event = events.put_nowait
             turn = asyncio.create_task(self.agent.turn(text))
+            self._running_turn = turn
             turn.add_done_callback(lambda _: events.put_nowait(None))
             try:
                 while (event := await events.get()) is not None:
@@ -160,10 +163,22 @@ class ApiChat:
                     with contextlib.suppress(asyncio.CancelledError):
                         await turn
                 self.agent.on_event = None
+                self._running_turn = None
+            if turn.cancelled():
+                return
             if turn.exception() is not None:
                 yield ChatEvent("error", text=_api_error(turn.exception()))
                 return
-            yield ChatEvent("done", cost=self._cost())
+            stopped = self.agent.stop_requested
+            yield ChatEvent("stopped" if stopped else "done", cost=self._cost())
+
+    async def interrupt(self) -> None:
+        """Stop the reply being streamed. The agent keeps what it said so far."""
+        turn = self._running_turn
+        if turn is None or turn.done() or self.agent.stop_requested:
+            return
+        self.agent.stop_reply()
+        turn.cancel()
 
     def _local_reply(self, text: str) -> str | None:
         """Commands answered here instead of by the tutor (the page has no /model)."""

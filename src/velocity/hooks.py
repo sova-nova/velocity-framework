@@ -70,6 +70,16 @@ def _reopen(subject: Subject, payload: dict) -> Session | None:
     return session
 
 
+# Set by the web UI, which shows the third-party reminder itself where sessions start.
+REMINDER_SHOWN_ENV = "VELOCITY_REMINDER_SHOWN"
+
+
+def _reminder_shown(payload: dict) -> bool:
+    return bool(payload.get("reminder_shown")) or (
+        os.environ.get(REMINDER_SHOWN_ENV) == "1"
+    )
+
+
 def session_start(config: Config, subject: Subject, payload: dict) -> dict:
     claude_id = payload.get("session_id", "")
     mapping = _claude_map(subject) / claude_id if claude_id else None
@@ -162,7 +172,12 @@ def session_start(config: Config, subject: Subject, payload: dict) -> dict:
         context.append(load_state(subject.dir).summary(date.today()))
     except StateError as e:
         context.append(f"Learner state could not be read: {e}")
-    if not resumed:
+    if not resumed and _reminder_shown(payload):
+        context.append(
+            "The learner has already seen the third-party reminder on the page: don't "
+            "repeat it. Open with the rest of the start of session from your instructions."
+        )
+    elif not resumed:
         context.append("Open with the third-party reminder from your instructions.")
     return {
         "hookSpecificOutput": {
@@ -218,8 +233,16 @@ def user_prompt(config: Config, subject: Subject, payload: dict) -> dict:
     if not session or session.ended or not payload.get("prompt", "").strip():
         return {}
     changes = _log_changes(session)
-    session.append("learner", payload["prompt"])
-    session.render()
+    dialogue = [e for e in session.events() if e.role in ("learner", "tutor")]
+    retried = (
+        dialogue
+        and dialogue[-1].role == "learner"
+        and dialogue[-1].text == payload["prompt"]
+    )
+    # A message sent again after a failed reply (Retry) is logged once.
+    if not retried:
+        session.append("learner", payload["prompt"])
+        session.render()
     if not changes:
         return {}
     return {

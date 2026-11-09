@@ -164,6 +164,13 @@ def build_app(config: Config, chats: ChatManager | None = None) -> Starlette:
 
         return StreamingResponse(events(), media_type="text/event-stream")
 
+    async def chat_stop(request: Request) -> Response:
+        subject = subject_or_404(request.path_params["slug"])
+        if subject is None:
+            return JSONResponse({"error": "unknown subject"}, 404)
+        await chats.stop_reply(subject)
+        return JSONResponse({"ok": True})
+
     async def chat_pause(request: Request) -> Response:
         subject = subject_or_404(request.path_params["slug"])
         if subject is None:
@@ -195,6 +202,7 @@ def build_app(config: Config, chats: ChatManager | None = None) -> Starlette:
         Route("/api/subjects/{slug}/chat/start", chat_start, methods=["POST"]),
         Route("/api/subjects/{slug}/chat/message", chat_message, methods=["POST"]),
         Route("/api/subjects/{slug}/chat/pause", chat_pause, methods=["POST"]),
+        Route("/api/subjects/{slug}/chat/stop", chat_stop, methods=["POST"]),
         Mount("/static", StaticFiles(directory=STATIC), name="static"),
     ]
     middleware = [

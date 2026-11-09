@@ -145,7 +145,8 @@ pre { background: var(--panel); padding: 0.75rem; border-radius: 6px; overflow-x
 .start-panel label { display: block; margin: 1rem 0; }
 .actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
 
-button.primary, .chat-bar button, .actions button, .skills button, .session-action, dialog button {
+button.primary, .chat-bar button, .actions button, .skills button, .session-action, dialog button,
+#stop, .retry {
   padding: 0.35rem 0.8rem;
   border-radius: 6px;
   border: 1px solid var(--border);
@@ -181,6 +182,17 @@ button:disabled { opacity: 0.5; cursor: default; }
 }
 
 .tool { margin: 0.25rem 0; font-size: 0.85rem; color: var(--muted); }
+.thinking { margin: 0.25rem 0; font-size: 0.85rem; color: var(--muted); font-style: italic; }
+.thinking:not([hidden]) { animation: pulse 1.5s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: 0.4; } }
+@media (prefers-reduced-motion: reduce) { .thinking:not([hidden]) { animation: none; } }
+.retry { margin: 0.25rem 0 0.75rem; }
+.reminder {
+  font-size: 0.9rem;
+  color: var(--muted);
+  border-left: 3px solid var(--border);
+  padding-left: 0.75rem;
+}
 .reply-cost { margin: -0.5rem 0 0.75rem; font-size: 0.75rem; color: var(--muted); }
 .cost { font-size: 0.85rem; color: var(--muted); white-space: nowrap; }
 .pickers { display: flex; gap: 1rem; flex-wrap: wrap; }

@@ -280,7 +280,11 @@ async function startChat(options = {}) {
     for (const m of status.messages) addMessage(m.role, m.text, m.title);
     showChat(status);
     if (options.resume) addNote(`Resumed session ${options.resume}. Say hello to carry on.`);
-    else if (options.continues) addNote(`Continuing from session ${options.continues}.`);
+    else if (options.continues) {
+      // Continue starts a new session without passing the start panel and its reminder.
+      addNote(`Continuing from session ${options.continues}.`);
+      addNote($("#reminder").textContent.replace(/\s+/g, " "), "reminder");
+    }
     $("#input").focus();
   } catch (error) {
     const status = await getJSON(`/api/subjects/${subject()}/chat`).catch(() => ({}));
@@ -316,10 +320,19 @@ function scrollToEnd() {
   messages.scrollTop = messages.scrollHeight;
 }
 
+// While a reply streams, nothing else can be sent; Send turns into Stop.
 function setBusy(busy) {
   for (const el of document.querySelectorAll("#send, #input, #skills button, #end-session, #pause")) {
     el.disabled = busy;
   }
+  $("#send").hidden = busy;
+  $("#stop").hidden = !busy;
+  $("#stop").disabled = false;
+}
+
+async function stopReply() {
+  $("#stop").disabled = true;
+  await postJSON(`/api/subjects/${subject()}/chat/stop`).catch(() => {});
 }
 
 function describeTool(name, input = {}) {
@@ -336,12 +349,22 @@ function describeTool(name, input = {}) {
   return `· ${(labels[name] || (() => name.replaceAll("_", " ")))()}`;
 }
 
-async function send(text) {
+// Send a message and stream the reply. `retry` resends a message whose reply failed
+// (it is already on the page, and the server doesn't log it twice).
+async function send(text, retry = false) {
   if (!text.trim()) return;
-  addMessage("learner", text);
+  for (const old of document.querySelectorAll(".retry")) old.remove();
+  if (!retry) addMessage("learner", text);
   const reply = addMessage("tutor", "");
+  // Shown until the tutor's first words, and again while it uses a tool.
+  const thinking = Object.assign(document.createElement("p"), {
+    className: "thinking",
+    textContent: "thinking…",
+  });
+  reply.after(thinking);
   let replyText = "";
   let pending = false;
+  let failed = false;
   const redraw = () => {
     pending = false;
     reply.replaceChildren(renderMarkdown(replyText));
@@ -375,29 +398,40 @@ async function send(text) {
       }
     }
   } catch (error) {
+    failed = true;
     addNote(`Could not reach the tutor: ${error.message}`, "error");
   } finally {
     if (pending) redraw();
+    thinking.remove();
     if (!replyText) reply.remove();
     setBusy(false);
+    if (failed && chatStatus.open) offerRetry(text);
     $("#input").focus();
   }
 
   function handleEvent(event) {
     if (event.type === "text") {
       replyText += event.text;
+      thinking.hidden = true;
       if (!pending) {
         pending = true;
         requestAnimationFrame(redraw);
       }
     } else if (event.type === "tool") {
+      thinking.hidden = false;
       reply.before(Object.assign(document.createElement("p"), {
         className: "tool",
         textContent: describeTool(event.name, event.input || {}),
       }));
     } else if (event.type === "error") {
+      failed = true;
       addNote(event.text, "error");
-    } else if (event.type === "done" && event.cost) {
+    } else if (event.type === "stopped") {
+      // Kept as it was when stopped, marked the same way as in the log.
+      replyText = (replyText.trim() ? `${replyText.trim()}\n\n` : "") + "*(stopped)*";
+      redraw();
+    }
+    if ((event.type === "done" || event.type === "stopped") && event.cost) {
       // The own loop: what this reply cost, and the session's total so far.
       if (event.cost.reply) {
         reply.after(Object.assign(document.createElement("p"), {
@@ -411,6 +445,20 @@ async function send(text) {
       chatEnded(event.text);
     }
   }
+}
+
+// After a failed reply: send the same message again with one click.
+function offerRetry(text) {
+  const button = Object.assign(document.createElement("button"), {
+    className: "retry",
+    textContent: "Retry",
+  });
+  button.addEventListener("click", () => {
+    button.remove();
+    send(text, true);
+  });
+  $("#messages").append(button);
+  scrollToEnd();
 }
 
 function chatEnded(how) {
@@ -491,6 +539,7 @@ function setUpChat() {
   $("#close-other").addEventListener("click", () => startChat({ close_other: true }));
   $("#end-session").addEventListener("click", () => send("/end-session"));
   $("#pause").addEventListener("click", pauseChat);
+  $("#stop").addEventListener("click", stopReply);
   $("#help-button").addEventListener("click", () => $("#help").showModal());
   for (const button of document.querySelectorAll("#skills button")) {
     button.addEventListener("click", () => send(button.dataset.command));
