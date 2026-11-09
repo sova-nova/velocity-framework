@@ -147,7 +147,7 @@ Everything runs locally, but what you say, the source sections the tutor reads, 
                    velocity MCP server (stdio)
                                  |
                plain typed Python functions
-     sources: list_sources, get_outline, search_source, read_section, get_exercises
+     sources: list_sources, get_outline, search_source, view_page, read_section, get_exercises
      log:     append_log, list_sessions, read_session, check_log, end_session
      state:   read_state, record_question, set_topic_status, open/close_thread
      notes:   list_notes, read_note (read-only)

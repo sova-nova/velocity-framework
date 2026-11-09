@@ -347,6 +347,12 @@ function describeTool(name, input = {}) {
   const labels = {
     record_question: () => `recorded your answer (${input.outcome || "?"})`,
     read_section: () => `read ${input.source} §${input.section_id}`,
+    view_page: () => {
+      const count = Number(input.count) || 1;
+      const pages = count > 1 ? `pp. ${input.page}–${Number(input.page) + count - 1}` : `p. ${input.page}`;
+      return `looked at ${input.source} PDF ${pages}`;
+    },
+    search_source: () => `searched ${input.source || "the sources"} for "${input.query}"`,
     get_exercises: () => `looked up exercises in ${input.source} §${input.section_id}`,
     get_outline: () => `read the outline of ${input.source}`,
     set_session_title: () => `titled the session "${input.title}"`,

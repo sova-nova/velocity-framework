@@ -6,6 +6,7 @@ Return values are plain text meant for the model to read.
 import os
 import re
 from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import date
 from typing import Literal
 
@@ -15,7 +16,7 @@ from velocity.notes import list_notes as _list_notes
 from velocity.notes import read_note as _read_note
 from velocity.ocr import PageOcr
 from velocity.pdf_source import PdfSource
-from velocity.search import format_hits, query_terms, search
+from velocity.search import format_hits, query_terms, search, section_at
 from velocity.session import (
     RECAP_TITLE,
     Session,
@@ -34,6 +35,16 @@ from velocity.state import (
 from velocity.text_source import TEXT_SUFFIXES, TextSource
 
 BlockKind = Literal["example", "summary", "note", "tip", "question", "warning", "quote"]
+
+
+MAX_PAGES_PER_VIEW = 3  # view_page: an example can run onto the next page or two
+
+
+@dataclass(frozen=True)
+class PngImage:
+    """An image a tool returns; the MCP layer sends it as image content."""
+
+    data: bytes
 
 
 class ToolError(Exception):
@@ -168,6 +179,32 @@ class TutorTools:
             )
             results.append(format_hits(name, query, search(chunks, query), note))
         return "\n\n".join(results)
+
+    def view_page(self, source: str, page: int, count: int = 1) -> list:
+        """See PDF pages as printed: figures, diagrams and formulas exactly as in the
+        book. Fast (no OCR). Use it for a page the learner asks about, for figures, or to
+        check math in text you read. `page` is a PDF page number; `count` shows up to 3
+        consecutive pages (each image costs about 2,000 tokens)."""
+        pdf = self._source(source)
+        if not isinstance(pdf, PdfSource):
+            raise ToolError(
+                f"{source} has no pages (it isn't a PDF). Use read_section instead."
+            )
+        total = pdf.page_count
+        if not 1 <= page <= total:
+            raise ToolError(
+                f"{source} has PDF pages 1-{total}; there is no page {page}."
+            )
+        count = max(1, min(count, MAX_PAGES_PER_VIEW, total - page + 1))
+        pages = range(page, page + count)
+        section = section_at(pdf.outline(), page)
+        where = f" ({source} §{section.id}: {section.title})" if section else ""
+        span = f"p. {page}" if count == 1 else f"pp. {page}-{page + count - 1}"
+        header = (
+            f"{source} PDF {span}{where}, as printed. Cite it as `PDF p. <n>`; the "
+            "learner can click that to open the page."
+        )
+        return [header] + [PngImage(pdf.render_page(p)) for p in pages]
 
     def get_exercises(self, source: str, section_id: str) -> str:
         """The exercise set at the end of a section (everything after its EXERCISES heading)."""
