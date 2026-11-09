@@ -24,8 +24,12 @@ def _slug(text: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")
 
 
+# "Ch 2: ..." (Stewart), "Chapter 1. ..." (O'Reilly), "Chapter 3: ...", "CHAPTER 4 ...".
+_CHAPTER = re.compile(r"(?:Ch|Chapter|CHAPTER)\s+(\d+)\b[.:]?")
+
+
 def _section_id(title: str, chapter: str | None) -> str:
-    if m := re.match(r"Ch (\d+):", title):
+    if m := _CHAPTER.match(title):
         return f"ch{m[1]}"
     if m := re.match(r"(\d+\.\d+):", title):
         return m[1]
@@ -45,11 +49,17 @@ def build_outline(toc: list[TocEntry], page_count: int) -> list[Section]:
     chapter: str | None = None
     for i, (level, title, start) in enumerate(entries):
         if level == 1:
-            m = re.match(r"Ch (\d+):", title)
+            m = _CHAPTER.match(title)
             chapter = m[1] if m else None
         sid = _section_id(title, chapter if level > 1 else None)
-        if any(s.id == sid for s in sections):
-            raise ValueError(f"duplicate section id {sid!r} for title {title!r}")
+        # A title that repeats (a "Summary" outside any numbered chapter, say) gets -2,
+        # -3, as in text sources, instead of making the whole book unreadable.
+        taken = {s.id for s in sections}
+        if sid in taken:
+            n = 2
+            while f"{sid}-{n}" in taken:
+                n += 1
+            sid = f"{sid}-{n}"
 
         end = page_count
         for next_level, _, next_start in entries[i + 1 :]:
