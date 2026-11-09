@@ -246,6 +246,23 @@ dialog hr { border: none; border-top: 1px solid var(--border); margin: 1rem 0 0.
 button.danger { background: #b3261e; border-color: #b3261e; color: #fff; }
 button.danger:disabled { opacity: 0.45; }
 .status-error { color: #b3261e; }
+/* The sources library (M10) */
+.or { text-align: center; margin: 0.6rem 0 0; }
+.source-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.35rem; }
+.source-list > li { border: 1px solid var(--border); border-radius: 8px; padding: 0.4rem 0.6rem; }
+.source-list .row { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+.source-list .row .what { flex: 1; min-width: 10rem; }
+.source-list .row .what small { display: block; color: var(--muted); }
+.source-list .row button, .source-list .confirm button {
+  padding: 0.15rem 0.55rem;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  cursor: pointer;
+}
+.source-list .confirm { margin-top: 0.4rem; display: flex; gap: 0.4rem; align-items: center; flex-wrap: wrap; }
+.source-list .confirm input { flex: 1; }
+.source-list li.empty { border-style: dashed; color: var(--muted); }
 #add-source { max-width: 32rem; }
 #add-source .field { display: flex; flex-direction: column; gap: 0.25rem; margin: 0.75rem 0; }
 #add-source input[type="text"] {

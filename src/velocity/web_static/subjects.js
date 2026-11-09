@@ -131,6 +131,7 @@ async function openSettings() {
   $("#settings-persona").value = settings.persona;
   settingsFolders = [...settings.note_folders];
   drawFolders();
+  drawSources(settings.sources);
   const options = $("#vault-folders");
   options.innerHTML = "";
   for (const folder of folders) options.append(new Option(folder));
@@ -160,6 +161,91 @@ async function saveSettings() {
   } catch (error) {
     dialogStatus("#settings-status", error.message, true);
   }
+}
+
+// The subject's books and notes, each with Rename and Remove (changes apply at once).
+function drawSources(sources) {
+  const list = $("#settings-sources");
+  list.innerHTML = "";
+  if (!sources.length) {
+    list.append(Object.assign(document.createElement("li"), { className: "empty", textContent: "none yet" }));
+  }
+  for (const s of sources) {
+    const item = document.createElement("li");
+    const row = Object.assign(document.createElement("div"), { className: "row" });
+    const what = Object.assign(document.createElement("span"), { className: "what" });
+    what.append(Object.assign(document.createElement("strong"), { textContent: s.name }));
+    what.append(
+      Object.assign(document.createElement("small"), {
+        textContent: s.missing ? `${s.filename} (file not found)` : s.filename,
+      }),
+    );
+    const rename = Object.assign(document.createElement("button"), { textContent: "Rename" });
+    rename.addEventListener("click", () => askRename(item, s));
+    const remove = Object.assign(document.createElement("button"), { textContent: "Remove" });
+    remove.addEventListener("click", () => askRemove(item, s));
+    row.append(what, rename, remove);
+    item.append(row);
+    list.append(item);
+  }
+}
+
+function inlineConfirm(item, parts) {
+  item.querySelector(".confirm")?.remove();
+  const box = Object.assign(document.createElement("div"), { className: "confirm" });
+  box.append(...parts);
+  item.append(box);
+  return box;
+}
+
+async function refreshSources(oldName, newName) {
+  const settings = await getJSON(`/api/subjects/${currentSlug}/settings`);
+  drawSources(settings.sources);
+  await sourcesChanged(oldName, newName);
+}
+
+function askRename(item, s) {
+  const input = Object.assign(document.createElement("input"), { type: "text", value: s.name });
+  const save = Object.assign(document.createElement("button"), { textContent: "Save" });
+  const note = Object.assign(document.createElement("small"), {
+    className: "hint",
+    textContent: "The tutor cites it by this name. Earlier logs keep the old one.",
+  });
+  save.addEventListener("click", async () => {
+    try {
+      const renamed = await postJSON(
+        `/api/subjects/${currentSlug}/sources/${encodeURIComponent(s.name)}/rename`,
+        { name: input.value },
+      );
+      dialogStatus("#settings-status", `Renamed to ${renamed.name}.`);
+      await refreshSources(s.name, renamed.name);
+    } catch (error) {
+      dialogStatus("#settings-status", error.message, true);
+    }
+  });
+  inlineConfirm(item, [input, save, note]);
+  input.focus();
+  input.select();
+}
+
+function askRemove(item, s) {
+  const subjectName = allSubjects.find((x) => x.slug === currentSlug)?.name ?? "this subject";
+  const text = Object.assign(document.createElement("span"), {
+    textContent: `Remove ${s.name} from ${subjectName}? The file stays in your library.`,
+  });
+  const go = Object.assign(document.createElement("button"), { textContent: "Remove" });
+  const keep = Object.assign(document.createElement("button"), { textContent: "Keep" });
+  keep.addEventListener("click", () => item.querySelector(".confirm")?.remove());
+  go.addEventListener("click", async () => {
+    try {
+      await postJSON(`/api/subjects/${currentSlug}/sources/${encodeURIComponent(s.name)}/remove`);
+      dialogStatus("#settings-status", `Removed ${s.name}. It's still in your library.`);
+      await refreshSources(s.name, null);
+    } catch (error) {
+      dialogStatus("#settings-status", error.message, true);
+    }
+  });
+  inlineConfirm(item, [text, go, keep]);
 }
 
 async function archiveCurrent() {

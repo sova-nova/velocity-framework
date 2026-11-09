@@ -223,7 +223,7 @@ def upload(client, name, filename, body: bytes, origin=True):
 def test_upload_adds_a_copy_as_a_source(client, config, tmp_path):
     import pymupdf
 
-    from velocity.uploads import uploads_dir
+    from velocity.uploads import library_dir
 
     added = upload(
         client, "Notes", "my notes.md", b"# Limits\n\nNear.\n\n# Continuity\n"
@@ -235,7 +235,7 @@ def test_upload_adds_a_copy_as_a_source(client, config, tmp_path):
         "sections": 2,
         "warning": None,
     }
-    copy = uploads_dir("calculus") / "my notes.md"
+    copy = library_dir() / "my notes.md"
     assert copy.read_bytes().startswith(b"# Limits")
     assert load_subject(config, "calculus").sources[-1].path == copy
     names = [s["name"] for s in client.get("/api/subjects/calculus/sources").json()]
@@ -249,12 +249,12 @@ def test_upload_adds_a_copy_as_a_source(client, config, tmp_path):
 
     # A second file with the same name is kept next to the first.
     upload(client, "Notes 2", "my notes.md", b"# Other\n")
-    assert (uploads_dir("calculus") / "my notes-2.md").exists()
+    assert (library_dir() / "my notes-2.md").exists()
 
 
 def test_upload_refuses_bad_files_and_leaves_nothing_behind(client, monkeypatch):
     import velocity.web
-    from velocity.uploads import uploads_dir
+    from velocity.uploads import library_dir
 
     assert upload(client, "X", "book.docx", b"PK...").status_code == 400
     assert "isn't a PDF" in upload(client, "X", "book.pdf", b"hello").json()["error"]
@@ -264,19 +264,15 @@ def test_upload_refuses_bad_files_and_leaves_nothing_behind(client, monkeypatch)
     assert upload(client, "X", "b.md", b"# A\n", origin=False).status_code == 403
     monkeypatch.setattr(velocity.web, "MAX_UPLOAD_BYTES", 10)
     assert upload(client, "X", "big.md", b"# " + b"a" * 100).status_code == 413
-    leftovers = (
-        list(uploads_dir("calculus").glob("*"))
-        if uploads_dir("calculus").exists()
-        else []
-    )
+    leftovers = list(library_dir().glob("*")) if library_dir().exists() else []
     assert leftovers == []
 
 
 def test_upload_names_and_paths(client):
-    from velocity.uploads import uploads_dir
+    from velocity.uploads import library_dir
 
     assert upload(client, "Notes", "../../escape.md", b"# A\n").status_code == 200
-    assert (uploads_dir("calculus") / "escape.md").exists()  # the base name only
+    assert (library_dir() / "escape.md").exists()  # the base name only
     duplicate = upload(client, "Notes", "other.md", b"# B\n")
     assert (
         duplicate.status_code == 409

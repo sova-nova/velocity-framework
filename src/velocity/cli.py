@@ -14,6 +14,8 @@ from velocity.config import (
     list_subjects,
     load_config,
     load_subject,
+    remove_source,
+    rename_source,
 )
 
 
@@ -134,6 +136,17 @@ def _source(args: argparse.Namespace) -> int:
         return _recheck(config, load_subject(config, args.subject), args.all)
     if args.source_command == "prepare":
         return _prepare(config, load_subject(config, args.subject), args)
+    if args.source_command == "remove":
+        remove_source(config, args.subject, args.name)
+        print(f"Removed {args.name!r} from {args.subject}. The file itself is kept.")
+        return 0
+    if args.source_command == "rename":
+        rename_source(config, args.subject, args.name, args.new_name)
+        print(
+            f"Renamed {args.name!r} to {args.new_name!r} in {args.subject}. Earlier "
+            "session logs keep citing the old name."
+        )
+        return 0
 
     from velocity.outline import toc_size
 
@@ -410,6 +423,17 @@ def main(argv: list[str] | None = None) -> int:
     source_recheck.add_argument(
         "--all", action="store_true", help="all cached pages, not only unchecked ones"
     )
+    source_remove = source_commands.add_parser(
+        "remove", help="take a source out of a subject (the file itself is kept)"
+    )
+    source_remove.add_argument("subject")
+    source_remove.add_argument("name", help="the source's name, as in source list")
+    source_rename = source_commands.add_parser(
+        "rename", help="change the name a subject cites a source by"
+    )
+    source_rename.add_argument("subject")
+    source_rename.add_argument("name")
+    source_rename.add_argument("new_name")
     source_prepare = source_commands.add_parser(
         "prepare",
         help="OCR a chapter or the whole book ahead of time, so reading it is instant "

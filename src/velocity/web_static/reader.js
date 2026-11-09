@@ -564,7 +564,9 @@ function addStatus(text, isError = false) {
   line.classList.toggle("error", isError);
 }
 
-function openAddDialog() {
+let libraryEntries = []; // books this subject could add from the library
+
+async function openAddDialog() {
   $("#add-file").value = "";
   $("#add-name").value = "";
   $("#add-cite").textContent = "Name";
@@ -572,7 +574,35 @@ function openAddDialog() {
   $("#add-prepare").hidden = true;
   addedSource = null;
   addStatus("");
+  await fillLibraryPicker();
   $("#add-source").showModal();
+}
+
+// The library's books that this subject doesn't use yet, with where each is used.
+async function fillLibraryPicker() {
+  const all = await getJSON("/api/library").catch(() => []);
+  libraryEntries = all.filter((e) => !e.uses.some((u) => u.subject === subject()));
+  $("#add-library").hidden = !libraryEntries.length;
+  const pick = $("#add-library-pick");
+  pick.innerHTML = "";
+  pick.append(new Option("Choose a book…", ""));
+  for (const e of libraryEntries) pick.append(new Option(`${e.suggested_name} (${e.filename})`, e.id));
+  $("#add-library-hint").textContent = "";
+}
+
+function onLibraryPick() {
+  const entry = libraryEntries.find((e) => e.id === $("#add-library-pick").value);
+  if (!entry) {
+    $("#add-library-hint").textContent = "";
+    return;
+  }
+  $("#add-file").value = ""; // one or the other
+  $("#add-name").value = entry.suggested_name;
+  $("#add-cite").textContent = entry.suggested_name;
+  const where = entry.uses.map((u) => `${u.subject_name} as “${u.name}”`);
+  $("#add-library-hint").textContent = where.length
+    ? `Already in ${where.join(", ")}. Prepared pages are shared.`
+    : "Uploaded earlier, not used by any subject yet.";
 }
 
 // A default name from the file name; the tutor cites sources by name, so short is
@@ -592,21 +622,30 @@ function nameFromFile(filename) {
 
 async function addSource() {
   const file = $("#add-file").files[0];
+  const fromLibrary = $("#add-library-pick").value;
   const name = $("#add-name").value.trim();
-  if (!file) return addStatus("Choose a file first.", true);
+  if (!file && !fromLibrary) return addStatus("Choose a book from your library, or a file.", true);
   if (!name) return addStatus("Give it a name.", true);
   $("#add-go").disabled = true;
-  addStatus(`Uploading ${file.name} (${(file.size / 1e6).toFixed(1)} MB) and checking it…`);
-  const params = new URLSearchParams({ name, filename: file.name });
   try {
-    const response = await fetch(`/api/subjects/${subject()}/sources?${params}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/octet-stream" },
-      body: file,
-    });
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(data.error || `${response.status}`);
-    addedSource = data;
+    if (fromLibrary) {
+      addStatus("Adding it from your library…");
+      addedSource = await postJSON(`/api/subjects/${subject()}/sources/library`, {
+        id: fromLibrary,
+        name,
+      });
+    } else {
+      addStatus(`Uploading ${file.name} (${(file.size / 1e6).toFixed(1)} MB) and checking it…`);
+      const params = new URLSearchParams({ name, filename: file.name });
+      const response = await fetch(`/api/subjects/${subject()}/sources?${params}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/octet-stream" },
+        body: file,
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || `${response.status}`);
+      addedSource = data;
+    }
   } catch (error) {
     $("#add-go").disabled = false;
     return addStatus(`Could not add it: ${error.message}`, true);
@@ -653,9 +692,15 @@ function setUpReader() {
   $("#add-close").addEventListener("click", () => $("#add-source").close());
   $("#add-file").addEventListener("change", () => {
     const file = $("#add-file").files[0];
+    if (file && $("#add-library-pick").value) {
+      $("#add-library-pick").value = ""; // one or the other
+      $("#add-library-hint").textContent = "";
+      $("#add-name").value = "";
+    }
     if (file && !$("#add-name").value.trim()) $("#add-name").value = nameFromFile(file.name);
     $("#add-cite").textContent = $("#add-name").value.trim() || "Name";
   });
+  $("#add-library-pick").addEventListener("change", onLibraryPick);
   $("#add-name").addEventListener("input", () => {
     $("#add-cite").textContent = $("#add-name").value.trim() || "Name";
   });
@@ -709,6 +754,27 @@ function setUpDivider() {
     divider.addEventListener("pointermove", move);
     divider.addEventListener("pointerup", up, { once: true });
   });
+}
+
+// After a source was removed or renamed (subject settings): reload the list, and keep
+// the reader on the same book under its new name, or leave a book that is gone.
+async function sourcesChanged(oldName = null, newName = null) {
+  await loadReaderSources(subject());
+  fillSources();
+  if (!reader.source) return;
+  const current = reader.source === oldName ? newName : reader.source;
+  if (current && sourceNamed(current)) {
+    if (current !== reader.source) {
+      reader.source = current;
+      $("#reader-source").value = current;
+      if (pdf.name === oldName) pdf.name = current;
+      remember();
+    }
+    return;
+  }
+  const wasOpen = readerOpen();
+  await resetReader(subject());
+  if (wasOpen) await toggleReader();
 }
 
 // Another subject: its own sources, and its own last place in the reader.
