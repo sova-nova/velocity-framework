@@ -153,6 +153,15 @@ pre { background: var(--panel); padding: 0.75rem; border-radius: 6px; overflow-x
   flex-direction: column;
   background: var(--bg);
 }
+/* The book on its own, in the middle of the page. */
+#workspace.book-only > #chat, #workspace.book-only > #reader-divider { display: none; }
+#workspace.book-only > #reader {
+  flex: 1 1 auto;
+  max-width: 64rem;
+  margin: 0 auto;
+  border-left: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+}
 .reader-bar {
   display: flex;
   align-items: center;
@@ -170,6 +179,15 @@ pre { background: var(--panel); padding: 0.75rem; border-radius: 6px; overflow-x
   border: 1px solid var(--border);
   background: var(--panel);
   cursor: pointer;
+}
+#reader-page-input {
+  width: 4.5rem;
+  font: inherit;
+  color: var(--text);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.1rem 0.3rem;
 }
 #reader-body { position: relative; flex: 1; }
 /* PDF.js requires an absolutely positioned container. */

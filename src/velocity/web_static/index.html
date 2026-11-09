@@ -128,7 +128,9 @@
       <select id="reader-source" aria-label="Source"></select>
       <select id="reader-section" aria-label="Section"></select>
       <span class="spacer"></span>
-      <span id="reader-page" class="hint"></span>
+      <label id="reader-page" class="hint" hidden>p.
+        <input id="reader-page-input" type="number" min="1" inputmode="numeric" title="Type a PDF page number and press Enter">
+        of <span id="reader-pages"></span></label>
       <button id="reader-ask" title="Start a message to the tutor about the page you're on">Ask about this page</button>
       <button id="reader-close" title="Close the reader">×</button>
     </div>

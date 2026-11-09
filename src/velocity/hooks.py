@@ -70,14 +70,21 @@ def _reopen(subject: Subject, payload: dict) -> Session | None:
     return session
 
 
-# Set by the web UI, which shows the third-party reminder itself where sessions start.
-REMINDER_SHOWN_ENV = "VELOCITY_REMINDER_SHOWN"
+# Set by the web UI: it shows the third-party reminder itself where sessions start, and
+# shows sources in a reader beside the chat.
+WEB_UI_ENV = "VELOCITY_WEB_UI"
+
+WEB_READER_CONTEXT = (
+    "The learner uses velocity's web page, which shows the sources in a reader beside "
+    "the chat. Your citations (`<source> §<id>`) and page references (`PDF p. <n>`) "
+    "become links that open the reader there, so cite in exactly those forms and tell "
+    "the learner they can click them; you can't move the reader yourself. A message "
+    "starting 'About <source> PDF p. <n> (§<id>):' is about the page the learner has open."
+)
 
 
-def _reminder_shown(payload: dict) -> bool:
-    return bool(payload.get("reminder_shown")) or (
-        os.environ.get(REMINDER_SHOWN_ENV) == "1"
-    )
+def _web_ui(payload: dict) -> bool:
+    return bool(payload.get("web_ui")) or os.environ.get(WEB_UI_ENV) == "1"
 
 
 def session_start(config: Config, subject: Subject, payload: dict) -> dict:
@@ -172,7 +179,10 @@ def session_start(config: Config, subject: Subject, payload: dict) -> dict:
         context.append(load_state(subject.dir).summary(date.today()))
     except StateError as e:
         context.append(f"Learner state could not be read: {e}")
-    if not resumed and _reminder_shown(payload):
+    web_ui = _web_ui(payload)
+    if web_ui and subject.sources:
+        context.append(WEB_READER_CONTEXT)
+    if not resumed and web_ui:
         context.append(
             "The learner has already seen the third-party reminder on the page: don't "
             "repeat it. Open with the rest of the start of session from your instructions."

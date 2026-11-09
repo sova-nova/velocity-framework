@@ -130,12 +130,16 @@ async function showSession(slug, id, button) {
 
 // -- views -----------------------------------------------------------------------------
 
+let activeView = "chat";
+
 function showView(name) {
+  activeView = name;
   for (const tab of document.querySelectorAll(".tab")) {
     tab.classList.toggle("active", tab.dataset.view === name);
   }
   $("#chat").hidden = name !== "chat";
   $("#history").hidden = name !== "history";
+  updateLayout();
   // Chats start, pause, and end while History is hidden: show the sessions as they are now.
   if (name === "history") loadSessions(subject());
 }
@@ -260,6 +264,7 @@ function showChat(status, notice = "") {
     : "";
   showCost(status.open ? status.cost : null);
   setBusy(status.busy);
+  updateLayout();
 }
 
 // Start a chat. The engine and model come from `options` (Resume's dialog) or else from

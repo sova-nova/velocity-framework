@@ -20,7 +20,7 @@ from velocity.chat import ChatManager, last_engine
 from velocity.claude_engine import ClaudeCodeChat
 from velocity.config import create_subject, load_config, load_subject
 from velocity.history import RESULT_NOT_RECORDED, rebuild_messages
-from velocity.hooks import REMINDER_SHOWN_ENV, REOPEN_ENV
+from velocity.hooks import REOPEN_ENV, WEB_UI_ENV
 from velocity.mcp_server import build_server
 from velocity.session import Session, active_session_id, record_dir
 from velocity.tools import TutorTools
@@ -382,7 +382,7 @@ def test_web_chats_tell_the_tutor_the_reminder_was_shown(client, config, api):
     hooks.session_end(config, subject, {"reason": "other"})
 
     post(client, "start", {"model": "sonnet"})
-    assert client.claude_env[REMINDER_SHOWN_ENV] == "1"
+    assert client.claude_env[WEB_UI_ENV] == "1"
     post(client, "pause")
 
     post(client, "start", {"engine": "api", "model": "sonnet"})
@@ -393,3 +393,26 @@ def test_web_chats_tell_the_tutor_the_reminder_was_shown(client, config, api):
     ]
     assert any("already seen the third-party reminder" in s for s in system)
     assert not any("Open with the third-party reminder" in s for s in system)
+
+
+def test_web_sessions_with_sources_are_told_about_the_reader(config, tmp_path):
+    from velocity.config import add_source
+
+    notes = tmp_path / "notes.md"
+    notes.write_text("# Limits\n\nNear, not at.\n")
+    add_source(config, "calculus", notes, "Notes")
+    subject = load_subject(config, "calculus")
+
+    def context(payload):
+        out = hooks.session_start(
+            config, subject, {"session_id": "c1", "source": "startup", **payload}
+        )["hookSpecificOutput"]["additionalContext"]
+        hooks.session_end(config, subject, {"reason": "other"})
+        return out
+
+    web = context({"web_ui": True})
+    assert "reader beside the chat" in web and "`PDF p. <n>`" in web
+    assert "already seen the third-party reminder" in web
+    terminal = context({})
+    assert "reader beside the chat" not in terminal
+    assert "Open with the third-party reminder" in terminal

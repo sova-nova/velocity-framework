@@ -36,7 +36,7 @@ from velocity.engine import (
     Engine,
     EngineError,
 )
-from velocity.hooks import CONTINUE_ENV, REMINDER_SHOWN_ENV, REOPEN_ENV
+from velocity.hooks import CONTINUE_ENV, REOPEN_ENV, WEB_UI_ENV
 from velocity.session import (
     SESSION_ID,
     Session,
@@ -207,7 +207,7 @@ class ChatManager:
         env = dict(os.environ)
         env.pop(CONTINUE_ENV, None)
         env.pop(REOPEN_ENV, None)
-        env[REMINDER_SHOWN_ENV] = "1"  # the page shows the third-party reminder
+        env[WEB_UI_ENV] = "1"  # the page shows the reminder, and a source reader
         resume_id = None
         if resume:
             # Claude Code's own conversation is complete only if Claude Code ran the

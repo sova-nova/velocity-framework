@@ -120,7 +120,7 @@ class ApiChat:
             effort=self.config.api_effort or DEFAULT_EFFORT,
             continues=self.continues,
             reopen=self.reopen,
-            reminder_shown=True,  # the page shows the third-party reminder
+            web_ui=True,  # the page shows the reminder, and a source reader
         )
         self.agent.start()
         self.session_id = active_session_id(self.subject.slug)

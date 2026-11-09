@@ -60,6 +60,16 @@ function closeReader() {
   $("#reader").hidden = true;
   $("#reader-divider").hidden = true;
   $("#book-button").classList.remove("open");
+  updateLayout();
+}
+
+// With no session open on the Chat tab there is nothing to sit beside, so the book takes
+// the middle of the page on its own (the Chat tab then goes back to the start panel).
+// Otherwise it sits to the right of the chat or the History log.
+function updateLayout() {
+  const bookOnly = readerOpen() && activeView === "chat" && !chatStatus.open;
+  $("#workspace").classList.toggle("book-only", bookOnly);
+  $('.tab[data-view="chat"]').classList.toggle("active", activeView === "chat" && !bookOnly);
 }
 
 async function toggleReader() {
@@ -79,6 +89,7 @@ async function openAt(name, { page = null, section = null } = {}) {
   $("#reader").hidden = false;
   $("#reader-divider").hidden = false;
   $("#book-button").classList.add("open");
+  updateLayout();
   if (source.error) {
     status(source.error);
     return;
@@ -190,7 +201,13 @@ function pageChanged(page) {
   reader.page = page;
   reader.section = sectionAt(source, page)?.id || null;
   if (reader.section) $("#reader-section").value = reader.section;
-  $("#reader-page").textContent = pdf.doc ? `p. ${page} of ${pdf.doc.numPages}` : "";
+  $("#reader-page").hidden = !pdf.doc;
+  // Don't overwrite a number the learner is typing.
+  if (document.activeElement !== $("#reader-page-input")) $("#reader-page-input").value = page;
+  if (pdf.doc) {
+    $("#reader-page-input").max = pdf.doc.numPages;
+    $("#reader-pages").textContent = pdf.doc.numPages;
+  }
   remember();
 }
 
@@ -200,7 +217,7 @@ async function showTextSection(source, sectionId) {
   $("#pdf-container").hidden = true;
   const article = $("#reader-text");
   article.hidden = false;
-  $("#reader-page").textContent = "";
+  $("#reader-page").hidden = true; // text sources have no pages
   if (!sectionId) {
     article.innerHTML = '<p class="hint">This source has no sections to show.</p>';
     return;
@@ -317,12 +334,22 @@ function setUpReader() {
     if (width) $("#reader").style.setProperty("--reader-width", width);
   } catch {}
   $("#book-button").addEventListener("click", toggleReader);
+  // From the book on its own, the Chat tab goes back to the start panel.
+  $('.tab[data-view="chat"]').addEventListener("click", () => {
+    if ($("#workspace").classList.contains("book-only")) closeReader();
+  });
   $("#reader-close").addEventListener("click", closeReader);
   $("#reader-ask").addEventListener("click", askAboutPage);
   $("#reader-source").addEventListener("change", (event) => openAt(event.target.value));
   $("#reader-section").addEventListener("change", (event) =>
     openAt(reader.source, { section: event.target.value }),
   );
+  // Typing a page number and pressing Enter (or leaving the box) jumps there.
+  $("#reader-page-input").addEventListener("change", (event) => {
+    const page = Number.parseInt(event.target.value, 10);
+    if (page > 0) goToPage(page);
+    event.target.blur();
+  });
   document.addEventListener("click", (event) => {
     const link = event.target.closest("a.cite");
     if (!link) return;
