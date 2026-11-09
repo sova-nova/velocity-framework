@@ -18,10 +18,77 @@
       <select id="subject"></select>
     </label>
     <nav>
-      <button class="tab active" data-view="history">History</button>
+      <button class="tab active" data-view="chat">Chat</button>
+      <button class="tab" data-view="history">History</button>
     </nav>
   </header>
-  <main id="history" class="view">
+  <main id="chat" class="view chat-view">
+    <section id="chat-start" class="start-panel">
+      <h2>Start a session</h2>
+      <p id="chat-notice" class="hint"></p>
+      <label>Model
+        <select id="model">
+          <option value="sonnet">Sonnet (default)</option>
+          <option value="opus">Opus</option>
+        </select>
+      </label>
+      <p class="hint">Runs Claude Code with your Claude plan. To resume or continue an earlier
+        session, use its button in History.</p>
+      <div class="actions">
+        <button id="start-new" class="primary">Start a new session</button>
+        <button id="close-other" hidden>Close the open session</button>
+      </div>
+    </section>
+    <section id="chat-live" hidden>
+      <div class="chat-bar">
+        <strong id="chat-title"></strong>
+        <span id="chat-meta" class="hint"></span>
+        <span class="spacer"></span>
+        <button id="help-button" class="help" title="What do these buttons do?">?</button>
+        <button id="pause">Pause</button>
+        <button id="end-session" class="primary">End session</button>
+      </div>
+      <div id="messages"></div>
+      <div id="skills" class="skills">
+        <button data-command="/quiz">Quiz</button>
+        <button data-command="/socratic">Socratic</button>
+        <button data-command="/explain-differently">Explain differently</button>
+        <button data-command="/assign-problems">Assign problems</button>
+        <button data-command="/review-notes">Review notes</button>
+      </div>
+      <form id="composer">
+        <textarea id="input" rows="2" placeholder="Message the tutor (Enter to send, Shift+Enter for a new line)"></textarea>
+        <button id="send" class="primary" type="submit">Send</button>
+      </form>
+    </section>
+  </main>
+  <dialog id="help">
+    <h2>Sessions</h2>
+    <dl>
+      <dt>End session</dt>
+      <dd>Wrap up properly: the tutor catches up your progress, asks one last question,
+        writes a recap, and closes the log. Do this when you're done for the day.</dd>
+      <dt>Pause</dt>
+      <dd>Stop for now without a wrap-up. The session stays unfinished and can be resumed.
+        A chat with no messages for 30 minutes is paused automatically.</dd>
+      <dt>Resume</dt>
+      <dd>Carry on with a paused session, in the same log.</dd>
+      <dt>Continue</dt>
+      <dd>Start a new session that picks up from a finished one. The tutor reads the earlier
+        session first; the new learning goes into a new log, linked to the old one.</dd>
+    </dl>
+    <form method="dialog"><button class="primary">Got it</button></form>
+  </dialog>
+  <dialog id="switch">
+    <h2 id="switch-title"></h2>
+    <p>Only one session per subject can be open at a time.</p>
+    <div class="dialog-actions">
+      <button id="switch-pause" class="primary"></button>
+      <button id="switch-back">Go back and end it properly</button>
+      <button id="switch-cancel">Cancel</button>
+    </div>
+  </dialog>
+  <main id="history" class="view" hidden>
     <aside>
       <h2>Sessions</h2>
       <ul id="sessions"></ul>

@@ -1,4 +1,4 @@
-"""Front end C: a local web UI (M8). This part serves the page and the session history.
+"""Front end C: a local web UI (M8): session history, and chat on Claude Code (chat.py).
 
 The server only listens on 127.0.0.1. Requests must name the local server as their host
 (against DNS rebinding), and requests that change anything must come from the page itself
@@ -6,6 +6,9 @@ The server only listens on 127.0.0.1. Requests must name the local server as the
 read here, through the session code.
 """
 
+import asyncio
+import contextlib
+import json
 import re
 from dataclasses import asdict
 from importlib.resources import files
@@ -15,11 +18,17 @@ from starlette.applications import Starlette
 from starlette.middleware import Middleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 from starlette.requests import Request
-from starlette.responses import FileResponse, JSONResponse, Response
+from starlette.responses import (
+    FileResponse,
+    JSONResponse,
+    Response,
+    StreamingResponse,
+)
 from starlette.routing import Mount, Route
 from starlette.staticfiles import StaticFiles
 from starlette.types import ASGIApp, Receive, Scope, Send
 
+from velocity.chat import ChatError, ChatManager
 from velocity.config import Config, ConfigError, list_subjects, load_subject
 from velocity.session import SESSION_ID, Session, record_dir, session_summaries
 
@@ -52,7 +61,9 @@ class SameOriginMiddleware:
         await self.app(scope, receive, send)
 
 
-def build_app(config: Config) -> Starlette:
+def build_app(config: Config, chats: ChatManager | None = None) -> Starlette:
+    chats = chats or ChatManager(config)
+
     def subject_or_404(slug: str):
         try:
             return load_subject(config, slug)
@@ -106,18 +117,94 @@ def build_app(config: Config) -> Starlette:
             }
         )
 
+    # -- chat --------------------------------------------------------------------------
+
+    async def chat_status(request: Request) -> Response:
+        subject = subject_or_404(request.path_params["slug"])
+        if subject is None:
+            return JSONResponse({"error": "unknown subject"}, 404)
+        return JSONResponse(chats.status(subject))
+
+    async def chat_start(request: Request) -> Response:
+        subject = subject_or_404(request.path_params["slug"])
+        if subject is None:
+            return JSONResponse({"error": "unknown subject"}, 404)
+        body = await _json(request)
+        try:
+            await chats.start(
+                subject,
+                model=str(body.get("model") or "sonnet"),
+                resume=body.get("resume") or None,
+                continues=body.get("continues") or None,
+                close_other=bool(body.get("close_other")),
+            )
+        except ChatError as e:
+            return JSONResponse({"error": str(e)}, e.status)
+        return JSONResponse(chats.status(subject))
+
+    async def chat_message(request: Request) -> Response:
+        subject = subject_or_404(request.path_params["slug"])
+        if subject is None:
+            return JSONResponse({"error": "unknown subject"}, 404)
+        text = str((await _json(request)).get("text") or "").strip()
+        if not text:
+            return JSONResponse({"error": "empty message"}, 400)
+        if subject.slug not in chats.chats:
+            return JSONResponse({"error": "No chat is open for this subject."}, 409)
+
+        async def events():
+            async for event in chats.send(subject, text):
+                yield f"data: {json.dumps(asdict(event))}\n\n"
+
+        return StreamingResponse(events(), media_type="text/event-stream")
+
+    async def chat_pause(request: Request) -> Response:
+        subject = subject_or_404(request.path_params["slug"])
+        if subject is None:
+            return JSONResponse({"error": "unknown subject"}, 404)
+        await chats.pause(subject)
+        return JSONResponse(chats.status(subject))
+
+    @contextlib.asynccontextmanager
+    async def lifespan(app: Starlette):
+        async def pause_idle_chats():
+            while True:
+                await asyncio.sleep(60)
+                await chats.pause_idle()
+
+        task = asyncio.create_task(pause_idle_chats())
+        try:
+            yield
+        finally:
+            task.cancel()
+            await chats.shutdown()  # stopping the server pauses open chats
+
     routes = [
         Route("/", index),
         Route("/api/subjects", subjects),
         Route("/api/subjects/{slug}/sessions", sessions),
         Route("/api/subjects/{slug}/sessions/{session_id}", session_log),
+        Route("/api/subjects/{slug}/chat", chat_status),
+        Route("/api/subjects/{slug}/chat/start", chat_start, methods=["POST"]),
+        Route("/api/subjects/{slug}/chat/message", chat_message, methods=["POST"]),
+        Route("/api/subjects/{slug}/chat/pause", chat_pause, methods=["POST"]),
         Mount("/static", StaticFiles(directory=STATIC), name="static"),
     ]
     middleware = [
         Middleware(TrustedHostMiddleware, allowed_hosts=ALLOWED_HOSTS),
         Middleware(SameOriginMiddleware),
     ]
-    return Starlette(routes=routes, middleware=middleware)
+    app = Starlette(routes=routes, middleware=middleware, lifespan=lifespan)
+    app.state.chats = chats
+    return app
+
+
+async def _json(request: Request) -> dict:
+    try:
+        body = await request.json()
+    except ValueError:
+        return {}
+    return body if isinstance(body, dict) else {}
 
 
 def session_list(subject) -> list[dict]:
