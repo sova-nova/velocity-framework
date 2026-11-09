@@ -3,16 +3,17 @@
 import functools
 from collections.abc import Callable
 
-from mcp.server.mcpserver import MCPServer
+from mcp.server.mcpserver import Image, MCPServer
 from mcp.server.mcpserver.exceptions import ToolError as McpToolError
 
 from velocity.config import load_config, load_subject
-from velocity.tools import ToolError, TutorTools
+from velocity.tools import PngImage, ToolError, TutorTools
 
 TOOL_NAMES = [
     "list_sources",
     "get_outline",
     "search_source",
+    "view_page",
     "read_section",
     "get_exercises",
     "append_log",
@@ -36,9 +37,16 @@ def _expected_errors_to_mcp(fn: Callable) -> Callable:
     @functools.wraps(fn)
     def wrapper(*args, **kwargs):
         try:
-            return fn(*args, **kwargs)
+            result = fn(*args, **kwargs)
         except ToolError as e:
             raise McpToolError(str(e)) from e
+        if isinstance(result, list):
+            # Images (view_page) become MCP image content.
+            return [
+                Image(data=r.data, format="png") if isinstance(r, PngImage) else r
+                for r in result
+            ]
+        return result
 
     return wrapper
 

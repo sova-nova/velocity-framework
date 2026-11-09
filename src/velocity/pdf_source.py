@@ -12,6 +12,10 @@ from velocity.outline import Section, get_outline
 from velocity.search import Chunk, section_at
 
 _HEADING = re.compile(r"^#{1,6}\s+(.+)$", re.MULTILINE)
+# Pixels on a page image's longer side. Checked on Stewart p. 137 (2026-11-09): at
+# 1,100 px a limit's subscript is barely legible; 1,400 px is clear. About 2,250 image
+# tokens per page (pixels / 750), well under the models' 2,576 px limit.
+PAGE_IMAGE_EDGE = 1400
 _TITLE_PREFIX = re.compile(r"^(Ch \d+|\d+\.\d+|Appendix [A-Z]):\s*")
 
 
@@ -95,6 +99,25 @@ class PdfSource:
             markdown[start:end].strip(),
             warnings,
         )
+
+    @property
+    def page_count(self) -> int:
+        import pymupdf
+
+        with pymupdf.open(self.pdf_path) as doc:
+            return doc.page_count
+
+    def render_page(self, page: int, long_edge: int = PAGE_IMAGE_EDGE) -> bytes:
+        """A page as a PNG image, `long_edge` pixels on its longer side (1-indexed page).
+        Takes about 0.1 s, with no OCR."""
+        import pymupdf
+
+        with pymupdf.open(self.pdf_path) as doc:
+            if not 1 <= page <= doc.page_count:
+                raise IndexError(f"page {page} is not in 1-{doc.page_count}")
+            pdf_page = doc[page - 1]
+            zoom = long_edge / max(pdf_page.rect.width, pdf_page.rect.height)
+            return pdf_page.get_pixmap(matrix=pymupdf.Matrix(zoom, zoom)).tobytes("png")
 
     def search_chunks(self) -> list[Chunk]:
         """Every page's text for search, under the section it belongs to: the text layer,

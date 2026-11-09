@@ -67,8 +67,9 @@ def resolve_model(name: str) -> str:
     )
 
 
-# (tool name, arguments) -> (result text, is_error)
-ToolCaller = Callable[[str, dict], Awaitable[tuple[str, bool]]]
+# (tool name, arguments) -> (result, is_error). The result is text, or a list of text
+# and image content blocks when a tool returns images (view_page).
+ToolCaller = Callable[[str, dict], Awaitable[tuple[str | list[dict], bool]]]
 
 
 class StreamFactory(Protocol):
@@ -525,7 +526,7 @@ class TutorAgent:
         return self._result(block.id, text, is_error)
 
     @staticmethod
-    def _result(tool_use_id: str, content: str, is_error: bool) -> dict:
+    def _result(tool_use_id: str, content: str | list[dict], is_error: bool) -> dict:
         result = {"type": "tool_result", "tool_use_id": tool_use_id, "content": content}
         if is_error:
             result["is_error"] = True
@@ -542,14 +543,26 @@ class TutorAgent:
 def mcp_tool_caller(mcp: Any) -> ToolCaller:
     """A ToolCaller that runs tools on a connected `mcp.Client`."""
 
-    async def call_tool(name: str, args: dict) -> tuple[str, bool]:
+    async def call_tool(name: str, args: dict) -> tuple[str | list[dict], bool]:
         result = await mcp.call_tool(name, args)
-        text = "\n".join(
-            c.text for c in result.content if getattr(c, "type", "") == "text"
-        )
-        return text, bool(result.is_error)
+        return tool_result_content(result.content), bool(result.is_error)
 
     return call_tool
+
+
+def tool_result_content(content: list[Any]) -> str | list[dict]:
+    """MCP content as tool_result content: plain text, or text and image blocks."""
+    texts = [c.text for c in content if getattr(c, "type", "") == "text"]
+    if not any(getattr(c, "type", "") == "image" for c in content):
+        return "\n".join(texts)
+    blocks = []
+    for c in content:
+        if c.type == "text":
+            blocks.append({"type": "text", "text": c.text})
+        elif c.type == "image":
+            source = {"type": "base64", "media_type": c.mime_type, "data": c.data}
+            blocks.append({"type": "image", "source": source})
+    return blocks
 
 
 async def chat(

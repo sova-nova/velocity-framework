@@ -12,7 +12,7 @@ Read `DESIGN.md` before making architectural decisions. It is the source of trut
 
 M1–M6 done and merged. M7 (polish and portfolio) is done except the postponed eval full run. M8 (web front end) is done except the postponed README demo. M9 (fleshing out) is in progress. See `DESIGN.md` section 4.
 
-**Where we left off (2026-11-09):** M9: `search_source` merged (#29). The source reader (PDF.js beside the chat and History, clickable citations, page box, "Ask about this page") is on branch `source-reader`; the user tested it in Firefox, and the two bugs they found are fixed and checked in headless Firefox. Next in M9, one PR each: a `view_page` tool (the tutor sees a rendered page, diagrams included, without OCR), OCR ahead of time (with a clear "this takes a while" warning and a strong progress indicator), uploading a source from the web page, then compaction for long own-loop chats. To check the page yourself: headless Firefox over WebDriver BiDi (see `DESIGN.md` "Notes: source reader"). Postponed by the user: the README demo (two screenshots as `docs/images/web-chat.png` and `docs/images/web-history.png` from the test vault, plus a short video uploaded to GitHub as a `user-attachments` link), the license (until the app is more fleshed out; don't propose it again until then), and a tester guide (when they invite testers).
+**Where we left off (2026-11-09):** M9: `search_source` (#29) and the source reader (#30) are merged. The `view_page` tool (the tutor sees rendered PDF pages, diagrams included, in about 0.1 s per page, no OCR) is built on branch `view-page`; live-checked with Claude Code (the diagram question went from 91 s and a failure to 12.6 s and a correct answer). Next in M9, one PR each: OCR ahead of time (with a clear "this takes a while" warning and a strong progress indicator), uploading a source from the web page, then compaction for long own-loop chats. To check the page yourself: headless Firefox over WebDriver BiDi (see `DESIGN.md` "Notes: source reader"). Postponed by the user: the README demo (two screenshots as `docs/images/web-chat.png` and `docs/images/web-history.png` from the test vault, plus a short video uploaded to GitHub as a `user-attachments` link), the license (until the app is more fleshed out; don't propose it again until then), and a tester guide (when they invite testers).
 
 **Earlier context:**
 
@@ -38,7 +38,7 @@ The license is postponed until the application is more fleshed out (user, 2026-1
 *How the user works (see also memory):*
 - One branch and PR per change, based on `main`. The user reviews and merges on GitHub with a merge commit and deletes the branch.
 - Don't stack PRs; that went wrong once (#2–#5, fixed by #6).
-- Merged so far: #1–#29.
+- Merged so far: #1–#30.
 - Edit one file at a time with Edit or Write; the user rejected a large multi-file edit script as too big to review.
 - To try the web UI: `uv run velocity web --no-browser --port 8799` (127.0.0.1 only). Page files are read from disk, so changes to the page only need a browser reload.
 
@@ -52,7 +52,7 @@ The license is postponed until the application is more fleshed out (user, 2026-1
 - Modules: `config`, `outline`, `ocr`, `dropcheck`, `pdf_source`, `text_source` (Markdown, HTML, EPUB), `web` (Starlette app; page in `web_static/`: `app.js`, and `reader.js` for the source reader), `chat` (web chats), `engine` (engine interface, `ChatEvent`), `claude_engine` (headless Claude Code), `api_engine` (the own loop for web chat), `search` (keyword search over sources), `history` (rebuild API messages from a record; shared with the evals), `session` (record + markdown log), `state` (learner state), `notes`, `skills`, `tools` (TutorTools), `mcp_server`, `workspace` (template, settings, notes protection, `claude_args`), `hooks`, `agent` (front end B), `cli`.
 - The tutor prompt is `src/velocity/template/CLAUDE.md`; skills are in `src/velocity/template/skills/<name>/SKILL.md`. The same files back both front ends.
 - Evals: `evals/` (cases, replay, checks, judge, label, run); `uv run python -m evals.run --list`. See `DESIGN.md` "M7 notes: evals".
-- Tests: about 251, `uv run pytest` (web chat uses `tests/fake_claude.py` instead of Claude Code, and a scripted API with in-process tools for the own loop). The slow real-OCR test runs only with `VELOCITY_OCR_TESTS=1`.
+- Tests: about 259, `uv run pytest` (web chat uses `tests/fake_claude.py` instead of Claude Code, and a scripted API with in-process tools for the own loop). The slow real-OCR test runs only with `VELOCITY_OCR_TESTS=1`.
 
 *How to test with real Claude Code without touching the user's vault:*
 - Use a throwaway `XDG_CONFIG_HOME`/`XDG_DATA_HOME` with a scratch vault, then `velocity new`. For OCR'd sections, copy `~/.local/share/velocity/sources/*` into the throwaway data dir.

@@ -79,7 +79,8 @@ WEB_READER_CONTEXT = (
     "the chat. Your citations (`<source> §<id>`) and page references (`PDF p. <n>`) "
     "become links that open the reader there, so cite in exactly those forms and tell "
     "the learner they can click them; you can't move the reader yourself. A message "
-    "starting 'About <source> PDF p. <n> (§<id>):' is about the page the learner has open."
+    "starting 'About <source> PDF p. <n> (§<id>):' is about the page the learner has open: "
+    "look at it with view_page first."
 )
 
 

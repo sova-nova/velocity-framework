@@ -96,7 +96,11 @@ def render_claude_md(subject: Subject) -> str:
             f"This subject has sources: {names}. Ground explanations in them: find where a "
             "topic is covered with `search_source` (or `get_outline`), read it with "
             "`read_section`, and cite sections as `<source> §<id>` (e.g. "
-            f"`{subject.sources[0].name} §2.4`). Say so when an answer goes beyond the sources."
+            f"`{subject.sources[0].name} §2.4`). Say so when an answer goes beyond the sources. "
+            "For PDFs, `view_page` shows pages as printed, in a fraction of a second: use "
+            "it for a specific page, for figures and diagrams (which `read_section` "
+            "doesn't include), and to check formulas in text you read. `read_section`'s "
+            "first read of a section can take a minute or two (OCR)."
         )
     else:
         sources_section = "This subject has no sources. Teach from general knowledge (and say so once, at the start)."
