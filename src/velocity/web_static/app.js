@@ -92,14 +92,20 @@ async function loadSessions(slug) {
       const go = document.createElement("button");
       go.className = "session-action";
       go.textContent = action[0];
-      go.addEventListener("click", () => {
+      const target = s.title || s.id;
+      const goOn = (options) => {
         if (chatStatus.open) {
-          askToSwitch(action[0], s.title || s.id, action[1]);
+          askToSwitch(action[0], target, options);
           return;
         }
         showView("chat");
-        startChat(action[1]);
-      });
+        startChat(options);
+      };
+      go.addEventListener("click", () =>
+        action[0] === "Resume"
+          ? askResume(target, s.last_engine || {}, (choice) => goOn({ ...action[1], ...choice }))
+          : goOn(action[1]),
+      );
       item.append(go);
     }
     list.append(item);
@@ -136,14 +142,77 @@ function showView(name) {
 // -- chat ------------------------------------------------------------------------------
 
 const subject = () => $("#subject").value;
-const MODEL_KEY = "velocity.model";
+const ENGINE_KEY = "velocity.engine";
+// The last model per engine ("velocity.model" was Claude Code's before there were two).
+const modelKey = (engine) => (engine === "claude-code" ? "velocity.model" : `velocity.model.${engine}`);
+const DEFAULT_ENGINE = "claude-code";
+const DEFAULT_MODEL = "sonnet";
 
-function savedModel() {
+// {engine: {label, models: {alias: name}, available, reason}}, from the server.
+let engines = {};
+
+function load(key) {
   try {
-    return localStorage.getItem(MODEL_KEY) || "sonnet";
+    return localStorage.getItem(key);
   } catch {
-    return "sonnet";
+    return null;
   }
+}
+
+function save(key, value) {
+  try {
+    localStorage.setItem(key, value);
+  } catch {}
+}
+
+const savedModel = (engine) => load(modelKey(engine)) || DEFAULT_MODEL;
+
+// The engine to preselect: the wanted one if it can run here, else another that can.
+function usableEngine(wanted) {
+  if (engines[wanted]?.available) return wanted;
+  return Object.keys(engines).find((e) => engines[e].available) || wanted;
+}
+
+function fillEngines(select, chosen) {
+  select.innerHTML = "";
+  for (const [name, engine] of Object.entries(engines)) {
+    const option = new Option(engine.label, name, false, name === chosen);
+    option.disabled = !engine.available;
+    if (!engine.available) option.title = engine.reason;
+    select.append(option);
+  }
+}
+
+function fillModels(select, engine, chosen) {
+  select.innerHTML = "";
+  const models = engines[engine]?.models || {};
+  for (const [alias, name] of Object.entries(models)) {
+    select.append(new Option(name, alias, false, alias === chosen));
+  }
+  if (!(chosen in models)) select.value = Object.keys(models).includes(DEFAULT_MODEL) ? DEFAULT_MODEL : select.options[0]?.value;
+}
+
+// Why an engine can't be picked, or what picking it means.
+function engineNote(engine) {
+  const unavailable = Object.values(engines).filter((e) => !e.available);
+  const notes = unavailable.map((e) => `${e.label}: ${e.reason}`);
+  if (engine === "api") notes.unshift("Billed per token on your API key; the cost is shown as you go.");
+  else notes.unshift("Runs Claude Code with your Claude plan.");
+  return notes.join(" ");
+}
+
+function showStartChoice() {
+  const engine = $("#engine").value;
+  fillModels($("#model"), engine, savedModel(engine));
+  $("#engine-hint").textContent = engineNote(engine);
+}
+
+const money = (dollars) => (dollars > 0 && dollars < 0.01 ? "<$0.01" : `$${dollars.toFixed(2)}`);
+
+function showCost(total) {
+  const cost = $("#chat-cost");
+  cost.hidden = total === null || total === undefined;
+  if (!cost.hidden) cost.textContent = `${money(total)} so far`;
 }
 
 async function postJSON(url, body) {
@@ -181,21 +250,31 @@ function showChat(status, notice = "") {
       : "");
   $("#close-other").hidden = !status.elsewhere;
   $("#chat-title").textContent = status.title || "New session";
+  const engine = engines[status.engine];
+  const model = engine?.models[status.model] || status.model;
   $("#chat-meta").textContent = status.open
-    ? [status.session, status.model].filter(Boolean).join(" · ")
+    ? [status.session, engine && engine.label.replace(/ \(.*\)$/, ""), model]
+        .filter(Boolean)
+        .join(" · ")
     : "";
+  showCost(status.open ? status.cost : null);
   setBusy(status.busy);
 }
 
+// Start a chat. The engine and model come from `options` (Resume's dialog) or else from
+// the start panel, whose choice is remembered for new sessions.
 async function startChat(options = {}) {
-  const model = $("#model").value;
-  try {
-    localStorage.setItem(MODEL_KEY, model);
-  } catch {}
+  const engine = options.engine || $("#engine").value;
+  const model = options.model || $("#model").value;
+  if (!options.engine) {
+    save(ENGINE_KEY, engine);
+    save(modelKey(engine), model);
+  }
   try {
     const status = await postJSON(`/api/subjects/${subject()}/chat/start`, {
-      model,
       ...options,
+      engine,
+      model,
     });
     $("#messages").innerHTML = "";
     for (const m of status.messages) addMessage(m.role, m.text, m.title);
@@ -318,6 +397,16 @@ async function send(text) {
       }));
     } else if (event.type === "error") {
       addNote(event.text, "error");
+    } else if (event.type === "done" && event.cost) {
+      // The own loop: what this reply cost, and the session's total so far.
+      if (event.cost.reply) {
+        reply.after(Object.assign(document.createElement("p"), {
+          className: "reply-cost",
+          textContent: money(event.cost.reply),
+          title: "Estimated API cost of this reply",
+        }));
+      }
+      showCost(event.cost.total);
     } else if (event.type === "ended") {
       chatEnded(event.text);
     }
@@ -337,6 +426,40 @@ async function pauseChat() {
   await postJSON(`/api/subjects/${subject()}/chat/pause`);
   showChat({ open: false }, "Paused. Resume this session any time from History.");
   loadSessions(subject());
+}
+
+// Resume: preselect the engine and model that ran the session last (decided 2026-11-09),
+// or another engine if that one can't run here, and say so.
+function askResume(target, last, onChoice) {
+  const dialog = $("#resume");
+  const lastEngine = last.engine || DEFAULT_ENGINE;
+  const engine = usableEngine(lastEngine);
+  $("#resume-title").textContent = `Resume "${target}"`;
+  fillEngines($("#resume-engine"), engine);
+  const showChoice = () => {
+    const chosen = $("#resume-engine").value;
+    const model = chosen === lastEngine && last.model ? last.model : savedModel(chosen);
+    fillModels($("#resume-model"), chosen, model);
+    const notes = [];
+    if (engine !== lastEngine) {
+      notes.push(`It ran on ${engines[lastEngine]?.label || lastEngine} last, which can't run here: ${engines[lastEngine]?.reason || ""}`);
+    }
+    if (chosen === "api") {
+      notes.push("The first reply re-sends the session so far, so it costs more than the rest.");
+    }
+    if (chosen === "claude-code" && lastEngine !== "claude-code") {
+      notes.push("Claude Code starts a fresh conversation that reads the session log first.");
+    }
+    $("#resume-note").textContent = notes.join(" ");
+  };
+  $("#resume-engine").onchange = showChoice;
+  showChoice();
+  $("#resume-go").onclick = () => {
+    dialog.close();
+    onChoice({ engine: $("#resume-engine").value, model: $("#resume-model").value });
+  };
+  $("#resume-cancel").onclick = () => dialog.close();
+  dialog.showModal();
 }
 
 // Resume/Continue while a chat is open: only one session per subject can be open, so
@@ -361,7 +484,9 @@ function askToSwitch(verb, target, options) {
 }
 
 function setUpChat() {
-  $("#model").value = savedModel();
+  fillEngines($("#engine"), usableEngine(load(ENGINE_KEY) || DEFAULT_ENGINE));
+  showStartChoice();
+  $("#engine").addEventListener("change", showStartChoice);
   $("#start-new").addEventListener("click", () => startChat());
   $("#close-other").addEventListener("click", () => startChat({ close_other: true }));
   $("#end-session").addEventListener("click", () => send("/end-session"));
@@ -405,6 +530,7 @@ async function start() {
   }
   const wanted = new URLSearchParams(location.search).get("subject");
   if (wanted && subjects.some((s) => s.slug === wanted)) select.value = wanted;
+  engines = await getJSON("/api/engines");
   setUpChat();
   select.addEventListener("change", () => {
     loadSessions(select.value);

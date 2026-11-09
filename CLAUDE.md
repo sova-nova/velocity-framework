@@ -12,7 +12,7 @@ Read `DESIGN.md` before making architectural decisions. It is the source of trut
 
 M1–M6 done and merged. M7 (polish and portfolio) is done except the postponed eval full run. M8 (web front end) is in progress. See `DESIGN.md` section 4.
 
-**Where we left off (2026-11-06):** PR B is open as #26 (branch `web-chat-claude-code`). The user tested it live and it worked. Next session: once #26 is merged, start PR C (web chat on the own loop) from a fresh branch off `main`.
+**Where we left off (2026-11-09):** PR C (web chat on the own loop) is open as #27 (branch `web-chat-own-loop`); the user live-tested it with their API key and it works. After it's merged: PR D (polish + README demo) from a fresh branch off `main`, then ask about the MIT license.
 
 **Earlier context:**
 
@@ -30,15 +30,15 @@ M1–M6 done and merged. M7 (polish and portfolio) is done except the postponed 
 *M8, web front end (planned 2026-11-06; decisions in `DESIGN.md` section 5):* both engines selectable, chat + session history, Starlette + plain JS, for daily use and as a demo. PRs, reordered after a design review (grilling) on 2026-11-06:
 1. Server + history: done (#24).
 2. PR A, session titles + resume/continue (core, all front ends; branch `session-titles-continue`).
-3. PR B (#26, open, branch `web-chat-claude-code`; PR A merged as #25), web chat on Claude Code headless. Tested live: skills, titles, the "?" popup, reload, pause/resume, end/continue, and the switch dialog (Resume/Continue in History while another session is open offers to pause it first). History reloads each time its tab opens. The experiment confirmed: one JSON line per message (`{"type":"user","message":{"role":"user","content":...}}`); the UserPromptSubmit/Stop hooks log stdin messages; `/quiz` works; closing stdin exits 0 and runs SessionEnd; `--resume <claude id>` reattaches to the same velocity session. Decisions: one process per chat; one open session per subject; End session (prominent) + Pause buttons with a "?" help popup; 30-minute idle timeout = pause; reopening the page continues a running chat; model picked at start (default Sonnet, last choice remembered); tool calls as grey lines; no dollar amounts; `--permission-prompts none`; resuming a `velocity chat` session attaches a new Claude Code conversation that reads the log first.
-4. PR C, web chat on the own loop (`agent.py` engine behind the same `ChatManager`), selectable next to Claude Code, with the cost shown (the "no dollar amounts" decision applies only to the Claude Code engine). The user exports `ANTHROPIC_API_KEY` in their own terminal and runs any paid tests themselves.
+3. PR B (merged as #26; PR A merged as #25), web chat on Claude Code headless. Tested live: skills, titles, the "?" popup, reload, pause/resume, end/continue, and the switch dialog (Resume/Continue in History while another session is open offers to pause it first). History reloads each time its tab opens. The experiment confirmed: one JSON line per message (`{"type":"user","message":{"role":"user","content":...}}`); the UserPromptSubmit/Stop hooks log stdin messages; `/quiz` works; closing stdin exits 0 and runs SessionEnd; `--resume <claude id>` reattaches to the same velocity session. Decisions: one process per chat; one open session per subject; End session (prominent) + Pause buttons with a "?" help popup; 30-minute idle timeout = pause; reopening the page continues a running chat; model picked at start (default Sonnet, last choice remembered); tool calls as grey lines; no dollar amounts; `--permission-prompts none`; resuming a `velocity chat` session attaches a new Claude Code conversation that reads the log first.
+4. PR C (branch `web-chat-own-loop`), web chat on the own loop (`api_engine.py` behind the same `ChatManager`), selectable next to Claude Code, with the cost shown (the "no dollar amounts" decision applies only to the Claude Code engine). Decided 2026-11-09 (see `DESIGN.md` decisions log): Claude Code is the default engine, and the last engine and model are remembered; the own loop resumes any paused session by rebuilding its history from the record; Resume preselects the engine and model that ran the session last; a session total plus a small per-reply cost. The user exports `ANTHROPIC_API_KEY` in their own terminal and runs any paid tests themselves.
 5. PR D, polish + README demo (incl. a stop button for long replies).
 Ask about the MIT license after M8.
 
 *How the user works (see also memory):*
 - One branch and PR per change, based on `main`. The user reviews and merges on GitHub with a merge commit and deletes the branch.
 - Don't stack PRs; that went wrong once (#2–#5, fixed by #6).
-- Merged so far: #1–#25.
+- Merged so far: #1–#26.
 - Edit one file at a time with Edit or Write; the user rejected a large multi-file edit script as too big to review.
 - To try the web UI: `uv run velocity web --no-browser --port 8799` (127.0.0.1 only). Page files are read from disk, so changes to the page only need a browser reload.
 
@@ -49,10 +49,10 @@ Ask about the MIT license after M8.
 
 *Code map:*
 - Commands: `velocity new "<name>"`, `velocity subjects`, `velocity source add/list/recheck`, `velocity notes add/list`, `velocity tutor <subject> [--resume]` (front end A, Claude Code), `velocity chat <subject> [--model opus|sonnet|haiku]` (front end B, API; `/model` switches mid-chat), `velocity web [subject]` (front end C, local web UI, M8 in progress). Internal: `velocity mcp --subject`, `velocity hook <event>` (events: session-start, user-prompt, stop, session-end, guard, tool-use).
-- Modules: `config`, `outline`, `ocr`, `dropcheck`, `pdf_source`, `text_source` (Markdown, HTML, EPUB), `web` (Starlette app; page in `web_static/`), `chat` (web chats), `claude_engine` (headless Claude Code), `session` (record + markdown log), `state` (learner state), `notes`, `skills`, `tools` (TutorTools), `mcp_server`, `workspace` (template, settings, notes protection, `claude_args`), `hooks`, `agent` (front end B), `cli`.
+- Modules: `config`, `outline`, `ocr`, `dropcheck`, `pdf_source`, `text_source` (Markdown, HTML, EPUB), `web` (Starlette app; page in `web_static/`), `chat` (web chats), `engine` (engine interface, `ChatEvent`), `claude_engine` (headless Claude Code), `api_engine` (the own loop for web chat), `history` (rebuild API messages from a record; shared with the evals), `session` (record + markdown log), `state` (learner state), `notes`, `skills`, `tools` (TutorTools), `mcp_server`, `workspace` (template, settings, notes protection, `claude_args`), `hooks`, `agent` (front end B), `cli`.
 - The tutor prompt is `src/velocity/template/CLAUDE.md`; skills are in `src/velocity/template/skills/<name>/SKILL.md`. The same files back both front ends.
 - Evals: `evals/` (cases, replay, checks, judge, label, run); `uv run python -m evals.run --list`. See `DESIGN.md` "M7 notes: evals".
-- Tests: about 229, `uv run pytest` (web chat uses `tests/fake_claude.py` instead of Claude Code). The slow real-OCR test runs only with `VELOCITY_OCR_TESTS=1`.
+- Tests: about 236, `uv run pytest` (web chat uses `tests/fake_claude.py` instead of Claude Code, and a scripted API with in-process tools for the own loop). The slow real-OCR test runs only with `VELOCITY_OCR_TESTS=1`.
 
 *How to test with real Claude Code without touching the user's vault:*
 - Use a throwaway `XDG_CONFIG_HOME`/`XDG_DATA_HOME` with a scratch vault, then `velocity new`. For OCR'd sections, copy `~/.local/share/velocity/sources/*` into the throwaway data dir.

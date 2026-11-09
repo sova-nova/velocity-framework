@@ -12,27 +12,15 @@ import asyncio
 import json
 import shutil
 from collections.abc import AsyncIterator
-from dataclasses import dataclass
 from pathlib import Path
 
+from velocity.engine import ChatEvent, EngineError
 from velocity.workspace import claude_args
+
+__all__ = ["MODELS", "ChatEvent", "ClaudeCodeChat", "EngineError", "parse_event"]
 
 MODELS = {"sonnet": "Sonnet", "opus": "Opus"}
 STOP_TIMEOUT = 30  # seconds to wait for Claude Code (and its SessionEnd hook) to exit
-
-
-@dataclass(frozen=True)
-class ChatEvent:
-    """What the web page sees: streamed text, a tool call, the end of a reply, an error."""
-
-    type: str  # "text", "tool", "done", "error"
-    text: str = ""
-    name: str = ""
-    input: dict | None = None
-
-
-class EngineError(Exception):
-    pass
 
 
 def claude_command(

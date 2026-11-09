@@ -150,6 +150,7 @@ def test_end_session_wraps_up_and_closes_the_chat(client, config):
         "text": "wrapped-up",
         "name": "",
         "input": None,
+        "cost": None,
     }
     assert session(config, session_id).wrapped_up
     assert client.get("/api/subjects/calculus/chat").json()["open"] is False
