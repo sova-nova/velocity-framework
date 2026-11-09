@@ -200,6 +200,19 @@ pre { background: var(--panel); padding: 0.75rem; border-radius: 6px; overflow-x
 .prepare-choices { display: flex; flex-direction: column; gap: 0.5rem; margin: 1rem 0; }
 .prepare-choices label { display: flex; gap: 0.5rem; align-items: baseline; }
 #prepare-dialog { max-width: 36rem; }
+#add-source { max-width: 32rem; }
+#add-source .field { display: flex; flex-direction: column; gap: 0.25rem; margin: 0.75rem 0; }
+#add-source input[type="text"] {
+  font: inherit;
+  color: var(--text);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.3rem 0.5rem;
+}
+#add-status.error { color: #b3261e; }
+.reader-empty { position: absolute; inset: 0; padding: 2rem 1.5rem; overflow: auto; }
+.reader-empty h2 { margin-top: 0; }
 #reader-page-input {
   width: 4.5rem;
   font: inherit;

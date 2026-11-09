@@ -32,7 +32,13 @@ from starlette.staticfiles import StaticFiles
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 from velocity.chat import ChatError, ChatManager, engines, last_engine
-from velocity.config import Config, ConfigError, list_subjects, load_subject
+from velocity.config import (
+    Config,
+    ConfigError,
+    add_source,
+    list_subjects,
+    load_subject,
+)
 from velocity.engine import CLAUDE_CODE
 from velocity.pdf_source import PdfSource
 from velocity.prepare import (
@@ -44,6 +50,7 @@ from velocity.prepare import (
 )
 from velocity.session import SESSION_ID, Session, record_dir, session_summaries
 from velocity.tools import ToolError, open_source, source_ref
+from velocity.uploads import MAX_UPLOAD_BYTES, UploadError, check_content, upload_path
 
 HOST = "127.0.0.1"
 DEFAULT_PORT = 8765
@@ -157,6 +164,90 @@ def build_app(config: Config, chats: ChatManager | None = None) -> Starlette:
                 item["error"] = f"Could not read {ref.name}: {e}"
             out.append(item)
         return JSONResponse(out)
+
+    async def source_upload(request: Request) -> Response:
+        """Add a source from the page: the file's bytes are the request body (no form
+        encoding), with its name and the source's name in the query string."""
+        subject = subject_or_404(request.path_params["slug"])
+        if subject is None:
+            return JSONResponse({"error": "unknown subject"}, 404)
+        name = request.query_params.get("name", "").strip()
+        filename = request.query_params.get("filename", "")
+        if not name:
+            return JSONResponse({"error": "Give the source a name."}, 400)
+        if any(s.name == name for s in subject.sources):
+            return JSONResponse(
+                {"error": f"{subject.name} already has a source named {name!r}."}, 409
+            )
+        try:
+            path = upload_path(subject.slug, filename)
+            await receive_upload(request, path)
+            added = await asyncio.to_thread(
+                add_source, config, subject.slug, path, name
+            )
+        except UploadError as e:
+            return JSONResponse({"error": str(e)}, e.status)
+        except ConfigError as e:
+            path.unlink(missing_ok=True)
+            return JSONResponse({"error": str(e)}, 400)
+        return JSONResponse(await asyncio.to_thread(describe_added, subject, added))
+
+    async def receive_upload(request: Request, path) -> None:
+        """Write the body to `path` (through a .part file), within the size limit, and
+        check that the content matches the type."""
+        part = path.with_name(path.name + ".part")
+        await asyncio.to_thread(part.parent.mkdir, parents=True, exist_ok=True)
+        handle = await asyncio.to_thread(open, part, "wb")
+        size = 0
+        try:
+            async for chunk in request.stream():
+                size += len(chunk)
+                if size > MAX_UPLOAD_BYTES:
+                    raise UploadError("The file is larger than 1 GB.", 413)
+                await asyncio.to_thread(handle.write, chunk)
+        except BaseException:
+            await asyncio.to_thread(handle.close)
+            part.unlink(missing_ok=True)
+            raise
+        await asyncio.to_thread(handle.close)
+        try:
+            await asyncio.to_thread(check_content, part, path.suffix)
+        except UploadError:
+            part.unlink(missing_ok=True)
+            raise
+        part.replace(path)
+
+    def describe_added(subject, added) -> dict:
+        """What the page shows after an upload: the source, and how many sections the
+        tutor can find in it (a warning if none)."""
+        kind = _source_kind(added)
+        try:
+            sections = len(
+                open_source(load_subject(config, subject.slug), added.name).outline()
+            )
+        except Exception:  # noqa: BLE001 - a broken file can fail in many ways
+            return {
+                "name": added.name,
+                "kind": kind,
+                "sections": 0,
+                "warning": "Its contents couldn't be read; check the file, or remove it "
+                "from subject.toml.",
+            }
+        warning = None
+        if not sections:
+            warning = (
+                "No table of contents (bookmarks) was found, so the tutor can't find its "
+                "sections; it can still search it and look at its pages."
+                if kind == "pdf"
+                else "No headings or table of contents were found, so the tutor can't "
+                "find its sections."
+            )
+        return {
+            "name": added.name,
+            "kind": kind,
+            "sections": sections,
+            "warning": warning,
+        }
 
     def reader_source(request: Request):
         """(subject, source ref) for a reader request, or an error response."""
@@ -357,6 +448,7 @@ def build_app(config: Config, chats: ChatManager | None = None) -> Starlette:
         Route("/api/subjects", subjects),
         Route("/api/engines", engine_list),
         Route("/api/subjects/{slug}/sources", source_list),
+        Route("/api/subjects/{slug}/sources", source_upload, methods=["POST"]),
         Route("/api/subjects/{slug}/sources/{name}/file", source_file),
         Route(
             "/api/subjects/{slug}/sources/{name}/sections/{section_id}",

@@ -25,7 +25,6 @@ async function loadReaderSources(slug) {
   } catch {
     readerSources = [];
   }
-  $("#book-button").hidden = !readerSources.length;
   return readerSources;
 }
 
@@ -81,16 +80,32 @@ async function toggleReader() {
   const last = remembered(subject());
   const source = sourceNamed(last.source) || readerSources.find((s) => !s.error);
   if (source) await openAt(source.name, { page: last.page, section: last.section });
+  else showReaderPanel(); // no sources yet: the "add a source" screen
+}
+
+// Open the panel; with no source to show, it offers to add one.
+function showReaderPanel() {
+  $("#reader").hidden = false;
+  $("#reader-divider").hidden = false;
+  $("#book-button").classList.add("open");
+  const empty = !readerSources.length;
+  $("#reader-empty").hidden = !empty;
+  for (const el of ["#reader-source", "#reader-section", "#reader-ask"]) $(el).hidden = empty;
+  if (empty) {
+    $("#pdf-container").hidden = true;
+    $("#reader-text").hidden = true;
+    $("#reader-page").hidden = true;
+    hidePrepare();
+    status("");
+  }
+  updateLayout();
 }
 
 // Open the reader at a source's page or section (citations, the Book button, pickers).
 async function openAt(name, { page = null, section = null } = {}) {
   const source = sourceNamed(name);
   if (!source) return;
-  $("#reader").hidden = false;
-  $("#reader-divider").hidden = false;
-  $("#book-button").classList.add("open");
-  updateLayout();
+  showReaderPanel();
   if (source.error) {
     status(source.error);
     return;
@@ -513,6 +528,83 @@ async function cancelPrepare() {
   refreshPrepare();
 }
 
+// -- adding a source -------------------------------------------------------------------
+
+let addedSource = null; // the source just added, for "Prepare it now…"
+
+function addStatus(text, isError = false) {
+  const line = $("#add-status");
+  line.hidden = !text;
+  line.textContent = text;
+  line.classList.toggle("error", isError);
+}
+
+function openAddDialog() {
+  $("#add-file").value = "";
+  $("#add-name").value = "";
+  $("#add-cite").textContent = "Name";
+  $("#add-go").disabled = false;
+  $("#add-prepare").hidden = true;
+  addedSource = null;
+  addStatus("");
+  $("#add-source").showModal();
+}
+
+// A default name from the file name; the tutor cites sources by name, so short is
+// better. "James Stewart - Calculus (8th Edition).pdf" (author - title) gives the
+// author's surname, "Stewart"; otherwise the title, shortened at a word.
+function nameFromFile(filename) {
+  const stem = filename.replace(/\.[^.]+$/, "").replace(/[_]+/g, " ").trim();
+  const [before, after] = stem.split(/\s+[-–]\s+/);
+  if (after !== undefined) {
+    const author = before.trim().split(/\s+/);
+    if (author.length <= 4) return author[author.length - 1];
+  }
+  let title = stem.split("(")[0].replace(/-/g, " ").replace(/\s+/g, " ").trim() || stem;
+  while (title.length > 30 && title.includes(" ")) title = title.slice(0, title.lastIndexOf(" "));
+  return title.replace(/[\s,;:.]+$/, "").slice(0, 40);
+}
+
+async function addSource() {
+  const file = $("#add-file").files[0];
+  const name = $("#add-name").value.trim();
+  if (!file) return addStatus("Choose a file first.", true);
+  if (!name) return addStatus("Give it a name.", true);
+  $("#add-go").disabled = true;
+  addStatus(`Uploading ${file.name} (${(file.size / 1e6).toFixed(1)} MB) and checking it…`);
+  const params = new URLSearchParams({ name, filename: file.name });
+  try {
+    const response = await fetch(`/api/subjects/${subject()}/sources?${params}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/octet-stream" },
+      body: file,
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || `${response.status}`);
+    addedSource = data;
+  } catch (error) {
+    $("#add-go").disabled = false;
+    return addStatus(`Could not add it: ${error.message}`, true);
+  }
+  const found = addedSource.sections
+    ? `${addedSource.sections} sections found.`
+    : addedSource.warning;
+  addStatus(
+    `Added ${addedSource.name}. ${found} The tutor can use it from your next session ` +
+      "(start a new one, or pause and resume).",
+  );
+  $("#add-prepare").hidden = addedSource.kind !== "pdf";
+  await loadReaderSources(subject());
+  fillSources();
+  await openAt(addedSource.name);
+}
+
+async function prepareAdded() {
+  $("#add-source").close();
+  await refreshPrepare(); // the status of the new source, for the estimate
+  openPrepareDialog();
+}
+
 // -- set-up ----------------------------------------------------------------------------
 
 function setUpReader() {
@@ -529,6 +621,19 @@ function setUpReader() {
   $("#reader-close").addEventListener("click", closeReader);
   $("#reader-ask").addEventListener("click", askAboutPage);
   $("#reader-prepare").addEventListener("click", openPrepareDialog);
+  $("#reader-add").addEventListener("click", openAddDialog);
+  $("#reader-empty-add").addEventListener("click", openAddDialog);
+  $("#add-go").addEventListener("click", addSource);
+  $("#add-prepare").addEventListener("click", prepareAdded);
+  $("#add-close").addEventListener("click", () => $("#add-source").close());
+  $("#add-file").addEventListener("change", () => {
+    const file = $("#add-file").files[0];
+    if (file && !$("#add-name").value.trim()) $("#add-name").value = nameFromFile(file.name);
+    $("#add-cite").textContent = $("#add-name").value.trim() || "Name";
+  });
+  $("#add-name").addEventListener("input", () => {
+    $("#add-cite").textContent = $("#add-name").value.trim() || "Name";
+  });
   $("#prepare-go").addEventListener("click", startPrepare);
   $("#prepare-close").addEventListener("click", () => $("#prepare-dialog").close());
   $("#prepare-cancel").addEventListener("click", cancelPrepare);
