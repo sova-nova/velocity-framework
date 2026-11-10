@@ -60,13 +60,14 @@ def test_page_and_static_files(client):
     assert client.get("/static/style.css").status_code == 200
 
 
-def test_subjects(client):
+def test_subjects(client, config):
     assert client.get("/api/subjects").json() == [
         {
             "slug": "calculus",
             "name": "Calculus",
             "sources": [],
             "archived": False,
+            "color": load_subject(config, "calculus").display_color,
             "sessions": 0,
         }
     ]

@@ -71,7 +71,7 @@ def parse_event(line: str) -> list[ChatEvent]:
                 "tool", name=_short_tool_name(b.get("name", "")), input=b.get("input")
             )
             for b in content
-            if b.get("type") == "tool_use"
+            if b.get("type") == "tool_use" and _shown(b.get("name", ""))
         ]
     if kind == "result":
         if event.get("is_error") or event.get("subtype") != "success":
@@ -83,6 +83,12 @@ def parse_event(line: str) -> list[ChatEvent]:
 
 def _short_tool_name(name: str) -> str:
     return name.removeprefix("mcp__velocity__")
+
+
+def _shown(name: str) -> bool:
+    """The page shows the tutor's own tools and skills, not Claude Code's internal
+    steps (ToolSearch and the like), which mean nothing to a learner (M10)."""
+    return name.startswith("mcp__velocity__") or name == "Skill"
 
 
 class ClaudeCodeChat:

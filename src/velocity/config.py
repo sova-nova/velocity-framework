@@ -4,6 +4,7 @@ Global: ~/.config/velocity/config.toml (vault path).
 Subject: <vault>/Tutor/<subject>/subject.toml (sources, readable note folders, persona extras).
 """
 
+import hashlib
 import json
 import os
 import re
@@ -63,10 +64,34 @@ class Subject:
     note_folders: tuple[Path, ...]  # absolute, inside the vault, outside Tutor/
     sources: tuple[SourceRef, ...]
     archived: bool = False  # hidden in lists, everything kept; can be recovered
+    color: str | None = None  # "#rrggbb" from subject.toml; else picked from the name
 
     @property
     def sessions_dir(self) -> Path:
         return self.dir / "sessions"
+
+    @property
+    def display_color(self) -> str:
+        """The subject's color on the page: its own, or one of SUBJECT_COLORS picked
+        from its id, so it stays the same without being stored."""
+        if self.color:
+            return self.color
+        index = int(hashlib.sha256(self.slug.encode()).hexdigest(), 16)
+        return SUBJECT_COLORS[index % len(SUBJECT_COLORS)]
+
+
+# Eight colors that read on the Chalkboard palette in light and dark (M10).
+SUBJECT_COLORS = (
+    "#2a9d8f",  # teal
+    "#e76f51",  # coral
+    "#5468d4",  # indigo
+    "#e9a23b",  # amber
+    "#9b5de5",  # plum
+    "#4f9d4a",  # green
+    "#d6457d",  # rose
+    "#5c7a99",  # slate
+)
+_COLOR = re.compile(r"^#[0-9a-fA-F]{6}$")
 
 
 def _read_toml(path: Path) -> dict:
@@ -145,6 +170,7 @@ def load_subject(config: Config, slug: str) -> Subject:
         ),
         sources=tuple(sources),
         archived=bool(data.get("archived", False)),
+        color=data["color"] if _COLOR.match(str(data.get("color", ""))) else None,
     )
 
 

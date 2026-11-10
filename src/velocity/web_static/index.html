@@ -18,17 +18,34 @@
 <body>
   <header>
     <h1>velocity</h1>
-    <label>Subject
-      <select id="subject"></select>
-    </label>
-    <button id="subject-settings-button" class="icon-button" title="Settings for this subject">⚙</button>
+    <div id="subject-menu" class="subject-menu">
+      <button id="subject-button" class="subject-button" aria-haspopup="menu" aria-expanded="false"
+        title="Switch subject, edit it, or make a new one">
+        <span class="dot" aria-hidden="true"></span>
+        <span id="subject-name">Subjects</span>
+        <svg class="caret" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 4.5 6 7.5 9 4.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <div id="subject-popover" class="popover" role="menu" hidden>
+        <div id="subject-list" class="menu-group"></div>
+        <div class="menu-line" role="separator"></div>
+        <button id="subject-edit" class="menu-item" role="menuitem">Edit…</button>
+        <button id="subject-new" class="menu-item" role="menuitem">New subject…</button>
+        <button id="subject-archived" class="menu-item" role="menuitem" hidden>Archived…</button>
+      </div>
+    </div>
     <nav>
       <button class="tab active" data-view="chat">Chat</button>
       <button class="tab" data-view="history">History</button>
       <button class="tab" data-view="library" title="All your books, in every subject">Library</button>
-      <button id="book-button" class="tab" title="Open the source reader beside the chat">Book</button>
-      <button id="settings-button" class="icon-button" title="Settings: notes folder, OCR, API">Settings</button>
     </nav>
+    <button id="book-button" class="toggle" aria-pressed="false" title="Show the book beside the chat">
+      <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 5.5C8.4 4.3 6.2 3.8 3 3.8v11c3.2 0 5.4.5 7 1.7 1.6-1.2 3.8-1.7 7-1.7v-11c-3.2 0-5.4.5-7 1.7Zm0 0v11" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>
+      Book
+    </button>
+    <span class="spacer"></span>
+    <button id="settings-button" class="icon-button" title="Settings: notes folder, OCR, API" aria-label="Settings">
+      <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M8.6 2.5h2.8l.4 2.1 1.5.9 2-.8 1.4 2.4-1.6 1.4v1.7l1.6 1.4-1.4 2.4-2-.8-1.5.9-.4 2.1H8.6l-.4-2.1-1.5-.9-2 .8-1.4-2.4 1.6-1.4V8.5L3.3 7.1l1.4-2.4 2 .8 1.5-.9Z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><circle cx="10" cy="10" r="2.4" fill="none" stroke="currentColor" stroke-width="1.4"/></svg>
+    </button>
   </header>
   <section id="setup" class="setup" hidden>
     <h2>Welcome to velocity</h2>
@@ -60,19 +77,25 @@
     </section>
     <section id="chat-start" class="start-panel">
       <h2>Start a session</h2>
-      <p id="reminder" class="reminder">What you share in a session, including any notes the
-        tutor reads, is sent to Anthropic's API (a third party).</p>
       <p id="chat-notice" class="hint"></p>
-      <div class="pickers">
-        <label>Engine <select id="engine"></select></label>
-        <label>Model <select id="model"></select></label>
-      </div>
-      <p id="engine-hint" class="hint"></p>
-      <p class="hint">To resume or continue an earlier session, use its button in History.</p>
+      <!-- The selects hold the choice; the switches beside them are what you click. -->
+      <select id="engine" hidden></select>
+      <select id="model" hidden></select>
+      <div class="switch-row"><span class="switch-label">Engine</span>
+        <div id="engine-switch" class="segmented" role="radiogroup" aria-label="Engine"></div></div>
+      <div class="switch-row"><span class="switch-label">Model</span>
+        <div id="model-switch" class="segmented" role="radiogroup" aria-label="Model"></div></div>
+      <p id="engine-hint" class="hint small"></p>
       <div class="actions">
-        <button id="start-new" class="primary">Start a new session</button>
+        <button id="start-new" class="primary big">Start a new session</button>
         <button id="close-other" hidden>Close the open session</button>
       </div>
+      <div id="pick-up" class="pick-up" hidden>
+        <h3>Pick up where you left off</h3>
+        <ul id="pick-up-list"></ul>
+      </div>
+      <p id="reminder" class="footnote">What you share in a session, including any notes the
+        tutor reads, is sent to Anthropic's API (a third party).</p>
     </section>
     <section id="chat-live" hidden>
       <div class="chat-bar">
@@ -93,7 +116,7 @@
         <button data-command="/review-notes">Review notes</button>
       </div>
       <form id="composer">
-        <textarea id="input" rows="2" placeholder="Message the tutor (Enter to send, Shift+Enter for a new line)"></textarea>
+        <textarea id="input" rows="2" placeholder="Message the tutor" title="Enter sends; Shift+Enter starts a new line"></textarea>
         <button id="send" class="primary" type="submit">Send</button>
         <button id="stop" type="button" title="Stop this reply; what the tutor said so far is kept" hidden>Stop</button>
       </form>
@@ -299,24 +322,30 @@
   <div id="reader-divider" title="Drag to resize" hidden></div>
   <section id="reader" hidden>
     <div class="reader-bar">
-      <select id="reader-source" aria-label="Source"></select>
-      <button id="reader-add" title="Add a source: PDF, EPUB, Markdown or HTML">＋</button>
+      <select id="reader-source" aria-label="Book"></select>
       <select id="reader-section" aria-label="Section"></select>
+      <label id="reader-page" class="page-box" hidden>p.
+        <input id="reader-page-input" type="number" min="1" inputmode="numeric" title="Type a page number and press Enter">
+        <span class="of">/ <span id="reader-pages"></span></span></label>
       <span class="spacer"></span>
-      <label id="reader-page" class="hint" hidden>p.
-        <input id="reader-page-input" type="number" min="1" inputmode="numeric" title="Type a PDF page number and press Enter">
-        of <span id="reader-pages"></span></label>
-      <button id="reader-ask" title="Start a message to the tutor about the page you're on">Ask about this page</button>
-      <button id="reader-prepare" title="OCR a chapter or the whole book ahead of time, so reading it is instant" hidden>Prepare…</button>
-      <button id="reader-close" title="Close the reader">×</button>
+      <button id="reader-ask" class="primary small" title="Start a message to the tutor about the page you're on">Ask about this page</button>
+      <div class="more">
+        <button id="reader-more" class="icon-button" aria-haspopup="menu" aria-expanded="false" title="More" aria-label="More">⋯</button>
+        <div id="reader-menu" class="popover right" role="menu" hidden>
+          <button id="reader-prepare" class="menu-item" role="menuitem" hidden>Prepare for instant reading…</button>
+          <button id="reader-add" class="menu-item" role="menuitem">Add a book…</button>
+        </div>
+      </div>
+      <button id="reader-close" class="icon-button" title="Close the book" aria-label="Close the book">×</button>
     </div>
+    <!-- Preparing a book: a thin line under the bar; finished notes fade away. -->
     <div id="prepare-progress" class="prepare-progress" hidden>
       <div class="prepare-line">
-        <strong id="prepare-title"></strong>
+        <span id="prepare-title"></span>
         <span id="prepare-detail" class="hint"></span>
         <span class="spacer"></span>
-        <button id="prepare-cancel" title="Stop after the current batch; finished pages are kept">Cancel</button>
-        <button id="prepare-dismiss" title="Hide this message" hidden>×</button>
+        <button id="prepare-cancel" class="link-button" title="Stop after the current batch; finished pages are kept">Cancel</button>
+        <button id="prepare-dismiss" class="link-button" title="Hide this message" hidden>×</button>
       </div>
       <progress id="prepare-bar" max="1" value="0"></progress>
     </div>
@@ -324,10 +353,10 @@
       <div id="pdf-container"><div id="pdf-viewer" class="pdfViewer"></div></div>
       <article id="reader-text" hidden></article>
       <div id="reader-empty" class="reader-empty" hidden>
-        <h2>No sources yet</h2>
+        <h2>No books yet</h2>
         <p>Add a textbook or your own notes (PDF, EPUB, Markdown or HTML). The tutor then
           teaches from it, cites it, and shows it here.</p>
-        <button id="reader-empty-add" class="primary">Add a source…</button>
+        <button id="reader-empty-add" class="primary">Add a book…</button>
       </div>
     </div>
     <p id="reader-status" class="hint" hidden></p>
