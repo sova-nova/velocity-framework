@@ -213,7 +213,7 @@ Long own-loop chats (`velocity chat`, and web chats on the own loop) use the API
 - **Shown:** a grey line, "Earlier conversation summarized to keep the chat short.", in the terminal and on the page (a `note` chat event). The session log and record are not changed: compaction only changes what the API sees.
 - **Resume** rebuilds the full conversation from the record (tool results as placeholders), which compacts again if it is still over the threshold.
 - **Why threshold, not on demand:** the API docs recommend on-demand compaction (beta `compact-2026-09-04`) for apps that must control when it runs or keep recent turns word for word. A tutoring chat needs neither, and threshold compaction is one parameter on the requests we already send. The cost is one slower reply when it runs.
-- **Not verified live yet:** how compaction behaves with mid-conversation `system` messages and a request ending in a `tool_result` (the docs don't say). A live check can lower the trigger to the API's minimum, 50K tokens, to keep it cheap.
+- **Checked live (2026-11-10, Sonnet 5.5, trigger 50K, about $0.35):** compaction works in a request that ends in a mid-conversation `system` message and in one that ends in a `tool_result`; after two summaries the tutor still recalled facts from the first turn.
 
 ### M8 notes: web chat on Claude Code (2026-11-06)
 
