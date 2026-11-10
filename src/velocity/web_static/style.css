@@ -358,11 +358,11 @@ pre { background: var(--panel); padding: 0.75rem; border-radius: 6px; overflow-x
 .prepare-progress.done #prepare-bar::-webkit-progress-value { background: var(--done); }
 .prepare-progress.failed { color: var(--danger); }
 .prepare-progress.failed .hint { color: var(--danger); }
-.prepare-choices { display: flex; flex-direction: column; gap: 0.5rem; margin: 1rem 0; }
 .prepare-choices label { display: flex; gap: 0.5rem; align-items: baseline; }
-#prepare-again { display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.4rem; padding-top: 0.6rem; border-top: 1px solid var(--border); }
+#prepare-again { display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.75rem; padding-top: 0.6rem; border-top: 1px solid var(--border); }
 #prepare-again[hidden] { display: none; }
-#prepare-dialog { max-width: 36rem; }
+#prepare-dialog { width: min(38rem, 92vw); max-width: none; }
+#add-source { width: min(32rem, 92vw); }
 /* Subjects (M10) */
 .icon-button {
   background: none;
@@ -685,7 +685,70 @@ dialog {
 dialog dt { font-weight: 600; margin-top: 0.75rem; }
 dialog dd { margin: 0.2rem 0 0; color: var(--muted); }
 dialog form { margin-top: 1rem; text-align: right; }
-.dialog-actions { display: flex; flex-direction: column; gap: 0.5rem; margin-top: 1rem; }
+/* One button pattern (D1): a row at the bottom right, Cancel then the action; a rare or
+   destructive action (.left) at the bottom left. */
+.dialog-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 0.5rem; margin-top: 1.25rem; }
+.dialog-actions .left { margin-right: auto; }
+dialog form.dialog-actions { text-align: initial; }
+.help-lines { display: grid; grid-template-columns: max-content 1fr; gap: 0.45rem 1rem; margin: 0.75rem 0 0; }
+.help-lines dt, .help-lines dd { margin: 0; }
+
+/* A small "Saved" beside a field's label, for a moment after it saves (D4). */
+.saved { margin-left: 0.4rem; font-size: 0.8rem; color: var(--ok); font-weight: 600; }
+
+/* The subject's color: eight swatches. */
+.swatches { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.swatches button {
+  width: 1.7rem;
+  height: 1.7rem;
+  padding: 0;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  background: var(--swatch);
+  box-shadow: inset 0 0 0 2px var(--bg);
+  cursor: pointer;
+}
+.swatches button[aria-checked="true"] { border-color: var(--text); }
+.swatches button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* Tabs inside a dialog (Add a book). */
+.dialog-tabs { display: flex; gap: 0.25rem; border-bottom: 1px solid var(--border); margin: 0.75rem 0 0.25rem; }
+.dialog-tabs[hidden] { display: none; }
+.dialog-tab {
+  padding: 0.4rem 0.8rem;
+  border: none;
+  border-radius: 0;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+  box-shadow: none;
+}
+.dialog-tab:hover { color: var(--text); }
+.dialog-tab[aria-selected="true"] { color: var(--text); font-weight: 600; box-shadow: inset 0 -2px 0 var(--accent); }
+
+/* Choices as cards (Prepare): a radio inside each, the card shows the choice. */
+.option-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr)); gap: 0.6rem; margin: 1rem 0 0.75rem; }
+.option-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.7rem 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+  cursor: pointer;
+}
+.option-card[hidden] { display: none; }
+.option-card input { position: absolute; opacity: 0; pointer-events: none; }
+.option-card:hover { border-color: var(--accent); }
+.option-card:has(input:checked) { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.option-card:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+.option-card:has(input:disabled) { opacity: 0.55; cursor: default; }
+.option-card:has(input:disabled):hover { border-color: var(--border); }
+.card-title { font-weight: 600; }
+.card-name { font-size: 0.85rem; color: var(--muted); overflow-wrap: anywhere; }
+.card-meta { font-size: 0.9rem; margin-top: auto; padding-top: 0.25rem; }
 
 @media (max-width: 700px) {
   .view { grid-template-columns: 1fr; height: auto; }

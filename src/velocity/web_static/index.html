@@ -81,7 +81,7 @@
       <!-- The selects hold the choice; the switches beside them are what you click. -->
       <select id="engine" hidden></select>
       <select id="model" hidden></select>
-      <div class="switch-row"><span class="switch-label">Engine</span>
+      <div class="switch-row"><span class="switch-label" title="Claude Code uses your Claude plan; the API is billed per token, with the cost shown.">Engine</span>
         <div id="engine-switch" class="segmented" role="radiogroup" aria-label="Engine"></div></div>
       <div class="switch-row"><span class="switch-label">Model</span>
         <div id="model-switch" class="segmented" role="radiogroup" aria-label="Model"></div></div>
@@ -104,8 +104,8 @@
         <span id="chat-cost" class="cost" title="Estimated API cost of this session so far" hidden></span>
         <span class="spacer"></span>
         <button id="help-button" class="help" title="What do these buttons do?">?</button>
-        <button id="pause">Pause</button>
-        <button id="end-session" class="primary">End session</button>
+        <button id="pause" title="Stop for now and resume later; 30 idle minutes also pause.">Pause</button>
+        <button id="end-session" class="primary" title="Wrap up: a recap, your progress saved, the log closed.">End session</button>
       </div>
       <div id="messages"></div>
       <div id="skills" class="skills">
@@ -118,42 +118,36 @@
       <form id="composer">
         <textarea id="input" rows="2" placeholder="Message the tutor" title="Enter sends; Shift+Enter starts a new line"></textarea>
         <button id="send" class="primary" type="submit">Send</button>
-        <button id="stop" type="button" title="Stop this reply; what the tutor said so far is kept" hidden>Stop</button>
+        <button id="stop" type="button" title="Cut the current reply short; what was said is kept." hidden>Stop</button>
       </form>
     </section>
   </main>
   <dialog id="help">
     <h2>Sessions</h2>
-    <dl>
+    <!-- One line each; the buttons' tooltips say the same (D5). -->
+    <dl class="help-lines">
       <dt>End session</dt>
-      <dd>Wrap up properly: the tutor catches up your progress, asks one last question,
-        writes a recap, and closes the log. Do this when you're done for the day.</dd>
+      <dd>Wrap up: a recap, your progress saved, the log closed.</dd>
       <dt>Pause</dt>
-      <dd>Stop for now without a wrap-up. The session stays unfinished and can be resumed.
-        A chat with no messages for 30 minutes is paused automatically.</dd>
+      <dd>Stop for now and resume later; 30 idle minutes also pause.</dd>
       <dt>Stop</dt>
-      <dd>Appears while the tutor is replying. It ends the reply where it is; what the
-        tutor said so far stays in the chat and the log, marked as stopped.</dd>
+      <dd>Cut the current reply short; what was said is kept.</dd>
       <dt>Resume</dt>
-      <dd>Carry on with a paused session, in the same log. It uses the engine and model that
-        ran the session last unless you pick others.</dd>
+      <dd>Carry on with a paused session, in the same log.</dd>
       <dt>Continue</dt>
-      <dd>Start a new session that picks up from a finished one. The tutor reads the earlier
-        session first; the new learning goes into a new log, linked to the old one.</dd>
+      <dd>A new session that picks up where a finished one ended.</dd>
       <dt>Engines</dt>
-      <dd>Claude Code runs on your Claude plan. The API engine uses your
-        <code>ANTHROPIC_API_KEY</code> and is billed per token: the chat bar shows the
-        session's estimated cost so far, and each reply shows its own.</dd>
+      <dd>Claude Code uses your Claude plan; the API is billed per token, with the cost shown.</dd>
     </dl>
-    <form method="dialog"><button class="primary">Got it</button></form>
+    <form method="dialog" class="dialog-actions"><button class="primary">Got it</button></form>
   </dialog>
   <dialog id="switch">
     <h2 id="switch-title"></h2>
-    <p>Only one session per subject can be open at a time.</p>
+    <p id="switch-text"></p>
     <div class="dialog-actions">
-      <button id="switch-pause" class="primary"></button>
-      <button id="switch-back">Go back and end it properly</button>
+      <button id="switch-back" class="left">Go back and end it</button>
       <button id="switch-cancel">Cancel</button>
+      <button id="switch-pause" class="primary"></button>
     </div>
   </dialog>
   <dialog id="app-settings">
@@ -179,8 +173,8 @@
     <ul id="app-checks" class="checks"></ul>
     <p id="app-settings-status" class="hint" hidden></p>
     <div class="dialog-actions">
-      <button id="app-settings-save" class="primary">Save</button>
       <button id="app-settings-close">Close</button>
+      <button id="app-settings-save" class="primary">Save</button>
     </div>
     <p class="hint">Saved in <code id="app-config-path"></code>.</p>
   </dialog>
@@ -193,20 +187,25 @@
     </label>
     <p id="new-subject-status" class="hint" hidden></p>
     <div class="dialog-actions">
-      <button id="new-subject-go" class="primary">Create</button>
       <button id="new-subject-close">Cancel</button>
+      <button id="new-subject-go" class="primary">Create</button>
     </div>
   </dialog>
   <dialog id="subject-settings">
+    <!-- Each field saves when you leave it (D4); Undo changes puts back what it opened with. -->
     <h2>Subject settings</h2>
-    <label class="field">Name
+    <label class="field"><span>Name <span class="saved" data-field="name" hidden>Saved</span></span>
       <input type="text" id="settings-name" maxlength="60">
     </label>
-    <label class="field">Extra instructions for the tutor
+    <div class="field">
+      <span>Color <span class="saved" data-field="color" hidden>Saved</span></span>
+      <div id="settings-colors" class="swatches" role="radiogroup" aria-label="Color"></div>
+    </div>
+    <label class="field"><span>Extra instructions for the tutor <span class="saved" data-field="persona" hidden>Saved</span></span>
       <textarea id="settings-persona" rows="4" placeholder="e.g. Use SI units. Ask me to explain my reasoning."></textarea>
     </label>
     <div class="field">
-      <span>Note folders the tutor may read</span>
+      <span>Note folders the tutor may read <span class="saved" data-field="note_folders" hidden>Saved</span></span>
       <ul id="settings-folders" class="chips"></ul>
       <div class="inline">
         <input type="text" id="settings-folder" list="vault-folders" placeholder="A folder in your vault">
@@ -222,15 +221,11 @@
       <span class="hint">Add more with Book → ＋. Removing one keeps the file in your library.</span>
     </div>
     <p id="settings-status" class="hint" hidden></p>
+    <p class="hint">Changes are saved as you go; the tutor uses them from your next session.</p>
     <div class="dialog-actions">
-      <button id="settings-save" class="primary">Save</button>
-      <button id="settings-close">Close</button>
-    </div>
-    <hr>
-    <div class="field">
-      <button id="settings-archive">Archive this subject</button>
-      <span class="hint">Hides it from the menu. Everything is kept, and you can recover it
-        any time from Archived.</span>
+      <button id="settings-archive" class="left" title="Hide it from the menu. Everything is kept; recover it any time from Archived.">Archive</button>
+      <button id="settings-undo" title="Put back the name, color, instructions and note folders as they were when this opened" disabled>Undo changes</button>
+      <button id="settings-close" class="primary">Done</button>
     </div>
   </dialog>
   <dialog id="archived-subjects">
@@ -238,56 +233,63 @@
     <ul id="archived-list" class="archived-list"></ul>
     <p id="archived-status" class="hint" hidden></p>
     <div class="dialog-actions">
-      <button id="archived-close">Close</button>
+      <button id="archived-close" class="primary">Done</button>
     </div>
   </dialog>
   <dialog id="add-source">
-    <h2>Add a source</h2>
-    <div id="add-library" class="field" hidden>
-      <span>From your library</span>
-      <select id="add-library-pick"></select>
-      <span id="add-library-hint" class="hint"></span>
-      <p class="hint or">or upload a new file</p>
+    <h2>Add a book</h2>
+    <!-- Two tabs (D3); without books in the library, only the upload is shown. -->
+    <div id="add-tabs" class="dialog-tabs" role="tablist" hidden>
+      <button id="add-tab-library" class="dialog-tab" role="tab" data-tab="library">From your library</button>
+      <button id="add-tab-upload" class="dialog-tab" role="tab" data-tab="upload">Upload a file</button>
     </div>
-    <p class="hint">A PDF, EPUB, Markdown or HTML file. velocity keeps a copy in its library
-      folder (not in your vault), so other subjects can use it too.</p>
-    <label class="field">File
-      <input type="file" id="add-file" accept=".pdf,.epub,.md,.markdown,.html,.htm,.xhtml">
-    </label>
+    <div id="add-library" class="field" role="tabpanel" hidden>
+      <select id="add-library-pick" aria-label="A book from your library"></select>
+      <span id="add-library-hint" class="hint"></span>
+    </div>
+    <div id="add-upload" class="field" role="tabpanel">
+      <input type="file" id="add-file" aria-label="A file" accept=".pdf,.epub,.md,.markdown,.html,.htm,.xhtml">
+      <span class="hint">PDF, EPUB, Markdown or HTML. velocity keeps a copy in its library
+        (not in your vault), so other subjects can use it too.</span>
+    </div>
     <label class="field">Name
       <input type="text" id="add-name" maxlength="40" placeholder="e.g. Stewart">
+      <span class="hint">The tutor cites it as “<span id="add-cite">Name</span> §2.4”, so
+        short is best.</span>
     </label>
-    <p class="hint">The tutor cites it as “<span id="add-cite">Name</span> §2.4”, so a short
-      name works best.</p>
     <p id="add-status" class="hint" hidden></p>
     <div class="dialog-actions">
-      <button id="add-go" class="primary">Add</button>
+      <button id="add-close">Cancel</button>
       <button id="add-prepare" hidden>Prepare it now…</button>
-      <button id="add-close">Close</button>
+      <button id="add-go" class="primary">Add</button>
     </div>
   </dialog>
   <dialog id="prepare-dialog">
-    <h2>Prepare <span id="prepare-source"></span> ahead of time</h2>
-    <p>Preparing reads the pages now (OCR), so that reading them later is instant.
-      <strong>This takes a while:</strong> about 6–7 seconds per page, and your GPU is busy
-      the whole time.</p>
-    <p>The tutor keeps working meanwhile. If it needs a page that isn't prepared yet, it
-      waits for the batch in progress (about a minute). Looking at pages and searching
-      never wait.</p>
-    <div class="prepare-choices">
-      <label><input type="radio" name="prepare-scope" value="chapter"> <span id="prepare-chapter"></span></label>
-      <label><input type="radio" name="prepare-scope" value="all"> <span id="prepare-all"></span></label>
-      <div id="prepare-again" hidden>
-        <span class="hint">Already prepared:</span>
-        <label id="prepare-unchecked-choice"><input type="radio" name="prepare-scope" value="recheck-unchecked"> <span id="prepare-unchecked"></span></label>
-        <label><input type="radio" name="prepare-scope" value="recheck-all"> <span id="prepare-recheck-all"></span></label>
-      </div>
+    <!-- The choices are the content (D2): one card each, with pages and time. -->
+    <h2>Prepare <span id="prepare-source"></span> for instant reading</h2>
+    <div class="option-cards">
+      <label class="option-card"><input type="radio" name="prepare-scope" value="section">
+        <span class="card-title">This section</span>
+        <span id="prepare-section-name" class="card-name"></span>
+        <span id="prepare-section" class="card-meta"></span></label>
+      <label class="option-card"><input type="radio" name="prepare-scope" value="chapter">
+        <span class="card-title">This chapter</span>
+        <span id="prepare-chapter-name" class="card-name"></span>
+        <span id="prepare-chapter" class="card-meta"></span></label>
+      <label class="option-card"><input type="radio" name="prepare-scope" value="all">
+        <span class="card-title">The whole book</span>
+        <span id="prepare-all" class="card-meta"></span></label>
     </div>
-    <p class="hint">It keeps going if you close this page or stop velocity web. You can cancel
-      any time: finished pages are kept, and starting again continues where it stopped.</p>
+    <p class="hint">Your GPU is busy while it runs, and it keeps going if you close the page.
+      Cancel keeps the finished pages.</p>
+    <div id="prepare-again" class="prepare-choices" hidden>
+      <span class="hint">Already prepared:</span>
+      <label id="prepare-unchecked-choice"><input type="radio" name="prepare-scope" value="recheck-unchecked"> <span id="prepare-unchecked"></span></label>
+      <label><input type="radio" name="prepare-scope" value="recheck-all"> <span id="prepare-recheck-all"></span></label>
+    </div>
     <div class="dialog-actions">
-      <button id="prepare-go" class="primary">Start preparing</button>
       <button id="prepare-close">Cancel</button>
+      <button id="prepare-go" class="primary">Start</button>
     </div>
   </dialog>
   <dialog id="resume">
@@ -298,8 +300,8 @@
     </div>
     <p id="resume-note" class="hint"></p>
     <div class="dialog-actions">
-      <button id="resume-go" class="primary">Resume</button>
       <button id="resume-cancel">Cancel</button>
+      <button id="resume-go" class="primary">Resume</button>
     </div>
   </dialog>
   <main id="history" class="view" hidden>

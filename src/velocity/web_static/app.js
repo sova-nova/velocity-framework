@@ -111,8 +111,8 @@ function sessionAction(s) {
   go.textContent = action[0];
   go.title =
     action[0] === "Resume"
-      ? "Carry on with this session, in the same log"
-      : "Start a new session that picks up from this one";
+      ? "Carry on with a paused session, in the same log."
+      : "A new session that picks up where a finished one ended.";
   const target = sessionName(s);
   const goOn = (options) => {
     if (chatStatus.open) {
@@ -308,6 +308,7 @@ async function loadPickUp() {
     what.append(title, when);
     const go = document.createElement("button");
     go.textContent = "Resume";
+    go.title = "Carry on with a paused session, in the same log.";
     go.addEventListener("click", () =>
       askResume(sessionName(s), s.last_engine || {}, (choice) => startChat({ resume: s.id, ...choice })),
     );
@@ -650,8 +651,10 @@ function askResume(target, last, onChoice) {
 function askToSwitch(verb, target, options) {
   const dialog = $("#switch");
   const current = chatStatus.title || chatStatus.session || "Your current session";
-  $("#switch-title").textContent = `"${current}" is still open.`;
-  $("#switch-pause").textContent = `Pause it and ${verb.toLowerCase()} "${target}"`;
+  $("#switch-title").textContent = `${verb} "${target}"?`;
+  $("#switch-text").textContent =
+    `"${current}" is still open, and only one session per subject can be open at a time.`;
+  $("#switch-pause").textContent = `Pause it and ${verb.toLowerCase()}`;
   $("#switch-pause").onclick = async () => {
     dialog.close();
     await pauseChat();

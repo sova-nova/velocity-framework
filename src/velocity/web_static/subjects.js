@@ -2,8 +2,8 @@
 //
 // The subject menu (clarity pass) is one button with the subject's color and name. It
 // opens a list of the active subjects, then Edit <subject>…, New subject… and, when
-// there are any, Archived (n)…. Edit opens the subject's settings: name, extra
-// instructions, note folders, and Archive. Archived subjects can be recovered, or
+// there are any, Archived (n)…. Edit opens the subject's settings: name, color, extra
+// instructions, note folders, books, and Archive; they save as you go. Archived subjects can be recovered, or
 // deleted after typing their name. Uses $, getJSON, postJSON, loadSessions, loadChat and
 // resetReader from app.js and reader.js.
 
@@ -116,8 +116,79 @@ async function createSubject() {
 }
 
 // -- settings --------------------------------------------------------------------------
+//
+// Saved as you go (D4 of the clarity pass): the name and the instructions when you leave
+// them, the color and the note folders when you pick them. Undo changes puts back what
+// the dialog opened with, until it closes. Renaming and removing books apply at once too,
+// but are not undone (they have their own confirmation).
 
+const SETTINGS_FIELDS = ["name", "persona", "note_folders", "color"];
+let settingsOpened = null; // the fields as the dialog opened with them
+let settingsNow = null; // the server's last answer: the fields as saved, and the colors
 let settingsFolders = [];
+
+const fieldsOf = (settings) => Object.fromEntries(SETTINGS_FIELDS.map((f) => [f, settings[f]]));
+const sameValue = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+
+function flashSaved(field) {
+  const mark = document.querySelector(`#subject-settings .saved[data-field="${field}"]`);
+  if (!mark) return;
+  mark.hidden = false;
+  clearTimeout(mark.timer);
+  mark.timer = setTimeout(() => (mark.hidden = true), 2000);
+}
+
+function showUndo() {
+  $("#settings-undo").disabled = sameValue(fieldsOf(settingsNow), settingsOpened);
+}
+
+// Save the fields in `changes` that differ from what is saved; then redraw what shows them.
+async function saveFields(changes, { flash = true } = {}) {
+  const changed = Object.fromEntries(
+    Object.entries(changes).filter(([field, value]) => !sameValue(value, settingsNow[field])),
+  );
+  if (!Object.keys(changed).length) return;
+  const slug = currentSlug;
+  try {
+    const saved = await postJSON(`/api/subjects/${slug}/settings`, changed);
+    if (slug !== currentSlug) return; // switched meanwhile
+    settingsNow = saved;
+    dialogStatus("#settings-status", "");
+    if (flash) for (const field of Object.keys(changed)) flashSaved(field);
+    if ("name" in changed || "color" in changed) await loadSubjects(currentSlug);
+  } catch (error) {
+    dialogStatus("#settings-status", error.message, true);
+  }
+  // What is saved, also after an error; only these fields, so that typing meanwhile in
+  // another one is kept.
+  drawSettings(settingsNow, Object.keys(changed));
+  showUndo();
+}
+
+function drawSettings(settings, fields = SETTINGS_FIELDS) {
+  if (fields.includes("name")) $("#settings-name").value = settings.name;
+  if (fields.includes("persona")) $("#settings-persona").value = settings.persona;
+  if (fields.includes("note_folders")) {
+    settingsFolders = [...settings.note_folders];
+    drawFolders();
+  }
+  if (fields.includes("color")) drawColors(settings.colors, settings.display_color);
+}
+
+function drawColors(colors, shown) {
+  const row = $("#settings-colors");
+  row.innerHTML = "";
+  for (const color of colors) {
+    const swatch = document.createElement("button");
+    swatch.setAttribute("role", "radio");
+    swatch.setAttribute("aria-checked", String(color === shown));
+    swatch.setAttribute("aria-label", color);
+    swatch.title = color;
+    swatch.style.setProperty("--swatch", color);
+    swatch.addEventListener("click", () => saveFields({ color }));
+    row.append(swatch);
+  }
+}
 
 function drawFolders() {
   const list = $("#settings-folders");
@@ -132,10 +203,9 @@ function drawFolders() {
       textContent: "×",
       title: `Stop letting the tutor read ${folder}`,
     });
-    remove.addEventListener("click", () => {
-      settingsFolders = settingsFolders.filter((f) => f !== folder);
-      drawFolders();
-    });
+    remove.addEventListener("click", () =>
+      saveFields({ note_folders: settingsFolders.filter((f) => f !== folder) }),
+    );
     item.append(remove);
     list.append(item);
   }
@@ -148,11 +218,12 @@ async function openSettings() {
     getJSON(`/api/subjects/${currentSlug}/settings`),
     getJSON("/api/vault/folders").catch(() => []),
   ]);
-  $("#settings-name").value = settings.name;
-  $("#settings-persona").value = settings.persona;
-  settingsFolders = [...settings.note_folders];
-  drawFolders();
+  settingsNow = settings;
+  settingsOpened = fieldsOf(settings);
+  for (const mark of document.querySelectorAll("#subject-settings .saved")) mark.hidden = true;
+  drawSettings(settings);
   drawSources(settings.sources);
+  showUndo();
   const options = $("#vault-folders");
   options.innerHTML = "";
   for (const folder of folders) options.append(new Option(folder));
@@ -160,27 +231,21 @@ async function openSettings() {
   $("#subject-settings").showModal();
 }
 
-function addFolder() {
+async function addFolder() {
   const folder = $("#settings-folder").value.trim().replace(/\/+$/, "");
   if (!folder) return;
-  if (!settingsFolders.includes(folder)) settingsFolders.push(folder);
-  $("#settings-folder").value = "";
-  drawFolders();
+  if (!settingsFolders.includes(folder)) await saveFields({ note_folders: [...settingsFolders, folder] });
+  if (!$("#settings-status").classList.contains("status-error")) $("#settings-folder").value = "";
 }
 
-async function saveSettings() {
-  try {
-    const saved = await postJSON(`/api/subjects/${currentSlug}/settings`, {
-      name: $("#settings-name").value,
-      persona: $("#settings-persona").value,
-      note_folders: settingsFolders,
-    });
-    await loadSubjects(currentSlug);
-    dialogStatus("#settings-status", `Saved. The tutor uses it from your next session.`);
-    settingsFolders = [...saved.note_folders];
-    drawFolders();
-  } catch (error) {
-    dialogStatus("#settings-status", error.message, true);
+// Typed fields save when you leave them (and when the dialog closes).
+const saveTyped = () =>
+  saveFields({ name: $("#settings-name").value, persona: $("#settings-persona").value });
+
+async function undoSettings() {
+  await saveFields(settingsOpened, { flash: false });
+  if (!$("#settings-status").classList.contains("status-error")) {
+    dialogStatus("#settings-status", "Put back as it was.");
   }
 }
 
@@ -398,8 +463,17 @@ function setUpSubjects() {
   $("#settings-folder").addEventListener("keydown", (event) => {
     if (event.key === "Enter") addFolder();
   });
-  $("#settings-save").addEventListener("click", saveSettings);
+  $("#settings-name").addEventListener("change", () => saveFields({ name: $("#settings-name").value }));
+  $("#settings-name").addEventListener("keydown", (event) => {
+    if (event.key === "Enter") saveFields({ name: $("#settings-name").value });
+  });
+  $("#settings-persona").addEventListener("change", () =>
+    saveFields({ persona: $("#settings-persona").value }),
+  );
+  $("#settings-undo").addEventListener("click", undoSettings);
   $("#settings-close").addEventListener("click", () => $("#subject-settings").close());
+  // Closing with Escape doesn't always leave the field first.
+  $("#subject-settings").addEventListener("close", saveTyped);
   $("#settings-archive").addEventListener("click", archiveCurrent);
   $("#archived-close").addEventListener("click", () => $("#archived-subjects").close());
 }

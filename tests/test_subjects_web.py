@@ -149,6 +149,24 @@ def test_settings_from_the_page(client):
     assert bad.status_code == 400 and "not a folder" in bad.json()["error"]
 
 
+def test_color_from_the_page(client, config):
+    url = "/api/subjects/calculus/settings"
+    shown = client.get(url).json()
+    assert shown["color"] is None  # picked automatically
+    assert shown["display_color"] in shown["colors"] and len(shown["colors"]) == 8
+    picked = client.post(url, json={"color": "#9B5DE5"}, headers=ORIGIN).json()
+    assert picked["color"] == picked["display_color"] == "#9b5de5"
+    assert client.get("/api/subjects").json()[0]["color"] == "#9b5de5"
+    toml = (config.tutor_dir / "calculus/subject.toml").read_text()
+    assert 'color = "#9b5de5"' in toml
+    bad = client.post(url, json={"color": "red"}, headers=ORIGIN)
+    assert bad.status_code == 400 and "not a color" in bad.json()["error"]
+    back = client.post(url, json={"color": None}, headers=ORIGIN).json()
+    assert back["color"] is None and back["display_color"] == shown["display_color"]
+    toml = (config.tutor_dir / "calculus/subject.toml").read_text()
+    assert 'color = "' not in toml
+
+
 def test_vault_folders_leave_out_hidden_and_tutor_folders(client):
     assert client.get("/api/vault/folders").json() == ["Math", "Math/Calculus"]
 

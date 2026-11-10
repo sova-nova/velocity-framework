@@ -34,6 +34,7 @@ from starlette.types import ASGIApp, Receive, Scope, Send
 
 from velocity.chat import ChatError, ChatManager, engines, last_engine
 from velocity.config import (
+    SUBJECT_COLORS,
     Config,
     ConfigError,
     add_source,
@@ -44,6 +45,7 @@ from velocity.config import (
     remove_source,
     rename_source,
     set_archived,
+    set_color,
     set_note_folders,
     set_persona,
     set_subject_name,
@@ -190,6 +192,10 @@ def build_app(
                 for f in subject.note_folders
             ],
             "archived": subject.archived,
+            # Its own color (None: picked automatically), the one shown, and the choices.
+            "color": subject.color,
+            "display_color": subject.display_color,
+            "colors": list(SUBJECT_COLORS),
             "folder": subject.dir.as_posix(),
             "sources": [
                 {
@@ -217,6 +223,11 @@ def build_app(
             if "note_folders" in body:
                 folders = [str(f) for f in body["note_folders"] or []]
                 subject = set_note_folders(config, subject.slug, folders)
+            if "color" in body:
+                color = body["color"]
+                subject = set_color(
+                    config, subject.slug, str(color) if color is not None else None
+                )
         except ConfigError as e:
             return JSONResponse({"error": str(e)}, 400)
         return JSONResponse(settings_of(subject))
