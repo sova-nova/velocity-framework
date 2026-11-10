@@ -64,9 +64,13 @@ def _reopen(subject: Subject, payload: dict) -> Session | None:
     if not SESSION_ID.match(session_id):
         return None
     session = _session(subject, session_id)
-    if not session.record_path.exists() or not session.ended or session.wrapped_up:
+    if not session.record_path.exists() or session.wrapped_up:
         return None
-    session.reopen()
+    if session.ended:
+        session.reopen()
+    elif session_id == active_session_id(subject.slug):
+        return None  # open now, somewhere else
+    # Otherwise it was cut off without an end event: it continues as it is.
     return session
 
 
@@ -86,6 +90,17 @@ WEB_READER_CONTEXT = (
 
 def _web_ui(payload: dict) -> bool:
     return bool(payload.get("web_ui")) or os.environ.get(WEB_UI_ENV) == "1"
+
+
+def _pause_previous(subject: Subject, session_id: str) -> None:
+    """A session taking over from another active one that never ended: end that one as
+    paused first, so its record says so (decided 2026-11-10)."""
+    previous = active_session_id(subject.slug)
+    if not previous or previous == session_id or not SESSION_ID.match(previous):
+        return
+    session = _session(subject, previous)
+    if session.record_path.exists() and not session.ended:
+        session.end()
 
 
 def session_start(config: Config, subject: Subject, payload: dict) -> dict:
@@ -114,6 +129,7 @@ def session_start(config: Config, subject: Subject, payload: dict) -> dict:
     if mapping:
         mapping.parent.mkdir(parents=True, exist_ok=True)
         mapping.write_text(session.id)
+    _pause_previous(subject, session.id)
     set_active(subject.slug, session.id)
 
     sources = (

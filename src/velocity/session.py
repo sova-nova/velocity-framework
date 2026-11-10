@@ -411,6 +411,7 @@ def session_summaries(subject_slug: str, log_dir: Path) -> list[SessionSummary]:
     """A subject's sessions, newest first, with a short summary of each."""
     records = record_dir(subject_slug)
     ids = [p.stem for p in records.glob("*.jsonl") if SESSION_ID.match(p.stem)]
+    active = active_session_id(subject_slug)
     out = []
     for session_id in sorted(ids, key=session_order, reverse=True):
         session = Session(subject_slug, session_id, records, log_dir)
@@ -419,10 +420,12 @@ def session_summaries(subject_slug: str, log_dir: Path) -> list[SessionSummary]:
         learner = [e.text for e in events if e.role == "learner"]
         if session.wrapped_up:
             ended = "wrapped-up"
-        elif session.ended:
+        elif session.ended or session_id != active:
+            # A record without an end event that isn't the active session was cut off
+            # (its process stopped, or another session took over): it is paused.
             ended = "no-wrap-up"
         else:
-            ended = None  # still open, or the record ends without an end event
+            ended = None  # open now
         out.append(
             SessionSummary(
                 id=session_id,

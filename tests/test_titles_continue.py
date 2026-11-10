@@ -15,6 +15,7 @@ from velocity.session import (
     active_session_id,
     record_dir,
     session_summaries,
+    set_active,
     with_title_property,
 )
 
@@ -115,6 +116,7 @@ def test_summaries_include_titles_and_links(subject):
         now=T0 + timedelta(days=1),
         continues=first.id,
     )
+    set_active("calculus", second.id)
     summaries = session_summaries("calculus", subject.sessions_dir)
     assert [(s.id, s.title, s.ended, s.continues) for s in summaries] == [
         (second.id, None, None, first.id),
@@ -268,3 +270,62 @@ def test_agent_start_passes_continues_to_the_hook(config, subject):
     record = record_dir("calculus") / f"{active_session_id('calculus')}.jsonl"
     start = json.loads(record.read_text().splitlines()[0])
     assert start["meta"]["continues"] == first.id
+
+
+# -- cut-off sessions (decided 2026-11-10) ----------------------------------------------
+
+
+def cut_off(subject) -> Session:
+    """A session whose process stopped without an end event, no longer active."""
+    s = Session.start(
+        "calculus", "Calculus", record_dir("calculus"), subject.sessions_dir, sources=[]
+    )
+    s.append("learner", "Teach me limits")
+    return s
+
+
+def status(subject) -> dict:
+    return {s.id: s.ended for s in session_summaries("calculus", subject.sessions_dir)}
+
+
+def test_a_session_is_open_only_while_active(subject):
+    from velocity.session import set_active
+
+    s = cut_off(subject)
+    set_active("calculus", s.id)
+    assert status(subject) == {s.id: None}
+    set_active("calculus", None)
+    assert status(subject) == {s.id: "no-wrap-up"}
+
+
+def test_a_cut_off_session_can_be_resumed(config, subject):
+    s = cut_off(subject)
+    start_hook(config, subject, reopen=s.id)
+    assert active_session_id("calculus") == s.id
+    assert status(subject) == {s.id: None}
+
+
+def test_the_active_session_is_not_taken_over_by_resume(config, subject):
+    from velocity.session import set_active
+
+    s = cut_off(subject)
+    set_active("calculus", s.id)
+    start_hook(config, subject, reopen=s.id)
+    new = active_session_id("calculus")
+    assert new != s.id
+    # Starting the new session ended the one it took over from, as paused.
+    assert status(subject) == {new: None, s.id: "no-wrap-up"}
+    assert Session("calculus", s.id, record_dir("calculus"), subject.sessions_dir).ended
+
+
+def test_starting_a_session_pauses_the_one_it_takes_over_from(config, subject):
+    start_hook(config, subject)
+    first = active_session_id("calculus")
+    start_hook(config, subject, session_id="other")
+    second = active_session_id("calculus")
+    assert second != first
+    events = Session(
+        "calculus", first, record_dir("calculus"), subject.sessions_dir
+    ).events()
+    assert [e.text for e in events if e.kind == "end"] == ["no-wrap-up"]
+    assert status(subject) == {second: None, first: "no-wrap-up"}
