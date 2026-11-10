@@ -119,6 +119,18 @@ def test_create_subject_from_the_page(client):
     assert slugs == ["ai-engineering", "calculus"]
 
 
+def test_each_subject_has_a_color(client, config):
+    from velocity.config import SUBJECT_COLORS, _set_top_level, subject_toml
+
+    first = client.get("/api/subjects").json()[0]["color"]
+    assert first in SUBJECT_COLORS
+    assert client.get("/api/subjects").json()[0]["color"] == first  # stable
+    _set_top_level(subject_toml(config, "calculus"), "color", '"#123abc"')
+    assert client.get("/api/subjects").json()[0]["color"] == "#123abc"
+    _set_top_level(subject_toml(config, "calculus"), "color", '"red"')  # not #rrggbb
+    assert client.get("/api/subjects").json()[0]["color"] == first
+
+
 def test_settings_from_the_page(client):
     url = "/api/subjects/calculus/settings"
     assert client.get(url).json()["note_folders"] == []

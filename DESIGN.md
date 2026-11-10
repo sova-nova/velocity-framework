@@ -376,6 +376,15 @@ Tested on all of Section 2.4 (PDF pp. 136–145, plus neighbouring 2.3 exercises
 
 ## 5. Decisions Log
 
+- **2026-11-09 (M10: the clarity pass, agreed on a design review page with screenshots and mockups):**
+  - Principles: show, don't explain (choices, numbers and short labels instead of paragraphs); one kind of thing per place (tabs switch views, menus hold actions, one settings gear); the same pattern everywhere (dialog buttons bottom right, one way of saving, one word per idea); the next step is obvious.
+  - **"Book"** is the page's word for a source (any file the tutor teaches from); "source" stays in the terminal and the docs.
+  - **Colors: "Chalkboard"** (the user's choice of three directions): a slate-green band across the top, green actions, chalk-yellow highlighted citations; light and dark. **Each subject gets a color** (eight, picked automatically, settable as `color` in `subject.toml`), shown as a dot in the subject menu and an edge on the chat bar. State colors (paused, done, preparing) are the same everywhere.
+  - Header: the subject menu holds Edit / New subject / Archived (the ⚙ beside it goes); Book is a toggle; Settings is the page's only gear, at the far right.
+  - Chat: engine and model as small switches; the last paused sessions are resumable under Start; the privacy reminder is a one-line footnote; a one-row reader bar with a ⋯ menu (Prepare, Add a book); a thin progress line; Claude Code's internal steps (ToolSearch) are not shown.
+  - Dialogs **save as you go**, with "Undo changes" restoring what the dialog opened with, until it closes. Buttons sit at the bottom right (Cancel, then the action).
+  - Three PRs: header, Chat and colors; History and Library; dialogs.
+
 - **2026-11-09 (Obsidian):** Obsidian is **strongly recommended, not required** (the user's point: not everyone who tries velocity has it). velocity works with any folder, and the web page shows chats, logs, books and progress; without Obsidian the learner can't conveniently annotate logs for the tutor or keep notes it reads. The README says so with what you'd miss, and the setup screen recommends it (with a link) only when it finds no Obsidian vault.
 
 - **2026-11-09 (M10: everything from the web page):**

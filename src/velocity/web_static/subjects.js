@@ -1,42 +1,74 @@
 // velocity web UI: managing subjects (M10, decided 2026-11-09).
 //
-// The subject menu lists the active subjects, then "New subject…" and, when there are
-// any, "Archived (n)…". ⚙ opens the settings of the current subject: name, extra
-// instructions, note folders, and Archive. Archived subjects can be recovered, or deleted
-// after typing their name. Uses $, getJSON, postJSON, loadSessions, loadChat and
+// The subject menu (clarity pass) is one button with the subject's color and name. It
+// opens a list of the active subjects, then Edit <subject>…, New subject… and, when
+// there are any, Archived (n)…. Edit opens the subject's settings: name, extra
+// instructions, note folders, and Archive. Archived subjects can be recovered, or
+// deleted after typing their name. Uses $, getJSON, postJSON, loadSessions, loadChat and
 // resetReader from app.js and reader.js.
 
-let allSubjects = []; // [{slug, name, sources, archived, sessions}]
+let allSubjects = []; // [{slug, name, color, sources, archived, sessions}]
 let currentSlug = null; // the subject in use; null when there is none yet
 
-const NEW_SUBJECT = "__new";
-const ARCHIVED = "__archived";
+const currentSubject = () => allSubjects.find((s) => s.slug === currentSlug);
 
-// Fill the menu; `wanted` stays selected if it is still active. Returns the selection.
+// Load the subjects; `wanted` stays in use if it is still active. Returns the one in use.
 async function loadSubjects(wanted = currentSlug) {
   allSubjects = await getJSON("/api/subjects");
   const active = allSubjects.filter((s) => !s.archived);
-  const archived = allSubjects.filter((s) => s.archived);
-  const menu = $("#subject");
-  menu.innerHTML = "";
-  for (const s of active) menu.append(new Option(s.name, s.slug));
-  if (active.length) {
-    const line = new Option("────────", "");
-    line.disabled = true;
-    menu.append(line);
-  }
-  menu.append(new Option("＋ New subject…", NEW_SUBJECT));
-  if (archived.length) menu.append(new Option(`Archived (${archived.length})…`, ARCHIVED));
   currentSlug = active.some((s) => s.slug === wanted) ? wanted : (active[0]?.slug ?? null);
-  menu.value = currentSlug ?? NEW_SUBJECT;
+  drawSubjectMenu();
   showNoSubjects(!currentSlug);
   return currentSlug;
+}
+
+function drawSubjectMenu() {
+  const active = allSubjects.filter((s) => !s.archived);
+  const archived = allSubjects.filter((s) => s.archived);
+  const current = currentSubject();
+  $("#subject-name").textContent = current ? current.name : "No subject yet";
+  // The open subject's color: a dot here, the edge of the chat bar, and so on.
+  document.documentElement.style.setProperty("--subject", current?.color || "var(--accent)");
+  const list = $("#subject-list");
+  list.innerHTML = "";
+  for (const s of active) {
+    const item = document.createElement("button");
+    item.className = "menu-item";
+    item.setAttribute("role", "menuitemradio");
+    item.setAttribute("aria-checked", String(s.slug === currentSlug));
+    const dot = document.createElement("span");
+    dot.className = "dot";
+    dot.style.background = s.color;
+    const name = document.createElement("span");
+    name.textContent = s.name;
+    item.append(dot, name);
+    item.addEventListener("click", () => {
+      closeSubjectMenu();
+      if (s.slug !== currentSlug) switchSubject(s.slug);
+    });
+    list.append(item);
+  }
+  list.hidden = !active.length;
+  $("#subject-edit").hidden = !current;
+  $("#subject-edit").textContent = current ? `Edit ${current.name}…` : "";
+  $("#subject-archived").hidden = !archived.length;
+  $("#subject-archived").textContent = `Archived (${archived.length})…`;
+}
+
+function openSubjectMenu() {
+  $("#subject-popover").hidden = false;
+  $("#subject-button").setAttribute("aria-expanded", "true");
+  ($("#subject-list [aria-checked='true']") || $("#subject-popover .menu-item:not([hidden])"))?.focus();
+}
+
+function closeSubjectMenu() {
+  $("#subject-popover").hidden = true;
+  $("#subject-button").setAttribute("aria-expanded", "false");
 }
 
 // With no subject yet, the chat view offers to create one instead of starting a session.
 function showNoSubjects(none) {
   $("#no-subjects").hidden = !none;
-  $("#subject-settings-button").hidden = none;
   $("#book-button").hidden = none; // books belong to a subject
   if (none) {
     $("#chat-start").hidden = true;
@@ -46,21 +78,10 @@ function showNoSubjects(none) {
 
 async function switchSubject(slug) {
   currentSlug = slug;
-  $("#subject").value = slug;
+  drawSubjectMenu();
   showNoSubjects(false);
   await resetReader(slug);
   await Promise.all([loadSessions(slug), loadChat()]);
-}
-
-async function onSubjectMenu() {
-  const value = $("#subject").value;
-  if (value === NEW_SUBJECT || value === ARCHIVED) {
-    $("#subject").value = currentSlug ?? NEW_SUBJECT; // the menu shows the subject in use
-    if (value === NEW_SUBJECT) openNewSubject();
-    else openArchived();
-    return;
-  }
-  if (value && value !== currentSlug) await switchSubject(value);
 }
 
 function dialogStatus(id, text, isError = false) {
@@ -338,8 +359,35 @@ function askDelete(item, s) {
 // -- set-up ----------------------------------------------------------------------------
 
 function setUpSubjects() {
-  $("#subject").addEventListener("change", onSubjectMenu);
-  $("#subject-settings-button").addEventListener("click", openSettings);
+  $("#subject-button").addEventListener("click", (event) => {
+    event.stopPropagation();
+    if ($("#subject-popover").hidden) openSubjectMenu();
+    else closeSubjectMenu();
+  });
+  const fromMenu = (open) => () => {
+    closeSubjectMenu();
+    open();
+  };
+  $("#subject-edit").addEventListener("click", fromMenu(openSettings));
+  $("#subject-new").addEventListener("click", fromMenu(openNewSubject));
+  $("#subject-archived").addEventListener("click", fromMenu(openArchived));
+  document.addEventListener("click", (event) => {
+    if (!$("#subject-menu").contains(event.target)) closeSubjectMenu();
+  });
+  $("#subject-menu").addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      closeSubjectMenu();
+      $("#subject-button").focus();
+    }
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      if ($("#subject-popover").hidden) return openSubjectMenu();
+      const items = [...document.querySelectorAll("#subject-popover .menu-item")].filter((b) => !b.hidden);
+      const at = items.indexOf(document.activeElement);
+      const step = event.key === "ArrowDown" ? 1 : -1;
+      items[(at + step + items.length) % items.length]?.focus();
+    }
+  });
   $("#first-subject").addEventListener("click", openNewSubject);
   $("#new-subject-go").addEventListener("click", createSubject);
   $("#new-subject-close").addEventListener("click", () => $("#new-subject").close());

@@ -217,6 +217,80 @@ function showStartChoice() {
   const engine = $("#engine").value;
   fillModels($("#model"), engine, savedModel(engine));
   $("#engine-hint").textContent = engineNote(engine);
+  drawSwitch($("#engine-switch"), $("#engine"), (name) => name.replace(/ \(.*\)$/, ""));
+  drawSwitch($("#model-switch"), $("#model"));
+}
+
+// A row of buttons standing for a hidden <select>: clicking one picks that option and
+// fires the select's "change", so the code reading the select stays the same. A disabled
+// option is a disabled button, with the option's title saying why.
+function drawSwitch(container, select, label = (text) => text) {
+  container.innerHTML = "";
+  for (const option of select.options) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = label(option.textContent);
+    button.setAttribute("role", "radio");
+    button.setAttribute("aria-checked", String(option.value === select.value));
+    button.disabled = option.disabled;
+    if (option.title) button.title = option.title;
+    button.addEventListener("click", () => {
+      if (select.value === option.value) return;
+      select.value = option.value;
+      select.dispatchEvent(new Event("change"));
+      for (const b of container.children) b.setAttribute("aria-checked", String(b === button));
+    });
+    container.append(button);
+  }
+}
+
+// Under Start: the last few paused sessions, each with Resume (C3 of the clarity pass).
+const PICK_UP = 3;
+
+async function loadPickUp() {
+  const box = $("#pick-up");
+  const slug = subject();
+  if (!slug) {
+    box.hidden = true;
+    return;
+  }
+  const sessions = await getJSON(`/api/subjects/${slug}/sessions`).catch(() => []);
+  if (slug !== subject()) return; // switched meanwhile
+  const paused = sessions.filter((s) => s.ended === "no-wrap-up").slice(0, PICK_UP);
+  const list = $("#pick-up-list");
+  list.innerHTML = "";
+  for (const s of paused) {
+    const item = document.createElement("li");
+    const what = document.createElement("span");
+    what.className = "what";
+    const title = document.createElement("strong");
+    title.textContent = s.title || s.first_message || s.id;
+    const when = document.createElement("small");
+    const messages = `${s.turns} message${s.turns === 1 ? "" : "s"}`;
+    when.textContent = [whenText(s.started), messages].filter(Boolean).join(" · ");
+    what.append(title, when);
+    const go = document.createElement("button");
+    go.textContent = "Resume";
+    go.addEventListener("click", () =>
+      askResume(s.title || s.id, s.last_engine || {}, (choice) => startChat({ resume: s.id, ...choice })),
+    );
+    item.append(what, go);
+    list.append(item);
+  }
+  box.hidden = !paused.length;
+}
+
+// "Today 15:20", "Yesterday 09:05", or "3 Nov 15:20".
+function whenText(iso) {
+  if (!iso) return "";
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "";
+  const time = date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const day = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const days = Math.round((day(new Date()) - day(date)) / 86400000);
+  if (days === 0) return `Today ${time}`;
+  if (days === 1) return `Yesterday ${time}`;
+  return `${date.toLocaleDateString([], { day: "numeric", month: "short" })} ${time}`;
 }
 
 const money = (dollars) => (dollars > 0 && dollars < 0.01 ? "<$0.01" : `$${dollars.toFixed(2)}`);
@@ -273,6 +347,7 @@ function showChat(status, notice = "") {
   showCost(status.open ? status.cost : null);
   setBusy(status.busy);
   updateLayout();
+  if (!status.open) loadPickUp();
 }
 
 // Start a chat. The engine and model come from `options` (Resume's dialog) or else from
@@ -495,7 +570,7 @@ function chatEnded(how) {
 
 async function pauseChat() {
   await postJSON(`/api/subjects/${subject()}/chat/pause`);
-  showChat({ open: false }, "Paused. Resume this session any time from History.");
+  showChat({ open: false }, "Paused. Resume it below or from History.");
   loadSessions(subject());
 }
 

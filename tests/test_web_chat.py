@@ -96,16 +96,20 @@ def test_parse_event():
         "message": {
             "content": [
                 {"type": "text", "text": "Hi"},
+                {"type": "tool_use", "name": "ToolSearch", "input": {}},
                 {
                     "type": "tool_use",
                     "name": "mcp__velocity__record_question",
                     "input": {"a": 1},
                 },
+                {"type": "tool_use", "name": "Skill", "input": {"skill": "quiz"}},
             ]
         },
     }
+    # Claude Code's internal steps (ToolSearch) are not shown; tutor tools and skills are.
     assert parse_event(json.dumps(tool)) == [
-        ChatEvent("tool", name="record_question", input={"a": 1})
+        ChatEvent("tool", name="record_question", input={"a": 1}),
+        ChatEvent("tool", name="Skill", input={"skill": "quiz"}),
     ]
     assert parse_event('{"type": "result", "subtype": "success"}') == [
         ChatEvent("done")

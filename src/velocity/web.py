@@ -133,6 +133,7 @@ def build_app(
                     "name": subject.name,
                     "sources": [s.name for s in subject.sources],
                     "archived": subject.archived,
+                    "color": subject.display_color,
                     "sessions": len(list(record_dir(slug).glob("*.jsonl"))),
                 }
             )

@@ -70,7 +70,8 @@ const readerOpen = () => !$("#reader").hidden;
 function closeReader() {
   $("#reader").hidden = true;
   $("#reader-divider").hidden = true;
-  $("#book-button").classList.remove("open");
+  $("#book-button").setAttribute("aria-pressed", "false");
+  closeReaderMenu();
   stopPrepareUpdates();
   updateLayout();
 }
@@ -99,7 +100,7 @@ async function toggleReader() {
 function showReaderPanel() {
   $("#reader").hidden = false;
   $("#reader-divider").hidden = false;
-  $("#book-button").classList.add("open");
+  $("#book-button").setAttribute("aria-pressed", "true");
   const empty = !readerSources.length;
   $("#reader-empty").hidden = !empty;
   for (const el of ["#reader-source", "#reader-section", "#reader-ask"]) $(el).hidden = empty;
@@ -459,6 +460,21 @@ function showPrepareProgress() {
   strip.hidden = !show;
   if (!show) return;
   strip.classList.toggle("failed", ["failed", "interrupted"].includes(progress?.state));
+  // A job that finished well says so for a few seconds, then fades away on its own.
+  const finished = !starting && progress?.state === "done";
+  strip.classList.toggle("done", finished);
+  if (finished && prepare.fading !== progress.started) {
+    prepare.fading = progress.started;
+    setTimeout(() => strip.classList.add("fading"), 6000);
+    setTimeout(() => {
+      if (prepare.status?.progress?.started !== progress.started) return; // a new job
+      prepare.dismissed = progress.started;
+      strip.hidden = true;
+      strip.classList.remove("fading");
+    }, 7000);
+  } else if (!finished) {
+    strip.classList.remove("fading");
+  }
   $("#prepare-cancel").hidden = !(starting || running) || prepare.cancelling;
   $("#prepare-dismiss").hidden = starting || running;
   const bar = $("#prepare-bar");
@@ -714,6 +730,11 @@ async function prepareAdded() {
 
 // -- set-up ----------------------------------------------------------------------------
 
+function closeReaderMenu() {
+  $("#reader-menu").hidden = true;
+  $("#reader-more").setAttribute("aria-expanded", "false");
+}
+
 function setUpReader() {
   fillSources();
   try {
@@ -727,8 +748,32 @@ function setUpReader() {
   });
   $("#reader-close").addEventListener("click", closeReader);
   $("#reader-ask").addEventListener("click", askAboutPage);
-  $("#reader-prepare").addEventListener("click", openPrepareDialog);
-  $("#reader-add").addEventListener("click", openAddDialog);
+  // The ⋯ menu: Prepare for instant reading…, Add a book….
+  $("#reader-more").addEventListener("click", (event) => {
+    event.stopPropagation();
+    if ($("#reader-menu").hidden) {
+      $("#reader-menu").hidden = false;
+      $("#reader-more").setAttribute("aria-expanded", "true");
+      $("#reader-menu .menu-item:not([hidden])")?.focus();
+    } else closeReaderMenu();
+  });
+  document.addEventListener("click", (event) => {
+    if (!event.target.closest(".reader-bar .more")) closeReaderMenu();
+  });
+  $("#reader-menu").addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      closeReaderMenu();
+      $("#reader-more").focus();
+    }
+  });
+  $("#reader-prepare").addEventListener("click", () => {
+    closeReaderMenu();
+    openPrepareDialog();
+  });
+  $("#reader-add").addEventListener("click", () => {
+    closeReaderMenu();
+    openAddDialog();
+  });
   $("#reader-empty-add").addEventListener("click", openAddDialog);
   $("#add-go").addEventListener("click", addSource);
   $("#add-prepare").addEventListener("click", prepareAdded);
