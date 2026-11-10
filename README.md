@@ -47,7 +47,13 @@ An excerpt from a real session log, as it appears in Obsidian (math renders ther
 
 ## Setup
 
-Requirements: Linux or macOS (Windows is best effort), [uv](https://docs.astral.sh/uv/), and an Obsidian vault (any folder of markdown works). For `velocity tutor` you need [Claude Code](https://claude.com/claude-code) 2.1.314 or later; for `velocity chat`, an Anthropic API key.
+Requirements: Linux or macOS (Windows is best effort) and [uv](https://docs.astral.sh/uv/). To chat on your Claude plan you need [Claude Code](https://claude.com/claude-code) 2.1.314 or later; for the API engine (`velocity chat`, or API chats on the web page), an Anthropic API key.
+
+**[Obsidian](https://obsidian.md) (free) is strongly recommended.** velocity keeps its session logs and progress as markdown in a folder of your notes, and Obsidian is the best way to work with them. Without it velocity still works, with any folder: the web page shows your chats, logs (math included), books and progress. What you'd miss:
+
+- **Annotating your logs.** Write your own thoughts between the lines of a session log; the tutor reads them next session and responds.
+- **Your own notes.** The tutor can read (never change) the notes you keep, and critique them with `/review-notes`. Without a notes app there's nowhere convenient to write them.
+- **Browsing everything as linked notes**, outside velocity: logs, `progress.md`, and your notes side by side.
 
 ```bash
 git clone https://github.com/sova-nova/velocity-framework.git

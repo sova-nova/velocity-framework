@@ -91,7 +91,7 @@ def checks(config: Config | None) -> list[dict]:
             "detail": detail,
             "fix": "Needed to read PDF sections (math included). Install the OCR "
             "packages with `uv sync --group ocr`; without an NVIDIA GPU, also set "
-            "the llama.cpp program below. Looking at pages and searching work "
+            "the llama.cpp program in Settings. Looking at pages and searching work "
             "without it.",
         }
     )

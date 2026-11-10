@@ -373,6 +373,8 @@ Tested on all of Section 2.4 (PDF pp. 136–145, plus neighbouring 2.3 exercises
 
 ## 5. Decisions Log
 
+- **2026-11-09 (Obsidian):** Obsidian is **strongly recommended, not required** (the user's point: not everyone who tries velocity has it). velocity works with any folder, and the web page shows chats, logs, books and progress; without Obsidian the learner can't conveniently annotate logs for the tutor or keep notes it reads. The README says so with what you'd miss, and the setup screen recommends it (with a link) only when it finds no Obsidian vault.
+
 - **2026-11-09 (M10: everything from the web page):**
   - Goal: the web page can do everything the terminal can, so every user can use velocity without a terminal.
   - **Subjects stay**, as free-form groups the learner names and organizes as they like ("Calculus", "AI Engineering", "Work notes"): each keeps its own sources, logs, progress, note folders and instructions. The page can create subjects, edit their settings (name, extra instructions, note folders), and **archive** them (hidden, everything kept, recoverable). **Delete** is only offered for archived subjects, after typing the subject's name; it removes the subject's folder in `Tutor/` and velocity's records for it, but not the book files.
