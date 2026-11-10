@@ -832,6 +832,18 @@ button.practice:hover { background: var(--accent); color: var(--on-accent); }
 .where .rich.inline, .where .rich.inline > p { display: inline; }
 button.link { background: none; border: none; padding: 0; color: var(--accent); cursor: pointer; font: inherit; text-decoration: underline; }
 
+/* Settings → Find empty sessions…: kept ones are greyed, with the reason. */
+.cleanup-list { list-style: none; margin: 0.8rem 0; padding: 0; max-height: 50vh; overflow-y: auto; }
+.cleanup-list li {
+  display: flex; gap: 0.75rem; align-items: baseline; justify-content: space-between;
+  padding: 0.4rem 0.6rem; border-bottom: 1px solid var(--border);
+}
+.cleanup-list li .reason { font-size: 0.85rem; color: var(--muted); }
+.cleanup-list li.kept { opacity: 0.6; }
+#cleanup .confirm { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; margin-top: 0.6rem; }
+#cleanup .confirm span { flex: 1; }
+#cleanup-open { flex: none; white-space: nowrap; }
+
 @media (max-width: 700px) {
   .view { grid-template-columns: 1fr; height: auto; }
   aside { border-right: none; border-bottom: 1px solid var(--border); }

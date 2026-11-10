@@ -479,6 +479,72 @@ def session_summaries(subject_slug: str, log_dir: Path) -> list[SessionSummary]:
     return out
 
 
+# -- cleaning up empty sessions (decided 2026-11-10) -------------------------------------
+
+
+@dataclass(frozen=True)
+class Cleanup:
+    """A session the cleanup finds, and whether it would be removed."""
+
+    session_id: str
+    started: str | None
+    reason: str  # "empty", or "wrap-up only" (the learner only sent /end-session)
+    kept: str | None  # why it is kept instead, or None if it would be removed
+
+
+def cleanup_reason(session: Session) -> str | None:
+    if session.empty:
+        return "empty"
+    learner = [e.text for e in session.events() if e.role == "learner"]
+    if learner and all(text.split()[:1] == ["/end-session"] for text in learner):
+        return "wrap-up only"
+    return None
+
+
+def cleanup_candidates(subject_slug: str, log_dir: Path) -> list[Cleanup]:
+    """Empty and wrap-up-only sessions, newest first. The open session is never listed;
+    one the learner wrote in, or that a later session continues, is listed as kept."""
+    records = record_dir(subject_slug)
+    ids = [p.stem for p in records.glob("*.jsonl") if SESSION_ID.match(p.stem)]
+    sessions = [Session(subject_slug, i, records, log_dir) for i in ids]
+    continued = {s.continues for s in sessions if s.continues}
+    active = active_session_id(subject_slug)
+    out = []
+    for session in sorted(sessions, key=lambda s: session_order(s.id), reverse=True):
+        reason = cleanup_reason(session)
+        if reason is None or session.id == active:
+            continue
+        events = session.events()
+        if not session._log_untouched() or any(e.kind == "annotation" for e in events):
+            kept = "you wrote in its log"
+        elif session.id in continued:
+            kept = "a later session continues it"
+        else:
+            kept = None
+        start = next((e for e in events if e.kind == "start"), None)
+        out.append(Cleanup(session.id, start.ts if start else None, reason, kept))
+    return out
+
+
+def remove_sessions(subject_slug: str, log_dir: Path, session_ids: list[str]) -> int:
+    """Remove the given sessions, each only if the cleanup would still remove it now (the
+    list the learner saw may be out of date). Returns how many were removed."""
+    removable = {
+        c.session_id
+        for c in cleanup_candidates(subject_slug, log_dir)
+        if c.kept is None
+    }
+    removed = 0
+    for session_id in session_ids:
+        if session_id in removable:
+            Session(
+                subject_slug, session_id, record_dir(subject_slug), log_dir
+            ).remove()
+            removable.discard(session_id)
+            removed += 1
+    return removed
+
+
 def set_active(subject_slug: str, session_id: str | None) -> None:
     """Mark the session the tutor's tools should write to (None clears it)."""
     pointer = record_dir(subject_slug) / "ACTIVE"

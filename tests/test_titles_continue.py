@@ -407,3 +407,79 @@ def test_end_session_first_never_reaches_the_tutor(config, subject):
     # Once something happened, /end-session goes to the tutor as usual.
     hooks.user_prompt(config, subject, {"prompt": "What is a limit?"})
     assert hooks.user_prompt(config, subject, {"prompt": "/end-session"}) == {}
+
+
+# -- cleaning up the backlog (decided 2026-11-10) ----------------------------------------
+
+
+def old_session(subject, day, learner=(), continues=None) -> Session:
+    """A session as older versions left it: ended, never removed."""
+    now = T0 + timedelta(days=day)
+    s = Session.start(
+        "calculus",
+        "Calculus",
+        record_dir("calculus"),
+        subject.sessions_dir,
+        sources=[],
+        now=now,
+        continues=continues,
+    )
+    for i, text in enumerate(learner):
+        s.append("learner", text, now=now + timedelta(seconds=2 * i + 1))
+        s.append("tutor", "Recap...", now=now + timedelta(seconds=2 * i + 2))
+    s.render()
+    s.end(now=now + timedelta(minutes=5))
+    return s
+
+
+def test_cleanup_finds_empty_and_wrap_up_only_sessions(subject):
+    from velocity.session import cleanup_candidates, remove_sessions
+
+    empty = old_session(subject, 0)
+    wrap_up = old_session(subject, 1, learner=["/end-session"])
+    real = old_session(subject, 2, learner=["Teach me limits", "/end-session"])
+    wrote = old_session(subject, 3)
+    with wrote.log_path.open("a") as f:
+        f.write("\nA thought of mine.\n")
+    parent = old_session(subject, 4, learner=["/end-session"])
+    old_session(subject, 5, learner=["Go on"], continues=parent.id)
+    open_now = old_session(subject, 6)
+    set_active("calculus", open_now.id)
+
+    found = {
+        c.session_id: (c.reason, c.kept)
+        for c in cleanup_candidates("calculus", subject.sessions_dir)
+    }
+    assert found == {
+        empty.id: ("empty", None),
+        wrap_up.id: ("wrap-up only", None),
+        wrote.id: ("empty", "you wrote in its log"),
+        parent.id: ("wrap-up only", "a later session continues it"),
+    }
+    assert real.id not in found and open_now.id not in found
+
+    # Only sessions the cleanup would still remove are removed, whatever is asked.
+    asked = [empty.id, wrap_up.id, wrote.id, real.id, open_now.id]
+    assert remove_sessions("calculus", subject.sessions_dir, asked) == 2
+    assert not empty.record_path.exists() and not wrap_up.log_path.exists()
+    assert wrote.record_path.exists() and real.record_path.exists()
+
+
+def test_cli_remove_empty(use_config, subject, capsys, monkeypatch):
+    empty = old_session(subject, 0)
+    kept = old_session(subject, 1, learner=["Teach me limits"])
+    monkeypatch.setattr("builtins.input", lambda prompt: "n")
+    assert cli.main(["sessions", "--remove-empty"]) == 0
+    out = capsys.readouterr().out
+    assert f"Calculus\n  {empty.id}  empty\n" in out and "Nothing removed." in out
+    assert empty.record_path.exists()
+
+    monkeypatch.setattr("builtins.input", lambda prompt: "y")
+    assert cli.main(["sessions", "calculus", "--remove-empty"]) == 0
+    assert "Removed 1 session." in capsys.readouterr().out
+    assert not empty.record_path.exists() and kept.record_path.exists()
+
+    assert cli.main(["sessions", "--remove-empty"]) == 0
+    assert "No empty sessions to remove." in capsys.readouterr().out
+    with pytest.raises(SystemExit):
+        cli.main(["sessions"])  # listing needs a subject

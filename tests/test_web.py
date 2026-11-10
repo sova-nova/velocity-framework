@@ -323,3 +323,34 @@ def test_progress(client, config):
     (subject.dir / "state.json").write_text("not json")
     response = client.get("/api/subjects/calculus/progress")
     assert response.status_code == 500 and "Could not read" in response.json()["error"]
+
+
+def test_cleanup_of_empty_sessions(client, config):
+    from velocity.session import active_session_id
+
+    empty = session(config, day=0, learner=(), end="no-wrap-up")
+    real = session(config, day=1, end="no-wrap-up")
+    found = client.get("/api/cleanup/sessions").json()
+    assert [(c["subject"], c["session_id"], c["reason"], c["kept"]) for c in found] == [
+        ("calculus", empty.id, "empty", None)
+    ]
+    assert found[0]["subject_name"] == "Calculus"
+    origin = {"Origin": "http://127.0.0.1:8765"}
+    response = client.post(
+        "/api/cleanup/sessions",
+        json={
+            "sessions": [
+                {"subject": "calculus", "id": empty.id},
+                {"subject": "calculus", "id": real.id},  # not empty: never removed
+                {"subject": "nope", "id": "2026-11-04-9"},
+                "junk",
+            ]
+        },
+        headers=origin,
+    )
+    assert response.json() == {"removed": 1}
+    assert not empty.record_path.exists() and real.record_path.exists()
+    assert client.get("/api/cleanup/sessions").json() == []
+    assert active_session_id("calculus") is None
+    bad = client.post("/api/cleanup/sessions", json={}, headers=origin)
+    assert bad.status_code == 400
