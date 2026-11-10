@@ -70,18 +70,29 @@ def run_job(
     label: str,
     on_update: Callable[[dict], None] | None = None,
     clock: Callable[[], float] = time.time,
+    again: list[int] | None = None,
 ) -> dict:
     """OCR the pages of first..last that aren't cached yet, keeping prepare.json up to
-    date after each batch. Returns the final progress."""
+    date after each batch. Returns the final progress. With `again`, OCR those cached
+    pages again instead (recheck: the dropped-text check on pages prepared before it, or
+    every prepared page)."""
     if running(pdf):
         raise PrepareError("This source is already being prepared.")
-    missing = pdf.missing_pages(first, last)
+    finished: set[int] = set()
+
+    def remaining() -> list[int]:
+        if again is None:
+            return pdf.missing_pages(first, last)
+        return [p for p in sorted(again) if p not in finished]
+
+    missing = remaining()
     cancel_file(pdf).unlink(missing_ok=True)
     started = clock()
     progress = {
         "state": "running",
         "pid": os.getpid(),
         "label": label,
+        "kind": "prepare" if again is None else "recheck",
         "first": first,
         "last": last,
         "total": len(missing),
@@ -101,11 +112,12 @@ def run_job(
 
     def batch_done(pages: list[int]) -> None:
         now = clock()
+        finished.update(pages)
         progress["done"] += len(pages)
         progress["updated"] = now
-        remaining = pdf.missing_pages(first, last)
-        progress["next_page"] = remaining[0] if remaining else None
-        progress["next_section"] = _section(pdf, remaining[0]) if remaining else None
+        left = remaining()
+        progress["next_page"] = left[0] if left else None
+        progress["next_section"] = _section(pdf, left[0]) if left else None
         # From the real speed so far (the first batch includes loading the models).
         per_page = (now - started) / max(progress["done"], 1)
         progress["eta_seconds"] = round(
@@ -115,7 +127,10 @@ def run_job(
 
     save()
     try:
-        pdf.prepare(first, last, PREPARE_BATCH, batch_done, cancel_file(pdf).exists)
+        if again is None:
+            pdf.prepare(first, last, PREPARE_BATCH, batch_done, cancel_file(pdf).exists)
+        else:
+            pdf.ocr_again(again, PREPARE_BATCH, batch_done, cancel_file(pdf).exists)
     except Exception as e:
         progress.update(state="failed", error=str(e) or type(e).__name__)
         save()

@@ -137,7 +137,9 @@ def _source(args: argparse.Namespace) -> int:
         print("\n".join(f"{s.name}: {s.path}" for s in sources) or "No sources.")
         return 0
     if args.source_command == "recheck":
-        return _recheck(config, load_subject(config, args.subject), args.all)
+        return _recheck(
+            config, load_subject(config, args.subject), args.all, args.source
+        )
     if args.source_command == "prepare":
         return _prepare(config, load_subject(config, args.subject), args)
     if args.source_command == "remove":
@@ -248,6 +250,29 @@ def _prepare(config, subject, args: argparse.Namespace) -> int:
         "are kept, and running this again continues where it stopped."
     )
     tty = sys.stdout.isatty()
+    show = _progress_printer()
+    try:
+        result = run_job(pdf, first, last, label, on_update=show)
+    except PrepareError as e:
+        print(e)
+        return 1
+    except KeyboardInterrupt:
+        print("\nStopped. Finished pages are kept; run this again to continue.")
+        return 130
+    print(
+        ("\n" if tty else "")
+        + f"{ref.name}: {result['state']}, {result['done']} pages OCR'd."
+    )
+    return 0 if result["state"] == "done" else 1
+
+
+def _progress_printer():
+    """A progress bar for a prepare or recheck job, updated after each batch."""
+    import sys
+
+    from velocity.prepare import format_duration
+
+    tty = sys.stdout.isatty()
 
     def show(progress: dict) -> None:
         done, total = progress["done"], progress["total"]
@@ -265,33 +290,34 @@ def _prepare(config, subject, args: argparse.Namespace) -> int:
         print(("\r" + line.ljust(110)) if tty else line, end="" if tty else "\n")
         sys.stdout.flush()
 
-    try:
-        result = run_job(pdf, first, last, label, on_update=show)
-    except PrepareError as e:
-        print(e)
-        return 1
-    except KeyboardInterrupt:
-        print("\nStopped. Finished pages are kept; run this again to continue.")
-        return 130
-    print(
-        ("\n" if tty else "")
-        + f"{ref.name}: {result['state']}, {result['done']} pages OCR'd."
-    )
-    return 0 if result["state"] == "done" else 1
+    return show
 
 
-def _recheck(config, subject, all_pages: bool = False) -> int:
-    """Re-OCR cached pages with the dropped-text check: those from before it, or all."""
+def _recheck(
+    config, subject, all_pages: bool = False, source_name: str | None = None
+) -> int:
+    """Re-OCR cached pages with the dropped-text check: those from before it, or all.
+    Runs as a job (prepare.py), so the web page shows its progress too."""
     import json
+    import sys
 
     from velocity.pdf_source import PdfSource
+    from velocity.prepare import (
+        PrepareError,
+        estimate_seconds,
+        format_duration,
+        run_job,
+    )
     from velocity.tools import default_ocr
 
-    if not subject.sources:
-        print("This subject has no sources.")
-        return 0
+    refs = [s for s in subject.sources if s.path.suffix.lower() == ".pdf"]
+    if source_name:
+        refs = [s for s in refs if s.name == source_name]
+    if not refs:
+        print("No PDF source" + (f" named {source_name!r}." if source_name else "."))
+        return 0 if not source_name else 1
     todo = {}
-    for ref in subject.sources:
+    for ref in refs:
         source = PdfSource(ref.path, ocr=None)
         pages = source.cached_pages() if all_pages else source.unchecked_pages()
         if pages:
@@ -303,17 +329,41 @@ def _recheck(config, subject, all_pages: bool = False) -> int:
     ocr = default_ocr(config)
     for ref, pages in todo.items():
         print(
-            f"{ref.name}: OCR'ing {len(pages)} cached pages again with the dropped-text "
-            f"check (about {len(pages) * 8 // 60 + 1} min)..."
+            f"{ref.name}: OCR'ing {len(pages)} prepared "
+            f"page{'s' if len(pages) != 1 else ''} again with the dropped-text check "
+            f"({format_duration(estimate_seconds(len(pages)))})."
         )
         source = PdfSource(ref.path, ocr)
-        source.recheck(all_pages)
+        label = (
+            f"{len(pages)} prepared pages"
+            if all_pages
+            else f"{len(pages)} pages prepared before the dropped-text check"
+        )
+        try:
+            result = run_job(
+                source,
+                1,
+                source.page_count,
+                label,
+                on_update=_progress_printer(),
+                again=pages,
+            )
+        except PrepareError as e:
+            print(e)
+            return 1
+        except KeyboardInterrupt:
+            print("\nStopped. Pages done so far are kept.")
+            return 130
+        print("\n" if sys.stdout.isatty() else "", end="")
+        if result["state"] != "done":
+            print(f"{ref.name}: {result['state']}.")
+            return 1
+        reports = [source.cache_dir / "pages" / f"{p}.check.json" for p in pages]
         regions = [
             r
-            for p in pages
-            for r in json.loads(
-                (source.cache_dir / "pages" / f"{p}.check.json").read_text()
-            )
+            for report in reports
+            if report.exists()
+            for r in json.loads(report.read_text())
         ]
         fallback = sum(r["repaired_by"] == "text-layer" for r in regions)
         print(
@@ -427,6 +477,7 @@ def main(argv: list[str] | None = None) -> int:
     source_recheck.add_argument(
         "--all", action="store_true", help="all cached pages, not only unchecked ones"
     )
+    source_recheck.add_argument("--source", help="only this source (by name)")
     source_remove = source_commands.add_parser(
         "remove", help="take a source out of a subject (the file itself is kept)"
     )

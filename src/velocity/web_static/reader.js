@@ -470,13 +470,22 @@ function showPrepareProgress() {
   }
   const { done, total, label, state } = progress;
   bar.value = total ? done / total : 1;
-  const titles = {
-    running: `Preparing ${label}`,
-    done: `Prepared ${label}`,
-    cancelled: `Stopped preparing ${label}`,
-    failed: `Preparing ${label} failed`,
-    interrupted: `Preparing ${label} was interrupted`,
-  };
+  const recheck = progress.kind === "recheck";
+  const titles = recheck
+    ? {
+        running: `Reading again: ${label}`,
+        done: `Read again: ${label}`,
+        cancelled: `Stopped reading again: ${label}`,
+        failed: `Reading again failed: ${label}`,
+        interrupted: `Reading again was interrupted: ${label}`,
+      }
+    : {
+        running: `Preparing ${label}`,
+        done: `Prepared ${label}`,
+        cancelled: `Stopped preparing ${label}`,
+        failed: `Preparing ${label} failed`,
+        interrupted: `Preparing ${label} was interrupted`,
+      };
   $("#prepare-title").textContent = titles[state] || label;
   const parts = [`${done} of ${total} pages (${total ? Math.floor((100 * done) / total) : 100}%)`];
   if (running && prepare.cancelling) {
@@ -487,7 +496,11 @@ function showPrepareProgress() {
   } else if (state === "failed") {
     parts.push(progress.error || "see prepare.log in the source's cache folder");
   } else if (state !== "done") {
-    parts.push("finished pages are kept; Prepare again to continue");
+    parts.push(
+      recheck
+        ? "the pages read again so far are kept"
+        : "finished pages are kept; Prepare again to continue",
+    );
   }
   $("#prepare-detail").textContent = parts.join(" · ");
 }
@@ -497,10 +510,18 @@ function chapterAt(source, page) {
   return source.outline.find((s) => s.level === 1 && s.start_page <= page && page <= s.end_page);
 }
 
-function openPrepareDialog() {
+async function openPrepareDialog() {
   const source = sourceNamed(reader.source);
+  if (!source) return;
+  // Always this book's numbers: the status refreshes in the background after a switch,
+  // and the dialog must not show (or act on) the previous book's.
+  try {
+    prepare.status = await getJSON(prepareUrl(source.name));
+  } catch (error) {
+    status(`Could not check this book: ${error.message}`);
+    return;
+  }
   const st = prepare.status;
-  if (!source || !st) return;
   const estimate = (pages) => formatDuration(st.startup_seconds + pages * st.seconds_per_page);
   const chapterChoice = document.querySelector('input[name="prepare-scope"][value="chapter"]');
   const allChoice = document.querySelector('input[name="prepare-scope"][value="all"]');
@@ -524,8 +545,25 @@ function openPrepareDialog() {
     ? `The whole book: ${allLeft.toLocaleString()} of ${st.pages.toLocaleString()} pages ` +
       `to go, ${estimate(allLeft)}`
     : "The whole book: already prepared";
-  (chapterLeft ? chapterChoice : allChoice).checked = true;
-  $("#prepare-go").disabled = !(chapterLeft || allLeft);
+
+  // Reading prepared pages again: those prepared before the dropped-text check, or all
+  // (when a section's text looks wrong).
+  const prepared = st.prepared.length;
+  $("#prepare-again").hidden = !prepared;
+  $("#prepare-unchecked-choice").hidden = !st.unchecked;
+  $("#prepare-unchecked").textContent =
+    `Read again the ${st.unchecked} pages prepared before velocity checked for ` +
+    `dropped text, ${estimate(st.unchecked)}`;
+  $("#prepare-recheck-all").textContent =
+    `Read all ${prepared.toLocaleString()} prepared pages again, ${estimate(prepared)} ` +
+    "(if a section's text looks wrong)";
+
+  (chapterLeft ? chapterChoice : allLeft ? allChoice : null)?.click();
+  if (!chapterLeft && !allLeft) {
+    const again = st.unchecked ? "recheck-unchecked" : "recheck-all";
+    document.querySelector(`input[name="prepare-scope"][value="${again}"]`).checked = true;
+  }
+  $("#prepare-go").disabled = !(chapterLeft || allLeft || prepared);
   $("#prepare-dialog").showModal();
 }
 
@@ -533,7 +571,12 @@ async function startPrepare() {
   const choice = document.querySelector('input[name="prepare-scope"]:checked');
   $("#prepare-dialog").close();
   if (!choice) return;
-  const body = choice.value === "chapter" ? { section: choice.dataset.section } : {};
+  const bodies = {
+    chapter: { section: choice.dataset.section },
+    "recheck-unchecked": { recheck: "unchecked" },
+    "recheck-all": { recheck: "all" },
+  };
+  const body = bodies[choice.value] || {};
   try {
     prepare.status = await postJSON(prepareUrl(reader.source), body);
   } catch (error) {
