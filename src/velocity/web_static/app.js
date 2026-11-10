@@ -389,7 +389,27 @@ function showChat(status, notice = "") {
   showCost(status.open ? status.cost : null);
   setBusy(status.busy);
   updateLayout();
-  if (!status.open) loadPickUp();
+  if (!status.open) {
+    loadPickUp();
+    loadWhere(); // progress.js
+  }
+}
+
+// The practice buttons (Review these, Work on this, Practice; decided 2026-11-10): go to
+// the chat, starting a session with the start panel's engine and model unless one is
+// open, and put a ready-made message in the input. The learner edits it and sends it.
+async function practice(message) {
+  showView("chat");
+  if (!chatStatus.open && !chatStatus.elsewhere) {
+    await startChat();
+    // Like Continue, this skips the start panel and its reminder.
+    if (chatStatus.open) addNote($("#reminder").textContent.replace(/\s+/g, " "), "reminder");
+  }
+  if (!chatStatus.open) return; // couldn't start, or open elsewhere: the notice says why
+  const input = $("#input");
+  input.value = message;
+  input.focus();
+  input.setSelectionRange(message.length, message.length);
 }
 
 // Start a chat. The engine and model come from `options` (Resume's dialog) or else from
@@ -728,6 +748,7 @@ async function start() {
   setUpReader();
   setUpSubjects();
   setUpLibrary();
+  setUpProgress();
   await Promise.all([loadSessions(slug), loadChat()]);
   if (!slug) openNewSubject();
 }

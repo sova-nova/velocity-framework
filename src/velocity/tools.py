@@ -359,6 +359,7 @@ class TutorTools:
         "correct", "hinted" (needed hints), or "incorrect". topic is a short name, e.g.
         "epsilon-delta definition"; reuse names consistently. note: what went wrong or
         right, in a few words. source: section it came from, e.g. "Stewart §2.4".
+        Write math in question and note as LaTeX ($...$), as in the session log.
         """
         session = active_session_id(self.subject.slug) or ""
 
@@ -386,7 +387,8 @@ class TutorTools:
         return self._update_state(change)
 
     def open_thread(self, text: str) -> str:
-        """Note something to come back to (an unresolved confusion, a deferred question)."""
+        """Note something to come back to (an unresolved confusion, a deferred question).
+        Write math as LaTeX ($...$), as in the session log."""
         session = active_session_id(self.subject.slug) or ""
 
         def change(state: LearnerState, today: date) -> str:
