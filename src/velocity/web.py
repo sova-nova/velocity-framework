@@ -507,6 +507,8 @@ def build_app(
         return {
             "pages": pdf.page_count,
             "prepared": pdf.cached_pages(),
+            # Prepared before the dropped-text check existed (velocity source recheck).
+            "unchecked": len(pdf.unchecked_pages()),
             "progress": progress,
             "starting": starting,  # launched, still loading before its first update
             "seconds_per_page": SECONDS_PER_PAGE,
@@ -521,8 +523,9 @@ def build_app(
         return JSONResponse(await asyncio.to_thread(prepare_status, ref, pdf))
 
     async def prepare_start(request: Request) -> Response:
-        """Start `velocity source prepare` for a chapter or the whole book, detached, so
-        it keeps running if the page closes or the server stops."""
+        """Start `velocity source prepare` for a chapter or the whole book, or `velocity
+        source recheck` (body {"recheck": "unchecked" | "all"}), detached, so it keeps
+        running if the page closes or the server stops."""
         found, error = reader_pdf(request)
         if error:
             return error
@@ -531,21 +534,25 @@ def build_app(
         process = prepare_processes.get(ref.path.as_posix())
         if running(pdf) or (process is not None and process.poll() is None):
             return JSONResponse({"error": "Already preparing this source."}, 409)
-        scope = ["--all"]
-        if body.get("section"):
+        command = ["prepare", "--all"]
+        if body.get("recheck") in ("unchecked", "all"):
+            command = ["recheck"] + (["--all"] if body["recheck"] == "all" else [])
+        elif body.get("section"):
             section = str(body["section"])
             if not any(s.id == section for s in pdf.outline()):
                 return JSONResponse({"error": "unknown section"}, 404)
-            scope = ["--section", section]
-        await asyncio.to_thread(launch_prepare, subject, ref, pdf, scope)
+            command = ["prepare", "--section", section]
+        await asyncio.to_thread(launch_prepare, subject, ref, pdf, command)
         return JSONResponse(await asyncio.to_thread(prepare_status, ref, pdf))
 
-    def launch_prepare(subject, ref, pdf: PdfSource, scope: list[str]) -> None:
+    def launch_prepare(subject, ref, pdf: PdfSource, command: list[str]) -> None:
+        """Run `velocity source <prepare|recheck> <subject> --source <name> ...`."""
+        verb, *options = command
         pdf.cache_dir.mkdir(parents=True, exist_ok=True)
         with open(pdf.cache_dir / "prepare.log", "w") as log:
             prepare_processes[ref.path.as_posix()] = subprocess.Popen(
-                [sys.executable, "-m", "velocity.cli", "source", "prepare"]
-                + [subject.slug, "--source", ref.name, *scope],
+                [sys.executable, "-m", "velocity.cli", "source", verb]
+                + [subject.slug, "--source", ref.name, *options],
                 stdin=subprocess.DEVNULL,
                 stdout=log,
                 stderr=subprocess.STDOUT,

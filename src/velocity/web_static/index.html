@@ -254,6 +254,11 @@
     <div class="prepare-choices">
       <label><input type="radio" name="prepare-scope" value="chapter"> <span id="prepare-chapter"></span></label>
       <label><input type="radio" name="prepare-scope" value="all"> <span id="prepare-all"></span></label>
+      <div id="prepare-again" hidden>
+        <span class="hint">Already prepared:</span>
+        <label id="prepare-unchecked-choice"><input type="radio" name="prepare-scope" value="recheck-unchecked"> <span id="prepare-unchecked"></span></label>
+        <label><input type="radio" name="prepare-scope" value="recheck-all"> <span id="prepare-recheck-all"></span></label>
+      </div>
     </div>
     <p class="hint">It keeps going if you close this page or stop velocity web. You can cancel
       any time: finished pages are kept, and starting again continues where it stopped.</p>

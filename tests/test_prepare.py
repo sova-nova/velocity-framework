@@ -106,6 +106,7 @@ def test_run_job_writes_progress_and_finishes(tmp_path):
         pdf, 1, 25, "Ch 1: Limits", on_update=lambda p: updates.append(dict(p))
     )
     assert result["state"] == "done" and result["done"] == result["total"] == 25
+    assert result["kind"] == "prepare"
     assert updates[0]["state"] == "running" and updates[0]["done"] == 0
     assert updates[0]["next_section"] == "Ch 1: Limits"
     assert [u["done"] for u in updates[1:-1]] == [10, 20, 25]
@@ -249,3 +250,36 @@ def test_web_prepare_refuses_bad_requests(client):
     )
     assert response.status_code == 404
     assert client.post(f"{base}/Book/prepare", json={}).status_code == 403  # no Origin
+
+
+# -- reading prepared pages again (recheck, M10) -------------------------------------------
+
+
+def test_run_job_can_ocr_prepared_pages_again(tmp_path):
+    ocr = FakeOcr()
+    pdf = source(tmp_path, ocr)
+    cache(pdf, 3, 4, 5, 9)
+    updates = []
+    result = run_job(
+        pdf,
+        1,
+        25,
+        "4 pages again",
+        on_update=lambda p: updates.append(dict(p)),
+        again=[3, 4, 5, 9],
+    )
+    assert result["state"] == "done" and result["total"] == result["done"] == 4
+    assert result["kind"] == "recheck"  # the page words it as "Reading again"
+    assert ocr.calls == [(3, 5), (9, 9)]  # the cached pages, OCR'd again
+    assert updates[0]["next_page"] == 3
+
+
+def test_web_starts_a_recheck(client, monkeypatch):
+    import velocity.web
+
+    monkeypatch.setattr(velocity.web.subprocess, "Popen", FakeProcess)
+    url = "/api/subjects/calculus/sources/Book/prepare"
+    assert client.get(url).json()["unchecked"] == 0
+    client.post(url, json={"recheck": "all"}, headers=ORIGIN)
+    command = " ".join(LAUNCHED[-1])
+    assert command.endswith("velocity.cli source recheck calculus --source Book --all")

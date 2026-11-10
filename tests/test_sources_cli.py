@@ -153,7 +153,7 @@ def test_cli_source_recheck(config, tmp_path, monkeypatch, capsys):
     assert main(["source", "recheck", "calculus"]) == 0
     out = capsys.readouterr().out
     assert (
-        "OCR'ing 1 cached pages again" in out and "0 dropped passages restored." in out
+        "OCR'ing 1 prepared page again" in out and "0 dropped passages restored." in out
     )
     assert (pages / "1.md").read_text() == "new"
     assert (pages / "1.check.json").read_text() == "[]"

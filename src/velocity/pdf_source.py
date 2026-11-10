@@ -199,10 +199,7 @@ class PdfSource:
     def recheck(self, all_pages: bool = False) -> list[int]:
         """OCR cached pages again with the dropped-text check: the unchecked ones, or all."""
         pages = self.cached_pages() if all_pages else self.unchecked_pages()
-        with self.ocr_lock():
-            for run_first, run_last in _runs(pages):
-                self._ocr_run(run_first, run_last)
-        return pages
+        return self.ocr_again(pages)
 
     def prepare(
         self,
@@ -233,6 +230,29 @@ class PdfSource:
                 done += pages
                 if on_batch:
                     on_batch(pages)
+        return done
+
+    def ocr_again(
+        self,
+        pages: list[int],
+        batch: int = PREPARE_BATCH,
+        on_batch: Callable[[list[int]], None] | None = None,
+        should_stop: Callable[[], bool] = lambda: False,
+    ) -> list[int]:
+        """OCR cached pages again (with the dropped-text check), in batches under the OCR
+        lock like `prepare`. Returns the pages done."""
+        done: list[int] = []
+        for run_first, run_last in _runs(sorted(pages)):
+            for start in range(run_first, run_last + 1, batch):
+                if should_stop():
+                    return done
+                end = min(start + batch - 1, run_last)
+                with self.ocr_lock():
+                    self._ocr_run(start, end)
+                batch_pages = list(range(start, end + 1))
+                done += batch_pages
+                if on_batch:
+                    on_batch(batch_pages)
         return done
 
     @contextlib.contextmanager
