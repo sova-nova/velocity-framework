@@ -49,7 +49,7 @@ An excerpt from a real session log, as it appears in Obsidian (math renders ther
 
 Requirements: Linux or macOS (Windows is best effort) and [uv](https://docs.astral.sh/uv/). To chat on your Claude plan you need [Claude Code](https://claude.com/claude-code) 2.1.314 or later; for the API engine (`velocity chat`, or API chats on the web page), an Anthropic API key.
 
-**[Obsidian](https://obsidian.md) (free) is strongly recommended.** velocity keeps its session logs and progress as markdown in a folder of your notes, and Obsidian is the best way to work with them. Without it velocity still works, with any folder: the web page shows your chats, logs (math included), books and progress. What you'd miss:
+**[Obsidian](https://obsidian.md) (free) is strongly recommended.** velocity keeps its session logs and progress as markdown in a folder of your notes, and Obsidian is the best way to work with them. Without it velocity still works, with any folder: the web page shows your chats, logs (math included) and books. What you'd miss:
 
 - **Annotating your logs.** Write your own thoughts between the lines of a session log; the tutor reads them next session and responds.
 - **Your own notes.** The tutor can read (never change) the notes you keep, and critique them with `/review-notes`. Without a notes app there's nowhere convenient to write them.

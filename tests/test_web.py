@@ -4,7 +4,7 @@ import pytest
 from starlette.testclient import TestClient
 
 from velocity.config import Config, create_subject, load_subject
-from velocity.session import ENDED_WITH_WRAP_UP, Session, record_dir
+from velocity.session import ENDED_WITH_WRAP_UP, Session, record_dir, set_active
 from velocity.web import build_app
 
 T0 = datetime(2026, 11, 4, 18, 0, tzinfo=UTC)
@@ -84,13 +84,15 @@ def test_subjects(client, config):
 
 def test_session_list_newest_first(client, config):
     session(config, day=0, end=ENDED_WITH_WRAP_UP)
-    session(config, day=1, learner=("one", "two"))
+    session(config, day=1, learner=("one", "two"))  # cut off: no end, not active
+    set_active("calculus", session(config, day=2).id)
     listing = client.get("/api/subjects/calculus/sessions").json()
     assert [(s["id"], s["turns"], s["ended"]) for s in listing] == [
-        ("2026-11-05-1", 2, None),
+        ("2026-11-06-1", 1, None),
+        ("2026-11-05-1", 2, "no-wrap-up"),
         ("2026-11-04-1", 1, "wrapped-up"),
     ]
-    assert listing[1]["first_message"] == "What is a limit?"
+    assert listing[2]["first_message"] == "What is a limit?"
     assert client.get("/api/subjects/nope/sessions").status_code == 404
 
 
