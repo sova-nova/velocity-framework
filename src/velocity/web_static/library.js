@@ -1,6 +1,6 @@
 // velocity web UI: the Library tab (M10, 2026-11-09): every book once, with the subjects
-// that use it, how much is prepared, likely duplicates, "Add to <subject>", and removing
-// unused books. Removing deletes only copies velocity made (uploads) and their prepared
+// that use it, how much is prepared, likely duplicates, "Add to <subject>", adding a book
+// to the library only (Add a book…), and removing unused books. Removing deletes only copies velocity made (uploads) and their prepared
 // pages; a file of the learner's elsewhere is only forgotten. Uses $, getJSON, postJSON,
 // currentSlug, allSubjects, loadReaderSources and fillSources.
 
@@ -30,14 +30,14 @@ function bookTitle(e) {
   return names.length ? names.join(" / ") : e.filename.replace(/\.[^.]+$/, "");
 }
 
-function drawLibrary() {
+function drawLibrary(newId = null) {
   const list = $("#library-list");
   list.innerHTML = "";
   if (!libraryList.length) {
     list.append(
       Object.assign(document.createElement("li"), {
         className: "hint",
-        textContent: "No books yet. Add one with Book → ⋯ → Add a book.",
+        textContent: "No books yet. Add one with Add a book…, here or in the Book panel.",
       }),
     );
     return;
@@ -94,7 +94,48 @@ function drawLibrary() {
     row.append(what, actions);
     item.append(row);
     list.append(item);
+    if (e.id === newId) {
+      item.classList.add("new"); // the book just added
+      item.scrollIntoView({ block: "nearest" });
+    }
   }
+}
+
+// Add a book to the library only (no subject yet): pick a file, upload it, show it.
+async function uploadToLibrary(file) {
+  const button = $("#library-add");
+  button.disabled = true;
+  libraryStatus(`Uploading ${file.name} (${megabytes(file.size)}) and checking it…`);
+  try {
+    const params = new URLSearchParams({ filename: file.name });
+    const response = await fetch(`/api/library?${params}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/octet-stream" },
+      body: file,
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || `${response.status}`);
+    libraryList = await getJSON("/api/library");
+    drawLibrary(data.id);
+    const subjectName = allSubjects.find((s) => s.slug === currentSlug)?.name;
+    libraryStatus(
+      `Added ${data.filename} to your library.` +
+        (subjectName ? ` Use “Add to ${subjectName}” to teach from it.` : ""),
+    );
+  } catch (error) {
+    libraryStatus(`Could not add it: ${error.message}`, true);
+  } finally {
+    button.disabled = false;
+  }
+}
+
+function setUpLibrary() {
+  $("#library-add").addEventListener("click", () => $("#library-file").click());
+  $("#library-file").addEventListener("change", () => {
+    const file = $("#library-file").files[0];
+    $("#library-file").value = ""; // the same file can be picked again
+    if (file) uploadToLibrary(file);
+  });
 }
 
 // Open the book in the reader: on its own, or beside the chat when a session is open.

@@ -51,7 +51,7 @@ from velocity.config import (
     set_subject_name,
 )
 from velocity.engine import CLAUDE_CODE
-from velocity.library import duplicates, library
+from velocity.library import duplicates, entry_id, library, same_book
 from velocity.library import find as find_in_library
 from velocity.library import remove as remove_from_library
 from velocity.pdf_source import PdfSource
@@ -423,6 +423,30 @@ def build_app(
     async def library_list(request: Request) -> Response:
         return JSONResponse(await asyncio.to_thread(library_json))
 
+    async def library_upload(request: Request) -> Response:
+        """Add a book to the library only, for any subject to use later: the file's bytes
+        are the body, its name in the query string. The same file twice is refused."""
+        try:
+            path = upload_path(request.query_params.get("filename", ""))
+            await receive_upload(request, path)
+        except UploadError as e:
+            return JSONResponse({"error": str(e)}, e.status)
+        same = await asyncio.to_thread(same_book, config, path)
+        if same is not None:
+            await asyncio.to_thread(path.unlink, missing_ok=True)
+            return JSONResponse(
+                {
+                    "error": f"This book is already in your library, as {same.path.name}."
+                },
+                409,
+            )
+        added = next(
+            e
+            for e in await asyncio.to_thread(library_json)
+            if e["id"] == entry_id(path)
+        )
+        return JSONResponse(added)
+
     async def library_remove(request: Request) -> Response:
         """Remove an unused book from the library (the Library tab)."""
         try:
@@ -689,6 +713,7 @@ def build_app(
         Route("/api/subjects/{slug}/delete", subject_delete, methods=["POST"]),
         Route("/api/vault/folders", vault_folders),
         Route("/api/library", library_list),
+        Route("/api/library", library_upload, methods=["POST"]),
         Route("/api/library/{entry}/remove", library_remove, methods=["POST"]),
         Route(
             "/api/subjects/{slug}/sources/library",

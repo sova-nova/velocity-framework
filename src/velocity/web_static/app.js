@@ -717,6 +717,7 @@ async function start() {
   setUpChat();
   setUpReader();
   setUpSubjects();
+  setUpLibrary();
   await Promise.all([loadSessions(slug), loadChat()]);
   if (!slug) openNewSubject();
 }

@@ -6,6 +6,7 @@ Entries are named by an id (a hash of the file's path), never by the path: addin
 the library can only add a file that is already in it.
 """
 
+import filecmp
 import hashlib
 import shutil
 from dataclasses import dataclass, field
@@ -152,6 +153,18 @@ def duplicates(entries: list[LibraryEntry]) -> dict[str, str]:
         else:
             first[key] = e.id
     return out
+
+
+def same_book(config: Config, path: Path) -> LibraryEntry | None:
+    """Another entry with exactly this file's content (an upload of a book the library
+    already has, under any name), or None."""
+    path = path.resolve()
+    size = path.stat().st_size
+    for e in library(config):
+        same_size = e.path != path and e.path.stat().st_size == size
+        if same_size and filecmp.cmp(e.path, path, shallow=False):
+            return e
+    return None
 
 
 def remove(config: Config, entry: str) -> dict:
