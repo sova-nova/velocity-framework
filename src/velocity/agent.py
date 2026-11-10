@@ -18,6 +18,7 @@ import re
 import uuid
 from collections.abc import Awaitable, Callable
 from dataclasses import asdict, dataclass, field
+from importlib.resources import files
 from typing import Any, Protocol, TextIO
 
 from velocity import hooks
@@ -52,6 +53,26 @@ MODEL_ALIASES = {
     "haiku": "claude-haiku-5-5",
 }
 MAX_JSON_RETRIES = 2
+# Server-side compaction at a token threshold (decided 2026-11-10): when a request's input
+# reaches COMPACT_AT tokens, the API summarizes the older turns (with the tutor's prompt in
+# template/compaction.md) and the summary replaces them from then on.
+COMPACT_BETA = "compact-2026-01-12"
+COMPACT_AT = 150_000
+COMPACT_MODELS = {
+    "claude-fable-5-2",
+    "claude-fable-5-1",
+    "claude-fable-5",
+    "claude-opus-5-5",
+    "claude-opus-5",
+    "claude-opus-4-8",
+    "claude-opus-4-7",
+    "claude-opus-4-6",
+    "claude-sonnet-5-5",
+    "claude-sonnet-5",
+    "claude-sonnet-4-6",
+    "claude-haiku-5-5",
+}
+COMPACTED_NOTE = "Earlier conversation summarized to keep the chat short."
 
 
 def resolve_model(name: str) -> str:
@@ -87,10 +108,13 @@ class Usage:
     requests: int = 0
 
     def add(self, usage: Any) -> None:
-        self.input += getattr(usage, "input_tokens", 0) or 0
-        self.output += getattr(usage, "output_tokens", 0) or 0
-        self.cache_read += getattr(usage, "cache_read_input_tokens", 0) or 0
-        self.cache_write += getattr(usage, "cache_creation_input_tokens", 0) or 0
+        # With compaction on, the top-level counts leave out a compaction step; the
+        # per-iteration counts include it, so they are summed instead when present.
+        for part in getattr(usage, "iterations", None) or [usage]:
+            self.input += getattr(part, "input_tokens", 0) or 0
+            self.output += getattr(part, "output_tokens", 0) or 0
+            self.cache_read += getattr(part, "cache_read_input_tokens", 0) or 0
+            self.cache_write += getattr(part, "cache_creation_input_tokens", 0) or 0
         self.requests += 1
 
     def cost(self, model: str) -> float | None:
@@ -204,11 +228,28 @@ def mcp_tool_params(tools: list[Any]) -> list[dict]:
 
 def echo_content(content: list[Any]) -> list[Any]:
     """Assistant content to send back. After a mid-output fallback, model-internal blocks
-    (thinking, tool_use, ...) before the last fallback marker must be dropped; text stays."""
+    (thinking, tool_use, ...) before the last fallback marker must be dropped; text and
+    compaction summaries stay."""
     last = max((i for i, b in enumerate(content) if b.type == "fallback"), default=None)
     if last is None:
         return list(content)
-    return [b for i, b in enumerate(content) if i > last or b.type == "text"]
+    return [
+        b for i, b in enumerate(content) if i > last or b.type in ("text", "compaction")
+    ]
+
+
+def _block_type(block: Any) -> str | None:
+    """A content block's type, whether it is an SDK object or a dict."""
+    return (
+        block.get("type") if isinstance(block, dict) else getattr(block, "type", None)
+    )
+
+
+def compaction_instructions() -> str:
+    """The tutor's summarization prompt for compaction (template/compaction.md)."""
+    return (
+        files("velocity").joinpath("template/compaction.md").read_text(encoding="utf-8")
+    )
 
 
 @dataclass
@@ -361,14 +402,27 @@ class TutorAgent:
     def _keep_stopped(self, reply_start: int) -> str:
         """End a stopped turn: the text streamed so far replaces whatever the turn had
         added after the learner's message (tool calls in it are in the session record,
-        not in the history). Returns the reply as logged, with the stopped mark."""
+        not in the history). A compaction summary made during the turn is kept, so the
+        next request doesn't pay to summarize again. Returns the reply as logged, with the
+        stopped mark."""
+        summaries = [
+            b
+            for m in self.messages[reply_start:]
+            if m["role"] == "assistant" and isinstance(m["content"], list)
+            for b in m["content"]
+            if _block_type(b) == "compaction"
+        ]
         del self.messages[reply_start:]
         partial = self._streamed.strip()
+        text = (
+            partial + "\n\n" if partial else ""
+        ) + "[The learner stopped this reply here.]"
         self.messages.append(
             {
                 "role": "assistant",
-                "content": (partial + "\n\n" if partial else "")
-                + "[The learner stopped this reply here.]",
+                "content": [summaries[-1], {"type": "text", "text": text}]
+                if summaries
+                else text,
             }
         )
         return (partial + "\n\n" if partial else "") + STOPPED_MARK
@@ -456,13 +510,33 @@ class TutorAgent:
             "output_config": {"effort": self.effort},
             "cache_control": {"type": "ephemeral"},
         }
+        betas = []
         if self.model in FALLBACK_MODELS:
-            params["betas"] = [FALLBACK_BETA]
+            betas.append(FALLBACK_BETA)
             params["fallbacks"] = "default"
+        if self.model in COMPACT_MODELS:
+            betas.append(COMPACT_BETA)
+            params["context_management"] = {
+                "edits": [
+                    {
+                        "type": "compact_20260112",
+                        "trigger": {"type": "input_tokens", "value": COMPACT_AT},
+                        "instructions": compaction_instructions(),
+                    }
+                ]
+            }
+        if betas:
+            params["betas"] = betas
         async with self.stream(**params) as stream:
             started = False
             async for event in stream:
-                if event.type == "text":
+                if (
+                    event.type == "content_block_start"
+                    and _block_type(event.content_block) == "compaction"
+                ):
+                    self._write(f"\n[{COMPACTED_NOTE}]\n")
+                    self._emit(ChatEvent("note", text=COMPACTED_NOTE))
+                elif event.type == "text":
                     if not started:
                         self._write("\n")
                         started = True

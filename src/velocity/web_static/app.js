@@ -561,6 +561,12 @@ async function send(text, retry = false) {
         className: "tool",
         textContent: describeTool(event.name, event.input || {}),
       }));
+    } else if (event.type === "note") {
+      // A grey line like a tool call, e.g. when the own loop summarized earlier turns.
+      reply.before(Object.assign(document.createElement("p"), {
+        className: "tool",
+        textContent: event.text,
+      }));
     } else if (event.type === "error") {
       failed = true;
       addNote(event.text, "error");

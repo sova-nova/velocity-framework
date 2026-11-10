@@ -15,7 +15,7 @@ STOPPED_MARK = "*(stopped)*"
 class ChatEvent:
     """What the web page sees: streamed text, a tool call, the end of a reply, an error."""
 
-    type: str  # "text", "tool", "done", "stopped", "error", "ended"
+    type: str  # "text", "tool", "note", "done", "stopped", "error", "ended"
     text: str = ""
     name: str = ""
     input: dict | None = None
