@@ -6,6 +6,7 @@ Entries are named by an id (a hash of the file's path), never by the path: addin
 the library can only add a file that is already in it.
 """
 
+import filecmp
 import hashlib
 import shutil
 from dataclasses import dataclass, field
@@ -20,7 +21,8 @@ from velocity.config import (
     list_subjects,
     load_subject,
 )
-from velocity.pdf_source import default_cache_dir
+from velocity.pdf_source import PdfSource, default_cache_dir
+from velocity.prepare import running
 from velocity.uploads import legacy_upload_dirs, library_dir
 
 
@@ -154,6 +156,18 @@ def duplicates(entries: list[LibraryEntry]) -> dict[str, str]:
     return out
 
 
+def same_book(config: Config, path: Path) -> LibraryEntry | None:
+    """Another entry with exactly this file's content (an upload of a book the library
+    already has, under any name), or None."""
+    path = path.resolve()
+    size = path.stat().st_size
+    for e in library(config):
+        same_size = e.path != path and e.path.stat().st_size == size
+        if same_size and filecmp.cmp(e.path, path, shallow=False):
+            return e
+    return None
+
+
 def remove(config: Config, entry: str) -> dict:
     """Remove an unused book from the library. A copy velocity made is deleted with its
     prepared pages (unless another copy shares them); a file of the learner's elsewhere
@@ -167,6 +181,8 @@ def remove(config: Config, entry: str) -> dict:
         raise ConfigError(
             f"{e.path.name} is still used by {names}; remove it there first."
         )
+    if e.kind == "pdf" and running(PdfSource(e.path, ocr=None)):
+        raise ConfigError(f"{e.path.name} is being prepared; cancel that first.")
     forget_library_file(e.path)
     if not e.managed:
         return {"filename": e.path.name, "deleted": False, "freed": 0}

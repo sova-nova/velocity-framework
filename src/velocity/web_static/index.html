@@ -315,7 +315,11 @@
   </main>
   <main id="library" class="view library-view" hidden>
     <section class="library-panel">
-      <h2>Library</h2>
+      <div class="library-head">
+        <h2>Library</h2>
+        <button id="library-add" class="primary small" title="Keep a book here for any subject to use later">Add a book…</button>
+        <input type="file" id="library-file" accept=".pdf,.epub,.md,.markdown,.html,.htm,.xhtml" hidden>
+      </div>
       <p class="hint">Every book and notes file you've added, in any subject.</p>
       <p id="library-status" class="hint" hidden></p>
       <ul id="library-list" class="library-list"></ul>

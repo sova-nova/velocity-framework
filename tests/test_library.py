@@ -108,6 +108,44 @@ def test_only_library_entries_can_be_added(client, books, tmp_path):
     assert "no longer in the library" in response.json()["error"]
 
 
+def test_add_a_book_to_the_library_only(client, config, books):
+    def upload(filename, content):
+        return client.post(
+            "/api/library",
+            params={"filename": filename},
+            content=content,
+            headers={**ORIGIN, "Content-Type": "application/octet-stream"},
+        )
+
+    added = upload("Probability.md", b"# Dice\n")
+    assert added.status_code == 200
+    assert added.json()["filename"] == "Probability.md" and added.json()["uses"] == []
+    assert (library_dir() / "Probability.md").read_bytes() == b"# Dice\n"
+    assert load_subject(config, "calculus").sources[0].name == "Stewart"  # no subject
+
+    # The same book again, under any name, is refused and not kept.
+    for name in ("Probability.md", "dice.md", "Stewart copy.md"):
+        content = b"# Limits\n" if name == "Stewart copy.md" else b"# Dice\n"
+        again = upload(name, content)
+        assert (
+            again.status_code == 409
+            and "already in your library" in again.json()["error"]
+        )
+    assert sorted(p.name for p in library_dir().glob("*.md")) == [
+        "Probability.md",
+        "uploaded.md",
+    ]
+    bad = upload("photo.jpg", b"\xff\xd8")
+    assert bad.status_code == 400 and "unsupported" in bad.json()["error"]
+    # Then any subject can add it from the library.
+    response = client.post(
+        "/api/subjects/ai-engineering/sources/library",
+        json={"id": added.json()["id"], "name": "Dice"},
+        headers=ORIGIN,
+    )
+    assert response.status_code == 200
+
+
 # -- removing and renaming -----------------------------------------------------------------
 
 
@@ -219,6 +257,24 @@ def test_removing_an_upload_deletes_it_and_its_prepared_pages(config):
     assert done["deleted"] and done["freed"] > size  # the file and its prepared pages
     assert not upload.exists() and not cache.exists()
     assert "upload.pdf" not in [e.path.name for e in library(config)]
+
+
+def test_a_book_being_prepared_cant_be_removed(config):
+    import json
+    import os
+
+    from velocity.library import remove
+
+    library_dir().mkdir(parents=True, exist_ok=True)
+    upload = make_pdf(library_dir() / "upload.pdf")
+    cache = prepare_pages(upload, [1])
+    # A job that is running: its progress file names a live process (this one).
+    (cache / "prepare.json").write_text(
+        json.dumps({"state": "running", "pid": os.getpid()})
+    )
+    with pytest.raises(ConfigError, match="being prepared"):
+        remove(config, entry_id(upload))
+    assert upload.exists() and cache.exists()
 
 
 def test_a_copy_keeps_the_prepared_pages_it_shares(config, tmp_path):

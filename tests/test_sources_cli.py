@@ -157,3 +157,32 @@ def test_cli_source_recheck(config, tmp_path, monkeypatch, capsys):
     )
     assert (pages / "1.md").read_text() == "new"
     assert (pages / "1.check.json").read_text() == "[]"
+
+
+def test_cli_prepare_a_file_in_no_subject(config, tmp_path, monkeypatch, capsys):
+    from velocity.ocr import OcrPage
+    from velocity.pdf_source import default_cache_dir
+
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "data"))
+    pdf = make_pdf(tmp_path / "book.pdf", toc=True)
+    monkeypatch.setattr(
+        "velocity.tools.default_ocr",
+        lambda cfg: lambda pdf_path, first, last, image_dir: {1: OcrPage("one", [])},
+    )
+    assert main(["source", "prepare", "--file", str(pdf), "--all"]) == 0
+    assert "book.pdf: done, 1 pages OCR'd." in capsys.readouterr().out
+    assert (default_cache_dir(pdf) / "pages/1.md").read_text() == "one"
+
+    # A subject that adds it later finds the pages prepared.
+    add_source(config, "calculus", pdf, "Book")
+    assert main(["source", "prepare", "calculus", "--all"]) == 0
+    assert "Book: the whole book is already prepared." in capsys.readouterr().out
+
+    # Exactly one of a subject or --file.
+    assert main(["source", "prepare", "--all"]) == 1
+    assert main(["source", "prepare", "calculus", "--file", str(pdf), "--all"]) == 1
+    assert "Name a subject, or a PDF with --file" in capsys.readouterr().out
+    notes = tmp_path / "notes.md"
+    notes.write_text("# x\n")
+    assert main(["source", "prepare", "--file", str(notes), "--all"]) == 1
+    assert "not a PDF file" in capsys.readouterr().out

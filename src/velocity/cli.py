@@ -141,7 +141,11 @@ def _source(args: argparse.Namespace) -> int:
             config, load_subject(config, args.subject), args.all, args.source
         )
     if args.source_command == "prepare":
-        return _prepare(config, load_subject(config, args.subject), args)
+        if bool(args.subject) == bool(args.file):
+            print("Name a subject, or a PDF with --file (a book in no subject yet).")
+            return 1
+        subject = load_subject(config, args.subject) if args.subject else None
+        return _prepare(config, subject, args)
     if args.source_command == "remove":
         remove_source(config, args.subject, args.name)
         print(f"Removed {args.name!r} from {args.subject}. The file itself is kept.")
@@ -209,8 +213,11 @@ def prepare_scope(pdf, section: str | None, pages: str | None) -> tuple[int, int
 
 
 def _prepare(config, subject, args: argparse.Namespace) -> int:
-    """OCR part of a PDF source ahead of time, showing progress (velocity source prepare)."""
+    """OCR part of a PDF source ahead of time, showing progress (velocity source prepare).
+    With `subject` None, `args.file` names the PDF (a library book in no subject yet);
+    prepared pages are kept per file, so any subject that adds it later finds them."""
     import sys
+    from pathlib import Path
 
     from velocity.pdf_source import PdfSource
     from velocity.prepare import (
@@ -221,18 +228,27 @@ def _prepare(config, subject, args: argparse.Namespace) -> int:
     )
     from velocity.tools import default_ocr
 
-    pdfs = [s for s in subject.sources if s.path.suffix.lower() == ".pdf"]
-    if args.source:
-        pdfs = [s for s in pdfs if s.name == args.source]
-    if len(pdfs) != 1:
-        names = ", ".join(s.name for s in subject.sources if s.path.suffix == ".pdf")
-        print(
-            "Name the PDF source with --source"
-            + (f" (one of: {names})." if names else "; this subject has none.")
-        )
-        return 1
-    ref = pdfs[0]
-    pdf = PdfSource(ref.path, default_ocr(config))
+    if subject is None:
+        path = Path(args.file).expanduser().resolve()
+        if path.suffix.lower() != ".pdf" or not path.is_file():
+            print(f"{args.file}: not a PDF file.")
+            return 1
+        name = path.name
+    else:
+        pdfs = [s for s in subject.sources if s.path.suffix.lower() == ".pdf"]
+        if args.source:
+            pdfs = [s for s in pdfs if s.name == args.source]
+        if len(pdfs) != 1:
+            names = ", ".join(
+                s.name for s in subject.sources if s.path.suffix == ".pdf"
+            )
+            print(
+                "Name the PDF source with --source"
+                + (f" (one of: {names})." if names else "; this subject has none.")
+            )
+            return 1
+        name, path = pdfs[0].name, pdfs[0].path
+    pdf = PdfSource(path, default_ocr(config))
     try:
         first, last, label = prepare_scope(pdf, args.section, args.pages)
     except ValueError as e:
@@ -240,11 +256,11 @@ def _prepare(config, subject, args: argparse.Namespace) -> int:
         return 1
     todo = len(pdf.missing_pages(first, last))
     if not todo:
-        print(f"{ref.name}: {label} is already prepared.")
+        print(f"{name}: {label} is already prepared.")
         return 0
     where = "" if label.startswith("PDF pp.") else f" (PDF pp. {first}-{last})"
     print(
-        f"{ref.name}: preparing {label}{where}: {todo} pages to OCR, "
+        f"{name}: preparing {label}{where}: {todo} pages to OCR, "
         f"{format_duration(estimate_seconds(todo))}. This takes a while and keeps the "
         "GPU busy; the tutor keeps working meanwhile. Stop with Ctrl+C: finished pages "
         "are kept, and running this again continues where it stopped."
@@ -261,7 +277,7 @@ def _prepare(config, subject, args: argparse.Namespace) -> int:
         return 130
     print(
         ("\n" if tty else "")
-        + f"{ref.name}: {result['state']}, {result['done']} pages OCR'd."
+        + f"{name}: {result['state']}, {result['done']} pages OCR'd."
     )
     return 0 if result["state"] == "done" else 1
 
@@ -494,9 +510,13 @@ def main(argv: list[str] | None = None) -> int:
         help="OCR a chapter or the whole book ahead of time, so reading it is instant "
         "(takes a while: about 6-7 s per page on a GPU)",
     )
-    source_prepare.add_argument("subject")
+    source_prepare.add_argument("subject", nargs="?")
     source_prepare.add_argument(
         "--source", help="which source (needed when the subject has several PDFs)"
+    )
+    source_prepare.add_argument(
+        "--file",
+        help="a PDF in no subject yet (instead of a subject), e.g. a library book",
     )
     scope = source_prepare.add_mutually_exclusive_group(required=True)
     scope.add_argument(

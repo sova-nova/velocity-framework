@@ -463,6 +463,9 @@ body.in-setup #settings-button, body.in-setup #workspace { display: none; }
 /* The Library tab (M10) */
 #workspace > .library-view { display: block; overflow-y: auto; }
 .library-panel { max-width: 52rem; margin: 0 auto; padding: 1.5rem 1.25rem 3rem; }
+.library-head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+.library-head h2 { margin: 0.5rem 0; }
+.library-list > li.new { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
 .library-list { list-style: none; margin: 1rem 0 0; padding: 0; display: flex; flex-direction: column; gap: 0.6rem; }
 .library-list > li { border: 1px solid var(--border); border-radius: 10px; padding: 0.7rem 0.9rem; }
 .library-list .row { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
@@ -498,6 +501,7 @@ body.in-setup #settings-button, body.in-setup #workspace { display: none; }
   cursor: pointer;
 }
 .library-list .confirm button.danger { background: var(--danger); border-color: var(--danger); color: var(--bg); }
+.library-list .confirm button.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
 #add-source { max-width: 32rem; }
 #add-source .field { display: flex; flex-direction: column; gap: 0.25rem; margin: 0.75rem 0; }
 #add-source input[type="text"] {
