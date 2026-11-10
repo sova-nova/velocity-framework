@@ -230,6 +230,7 @@ def test_one_open_session_per_subject(client, config):
     other = Session.start(
         "calculus", "Calculus", record_dir("calculus"), subject.sessions_dir, []
     )
+    other.append("learner", "What is a limit?")  # not empty, so it is kept
     set_active("calculus", other.id)
     assert client.get("/api/subjects/calculus/chat").json()["elsewhere"] is True
     response = post(client, "start")
@@ -274,3 +275,20 @@ def test_stopping_the_server_pauses_open_chats(config, clock):
         session_id = active_session_id("calculus")
     paused = session(config, session_id)
     assert paused.ended and not paused.wrapped_up
+
+
+def test_end_session_in_an_empty_session_closes_it_without_the_tutor(client, config):
+    post(client, "start")
+    session_id = active_session_id("calculus")
+    events = say(client, "/end-session")
+    assert [e["type"] for e in events] == ["ended"] and events[0]["text"] == "empty"
+    assert client.get("/api/subjects/calculus/chat").json()["open"] is False
+    assert not session(config, session_id).record_path.exists()
+    assert client.get("/api/subjects/calculus/sessions").json() == []
+
+
+def test_a_chat_paused_before_any_message_leaves_nothing(client, config):
+    post(client, "start")
+    session_id = active_session_id("calculus")
+    assert post(client, "pause").status_code == 200
+    assert not session(config, session_id).log_path.exists()

@@ -36,7 +36,7 @@ from velocity.engine import (
     Engine,
     EngineError,
 )
-from velocity.hooks import CONTINUE_ENV, REOPEN_ENV, WEB_UI_ENV
+from velocity.hooks import CONTINUE_ENV, REOPEN_ENV, WEB_UI_ENV, nothing_to_wrap_up
 from velocity.session import (
     SESSION_ID,
     Session,
@@ -165,7 +165,7 @@ class ChatManager:
                     "if nothing is using it anymore.",
                     409,
                 )
-            _session(subject, other).end()
+            _session(subject, other).end_or_remove()
             set_active(subject.slug, None)
 
         if resume:
@@ -243,6 +243,12 @@ class ChatManager:
         chat = self.chats.get(subject.slug)
         if chat is None:
             raise ChatError("No chat is open for this subject.", 409)
+        if self._nothing_to_wrap_up(subject, chat, text):
+            # End session before anything happened: close it without the tutor; ending
+            # the engine removes the empty session.
+            await self.pause(subject)
+            yield ChatEvent("ended", text="empty")
+            return
         chat.busy = True
         chat.last_activity = self.clock()
         streamed = []
@@ -265,6 +271,17 @@ class ChatManager:
             # /end-session finished: the hooks closed the log, so stop the engine.
             await self.pause(subject)
             yield ChatEvent("ended", text="wrapped-up")
+
+    @staticmethod
+    def _nothing_to_wrap_up(subject: Subject, chat: OpenChat, text: str) -> bool:
+        """/end-session before anything happened in the session (hooks.nothing_to_wrap_up),
+        including in a new Claude Code chat whose session hasn't opened yet. A resumed
+        chat knows its session from the start, so it never counts as not open yet."""
+        if text.split()[:1] != ["/end-session"]:
+            return False
+        if chat.session_id is None and active_session_id(subject.slug) is None:
+            return True
+        return nothing_to_wrap_up(subject, text)
 
     async def stop_reply(self, subject: Subject) -> None:
         """Stop the reply being streamed; what the tutor said so far is kept."""

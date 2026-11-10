@@ -321,6 +321,7 @@ def test_the_active_session_is_not_taken_over_by_resume(config, subject):
 def test_starting_a_session_pauses_the_one_it_takes_over_from(config, subject):
     start_hook(config, subject)
     first = active_session_id("calculus")
+    hooks.user_prompt(config, subject, {"prompt": "Teach me limits"})
     start_hook(config, subject, session_id="other")
     second = active_session_id("calculus")
     assert second != first
@@ -329,3 +330,80 @@ def test_starting_a_session_pauses_the_one_it_takes_over_from(config, subject):
     ).events()
     assert [e.text for e in events if e.kind == "end"] == ["no-wrap-up"]
     assert status(subject) == {second: None, first: "no-wrap-up"}
+
+
+# -- empty sessions (decided 2026-11-10) ------------------------------------------------
+
+
+def session_files(s: Session) -> list[bool]:
+    return [s.record_path.exists(), s.log_path.exists()]
+
+
+def test_an_empty_session_is_removed_when_it_ends(config, subject):
+    claude_map = record_dir("calculus") / "claude-sessions"
+    start_hook(config, subject)
+    s = Session(
+        "calculus",
+        active_session_id("calculus"),
+        record_dir("calculus"),
+        subject.sessions_dir,
+    )
+    assert claude_map.joinpath("c9").read_text() == s.id
+    hooks.session_end(config, subject, {"reason": "prompt_input_exit"})
+    assert session_files(s) == [False, False]
+    assert not claude_map.joinpath("c9").exists()
+    assert active_session_id("calculus") is None
+    assert status(subject) == {}
+
+
+def test_a_session_with_anything_in_it_is_kept(config, subject):
+    start_hook(config, subject)
+    s = Session(
+        "calculus",
+        active_session_id("calculus"),
+        record_dir("calculus"),
+        subject.sessions_dir,
+    )
+    s.set_title("Limits")  # a title alone is enough
+    hooks.session_end(config, subject, {"reason": "prompt_input_exit"})
+    assert session_files(s) == [True, True] and s.ended
+
+
+def test_an_empty_session_with_the_learners_writing_is_kept(config, subject):
+    start_hook(config, subject)
+    s = Session(
+        "calculus",
+        active_session_id("calculus"),
+        record_dir("calculus"),
+        subject.sessions_dir,
+    )
+    with s.log_path.open("a") as f:
+        f.write("\nMy own thought before starting.\n")
+    hooks.session_end(config, subject, {"reason": "prompt_input_exit"})
+    assert session_files(s) == [True, True] and s.ended
+
+
+def test_an_empty_session_taken_over_is_removed(config, subject):
+    start_hook(config, subject)
+    first = Session(
+        "calculus",
+        active_session_id("calculus"),
+        record_dir("calculus"),
+        subject.sessions_dir,
+    )
+    start_hook(config, subject, session_id="other")
+    assert session_files(first) == [False, False]
+    assert list(status(subject).values()) == [None]
+
+
+def test_end_session_first_never_reaches_the_tutor(config, subject):
+    start_hook(config, subject)
+    blocked = hooks.user_prompt(config, subject, {"prompt": "/end-session"})
+    assert blocked["decision"] == "block" and "/exit" in blocked["reason"]
+    # Not logged; the session stays empty, so quitting removes it.
+    session_id = active_session_id("calculus")
+    s = Session("calculus", session_id, record_dir("calculus"), subject.sessions_dir)
+    assert s.empty
+    # Once something happened, /end-session goes to the tutor as usual.
+    hooks.user_prompt(config, subject, {"prompt": "What is a limit?"})
+    assert hooks.user_prompt(config, subject, {"prompt": "/end-session"}) == {}

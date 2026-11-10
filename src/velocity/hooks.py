@@ -94,13 +94,13 @@ def _web_ui(payload: dict) -> bool:
 
 def _pause_previous(subject: Subject, session_id: str) -> None:
     """A session taking over from another active one that never ended: end that one as
-    paused first, so its record says so (decided 2026-11-10)."""
+    paused first, so its record says so, or remove it if it is empty (decided 2026-11-10)."""
     previous = active_session_id(subject.slug)
     if not previous or previous == session_id or not SESSION_ID.match(previous):
         return
     session = _session(subject, previous)
     if session.record_path.exists() and not session.ended:
-        session.end()
+        session.end_or_remove()
 
 
 def session_start(config: Config, subject: Subject, payload: dict) -> dict:
@@ -255,7 +255,30 @@ def log_changes_context(new_annotations: list[str], new_missing: list[str]) -> s
     return "\n\n".join(parts)
 
 
+NOTHING_TO_WRAP_UP = (
+    "Nothing to wrap up yet, so the session was closed without a recap."
+)
+
+
+def nothing_to_wrap_up(subject: Subject, text: str) -> bool:
+    """/end-session as the first thing in a session: there is nothing for the tutor to wrap
+    up, so it never sees it and the empty session is closed (decided 2026-11-10)."""
+    words = text.split()
+    if not words or words[0] != "/end-session":
+        return False
+    session = _active(subject)
+    return bool(session and not session.ended and session.empty)
+
+
 def user_prompt(config: Config, subject: Subject, payload: dict) -> dict:
+    if nothing_to_wrap_up(subject, payload.get("prompt", "")):
+        # Claude Code in a terminal: the hook can keep the message from the tutor but
+        # can't close Claude Code, so the learner quits and SessionEnd removes the session.
+        return {
+            "decision": "block",
+            "reason": "Nothing to wrap up yet: this session is empty. Quit with /exit and "
+            "it is removed.",
+        }
     session = _active(subject)
     if not session or session.ended or not payload.get("prompt", "").strip():
         return {}
@@ -299,7 +322,7 @@ def session_end(config: Config, subject: Subject, payload: dict) -> dict:
     # Leaving to resume or clear is not the end of the learning session.
     if session and payload.get("reason") not in ("resume",):
         session.render()
-        session.end()
+        session.end_or_remove()  # an empty session is removed
         set_active(subject.slug, None)
     return {}
 

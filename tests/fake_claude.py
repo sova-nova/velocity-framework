@@ -1,7 +1,7 @@
 """A stand-in for `claude -p` with stream-json, for testing web chat without Claude Code.
 
 It speaks the protocol observed in the 2026-11-06 experiment and runs velocity's real
-hooks at the same moments Claude Code does: SessionStart before the first reply,
+hooks at the same moments Claude Code does: SessionStart when it starts,
 UserPromptSubmit and Stop around each reply, SessionEnd when stdin closes. The subject
 comes from FAKE_CLAUDE_SUBJECT; config and data directories from the usual XDG variables.
 
@@ -69,12 +69,11 @@ def write_until_interrupted() -> None:
     emit({"type": "result", "subtype": "error_during_execution", "is_error": True})
 
 
-started = False
+# Like Claude Code, SessionStart runs when the process starts, before any message (so a
+# chat closed before the first message leaves an empty session, which SessionEnd removes).
+hook("session_start", {"source": "resume" if resume else "startup"})
 while line := sys.stdin.readline():
     text = json.loads(line)["message"]["content"]
-    if not started:
-        hook("session_start", {"source": "resume" if resume else "startup"})
-        started = True
     if text == "crash":
         sys.exit(1)
     hook("user_prompt", {"prompt": text})
@@ -110,5 +109,4 @@ while line := sys.stdin.readline():
     hook("stop", {"last_assistant_message": reply})
     emit({"type": "result", "subtype": "success", "is_error": False, "result": reply})
 
-if started:
-    hook("session_end", {"reason": "other"})
+hook("session_end", {"reason": "other"})

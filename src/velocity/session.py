@@ -7,6 +7,7 @@ land between the right pieces of text. The tool only ever appends to the markdow
 learner adds there is treated as annotation, and text missing from it can be detected.
 """
 
+import contextlib
 import json
 import re
 from dataclasses import asdict, dataclass
@@ -220,6 +221,43 @@ class Session:
             return
         self.append("event", how, kind="end", now=now)
         self.render()
+
+    @property
+    def empty(self) -> bool:
+        """Nothing happened in it: no message from either side, no title, no log block,
+        no tool call, no annotation; only its start, end, resume and engine events."""
+        events = self.events()
+        return bool(events) and all(
+            e.role == "event" and e.kind in ("start", "end", "resume", "engine")
+            for e in events
+        )
+
+    def end_or_remove(self) -> bool:
+        """End the session, or remove it if it is empty and the learner hasn't written in
+        its log (decided 2026-11-10). Returns True if it was removed."""
+        if self.empty and self._log_untouched():
+            self.remove()
+            return True
+        self.end()
+        return False
+
+    def remove(self) -> None:
+        """Delete the session's record, its markdown log, and Claude Code's mappings to it.
+        Only for sessions with nothing in them (see end_or_remove)."""
+        mappings = self.record_path.parent / "claude-sessions"
+        if mappings.is_dir():
+            for mapping in mappings.iterdir():
+                with contextlib.suppress(OSError):
+                    if mapping.read_text().strip() == self.id:
+                        mapping.unlink()
+        for path in (self.log_path, self._rendered_path, self.record_path):
+            path.unlink(missing_ok=True)
+
+    def _log_untouched(self) -> bool:
+        if not self.log_path.exists():
+            return True
+        check = self.check_log()
+        return not check.annotations and not check.missing
 
     def _last_end(self) -> Event | None:
         """The end event, if the session is currently ended (not reopened since)."""
