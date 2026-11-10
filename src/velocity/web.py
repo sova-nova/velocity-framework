@@ -49,8 +49,9 @@ from velocity.config import (
     set_subject_name,
 )
 from velocity.engine import CLAUDE_CODE
+from velocity.library import duplicates, library
 from velocity.library import find as find_in_library
-from velocity.library import library
+from velocity.library import remove as remove_from_library
 from velocity.pdf_source import PdfSource
 from velocity.prepare import (
     SECONDS_PER_PAGE,
@@ -365,9 +366,23 @@ def build_app(config: Config, chats: ChatManager | None = None) -> Starlette:
 
     # -- the sources library (M10) -------------------------------------------------------
 
+    def library_json() -> list[dict]:
+        entries = library(config)
+        copies = duplicates(entries)
+        return [{**e.as_json(), "duplicate_of": copies.get(e.id)} for e in entries]
+
     async def library_list(request: Request) -> Response:
-        entries = await asyncio.to_thread(library, config)
-        return JSONResponse([e.as_json() for e in entries])
+        return JSONResponse(await asyncio.to_thread(library_json))
+
+    async def library_remove(request: Request) -> Response:
+        """Remove an unused book from the library (the Library tab)."""
+        try:
+            done = await asyncio.to_thread(
+                remove_from_library, config, request.path_params["entry"]
+            )
+        except ConfigError as e:
+            return JSONResponse({"error": str(e)}, 400)
+        return JSONResponse(done)
 
     async def source_from_library(request: Request) -> Response:
         """Add a book from the library to a subject: the same file, no new upload."""
@@ -618,6 +633,7 @@ def build_app(config: Config, chats: ChatManager | None = None) -> Starlette:
         Route("/api/subjects/{slug}/delete", subject_delete, methods=["POST"]),
         Route("/api/vault/folders", vault_folders),
         Route("/api/library", library_list),
+        Route("/api/library/{entry}/remove", library_remove, methods=["POST"]),
         Route(
             "/api/subjects/{slug}/sources/library",
             source_from_library,

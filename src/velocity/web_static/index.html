@@ -12,6 +12,7 @@
   <script defer src="/static/app.js"></script>
   <script defer src="/static/reader.js"></script>
   <script defer src="/static/subjects.js"></script>
+  <script defer src="/static/library.js"></script>
 </head>
 <body>
   <header>
@@ -23,6 +24,7 @@
     <nav>
       <button class="tab active" data-view="chat">Chat</button>
       <button class="tab" data-view="history">History</button>
+      <button class="tab" data-view="library" title="All your books, in every subject">Library</button>
       <button id="book-button" class="tab" title="Open the source reader beside the chat">Book</button>
     </nav>
   </header>
@@ -230,6 +232,14 @@
     <article id="log">
       <p class="hint">Pick a session to read its log.</p>
     </article>
+  </main>
+  <main id="library" class="view library-view" hidden>
+    <section class="library-panel">
+      <h2>Library</h2>
+      <p class="hint">Every book and notes file you've added, in any subject.</p>
+      <p id="library-status" class="hint" hidden></p>
+      <ul id="library-list" class="library-list"></ul>
+    </section>
   </main>
   <div id="reader-divider" title="Drag to resize" hidden></div>
   <section id="reader" hidden>

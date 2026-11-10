@@ -181,3 +181,96 @@ def test_a_deleted_subjects_books_stay_in_the_library(config, books):
     names = sorted(e.path.name for e in library(config))
     assert names == ["notes.md", "stewart.md", "uploaded.md"]
     assert all(not e.uses for e in library(config))
+
+
+# -- the Library tab: removing books (M10) -----------------------------------------------
+
+
+def make_pdf(path, pages=3):
+    import pymupdf
+
+    doc = pymupdf.open()
+    for n in range(pages):
+        doc.new_page().insert_text((72, 72), f"Page {n + 1}")
+    doc.save(path)
+    return path
+
+
+def prepare_pages(pdf, pages):
+    from velocity.pdf_source import default_cache_dir
+
+    folder = default_cache_dir(pdf) / "pages"
+    folder.mkdir(parents=True, exist_ok=True)
+    for p in pages:
+        (folder / f"{p}.md").write_text(f"page {p}")
+    return folder.parent
+
+
+def test_removing_an_upload_deletes_it_and_its_prepared_pages(config):
+    from velocity.library import remove
+
+    library_dir().mkdir(parents=True, exist_ok=True)
+    upload = make_pdf(library_dir() / "upload.pdf")
+    cache = prepare_pages(upload, [1, 2])
+    entry = next(e for e in library(config) if e.path.name == "upload.pdf")
+    assert entry.managed and entry.prepared() == {"pages": 3, "done": 2}
+    size = upload.stat().st_size
+    done = remove(config, entry.id)
+    assert done["deleted"] and done["freed"] > size  # the file and its prepared pages
+    assert not upload.exists() and not cache.exists()
+    assert "upload.pdf" not in [e.path.name for e in library(config)]
+
+
+def test_a_copy_keeps_the_prepared_pages_it_shares(config, tmp_path):
+    from velocity.library import duplicates, remove
+    from velocity.uploads import legacy_upload_dirs
+
+    old = tmp_path / "data/velocity/uploads/calculus"
+    old.mkdir(parents=True)
+    first = make_pdf(old / "book.pdf")
+    library_dir().mkdir(parents=True, exist_ok=True)
+    second = library_dir() / "book.pdf"
+    second.write_bytes(first.read_bytes())
+    cache = prepare_pages(first, [1])
+    assert legacy_upload_dirs()
+    entries = library(config)
+    copies = duplicates(entries)
+    assert len(copies) == 1  # one of the two is flagged as a copy of the other
+    copy_id = next(iter(copies))
+    remove(config, copy_id)
+    assert cache.exists()  # still used by the other copy
+    assert len([e for e in library(config) if e.path.name == "book.pdf"]) == 1
+
+
+def test_a_learners_own_file_is_only_forgotten(config, tmp_path):
+    from velocity.library import remove
+
+    own = make_pdf(tmp_path / "my-book.pdf")
+    add_source(config, "calculus", own, "Mine")
+    remove_source(config, "calculus", "Mine")
+    entry = next(e for e in library(config) if e.path.name == "my-book.pdf")
+    assert not entry.managed
+    done = remove(config, entry.id)
+    assert done == {"filename": "my-book.pdf", "deleted": False, "freed": 0}
+    assert own.exists()  # never deleted
+    assert "my-book.pdf" not in [e.path.name for e in library(config)]
+
+
+def test_a_used_book_cant_be_removed(client, config, books):
+    stewart, _ = books
+    response = client.post(f"/api/library/{entry_id(stewart)}/remove", headers=ORIGIN)
+    assert response.status_code == 400
+    assert "still used by Calculus" in response.json()["error"]
+    assert stewart.exists()
+
+
+def test_library_tab_data(client, config, books):
+    entries = {e["filename"]: e for e in client.get("/api/library").json()}
+    assert entries["uploaded.md"]["managed"] is True
+    assert entries["stewart.md"]["managed"] is False
+    assert entries["stewart.md"]["prepared"] is None  # text sources aren't prepared
+    assert entries["uploaded.md"]["duplicate_of"] is None
+    forgot = client.post(
+        f"/api/library/{entries['uploaded.md']['id']}/remove", headers=ORIGIN
+    )
+    assert forgot.json()["deleted"] is True

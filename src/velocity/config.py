@@ -348,6 +348,17 @@ def remember_library_file(path: Path) -> None:
     )
 
 
+def forget_library_file(path: Path) -> None:
+    """Drop a file from the library index (the file itself is not touched here)."""
+    path = path.resolve()
+    files = [p for p in library_files() if p.resolve() != path]
+    index = _library_index()
+    if index.exists():
+        index.write_text(
+            json.dumps([p.as_posix() for p in files], indent=1), encoding="utf-8"
+        )
+
+
 def library_files() -> list[Path]:
     """Every source file ever added to a subject (that the index remembers)."""
     try:
