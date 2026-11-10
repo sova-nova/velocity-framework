@@ -275,8 +275,10 @@ function drawSwitch(container, select, label = (text) => text) {
     button.addEventListener("click", () => {
       if (select.value === option.value) return;
       select.value = option.value;
-      select.dispatchEvent(new Event("change"));
+      // Mark it first: "change" may redraw this switch (the engine's does), and the new
+      // buttons are drawn from the select, so they come out right either way.
       for (const b of container.children) b.setAttribute("aria-checked", String(b === button));
+      select.dispatchEvent(new Event("change"));
     });
     container.append(button);
   }
