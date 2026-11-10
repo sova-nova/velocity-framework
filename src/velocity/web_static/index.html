@@ -13,6 +13,7 @@
   <script defer src="/static/reader.js"></script>
   <script defer src="/static/subjects.js"></script>
   <script defer src="/static/library.js"></script>
+  <script defer src="/static/progress.js"></script>
   <script defer src="/static/setup.js"></script>
 </head>
 <body>
@@ -36,6 +37,7 @@
     <nav>
       <button class="tab active" data-view="chat">Chat</button>
       <button class="tab" data-view="history">History</button>
+      <button class="tab" data-view="progress" title="What the tutor has recorded about your learning">Progress</button>
       <button class="tab" data-view="library" title="All your books, in every subject">Library</button>
     </nav>
     <button id="book-button" class="toggle" aria-pressed="false" title="Show the book beside the chat">
@@ -312,6 +314,14 @@
     <article id="log">
       <p class="hint">Pick a session to read its log.</p>
     </article>
+  </main>
+  <main id="progress" class="view library-view" hidden>
+    <section class="library-panel progress-panel">
+      <h2>Progress</h2>
+      <p class="hint">What the tutor has recorded as you study. To correct something, tell the tutor.</p>
+      <p id="progress-status" class="hint" hidden></p>
+      <div id="progress-body"></div>
+    </section>
   </main>
   <main id="library" class="view library-view" hidden>
     <section class="library-panel">
