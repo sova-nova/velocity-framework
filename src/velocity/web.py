@@ -418,7 +418,22 @@ def build_app(
     def library_json() -> list[dict]:
         entries = library(config)
         copies = duplicates(entries)
-        return [{**e.as_json(), "duplicate_of": copies.get(e.id)} for e in entries]
+        return [
+            {**e.as_json(), "duplicate_of": copies.get(e.id), "job": job_of(e)}
+            for e in entries
+        ]
+
+    def job_of(entry) -> dict | None:
+        """A PDF's preparing job, started here or from a subject, for the Library tab:
+        its progress (any state), or {"state": "starting"} while it loads."""
+        if entry.kind != "pdf":
+            return None
+        progress = read_progress(PdfSource(entry.path, ocr=None))
+        process = prepare_processes.get(entry.path.as_posix())
+        launched = process is not None and process.poll() is None
+        if launched and not (progress and progress["state"] == "running"):
+            return {"state": "starting"}
+        return progress
 
     async def library_list(request: Request) -> Response:
         return JSONResponse(await asyncio.to_thread(library_json))
@@ -608,12 +623,17 @@ def build_app(
 
     def launch_prepare(subject, ref, pdf: PdfSource, command: list[str]) -> None:
         """Run `velocity source <prepare|recheck> <subject> --source <name> ...`."""
+        launch_job([subject.slug, "--source", ref.name], ref.path, pdf, command)
+
+    def launch_job(target: list[str], path, pdf: PdfSource, command: list[str]) -> None:
+        """Run `velocity source <prepare|recheck> <target...> <options...>`, detached.
+        `target` names the PDF: a subject and source, or `--file <path>`."""
         verb, *options = command
         pdf.cache_dir.mkdir(parents=True, exist_ok=True)
         with open(pdf.cache_dir / "prepare.log", "w") as log:
-            prepare_processes[ref.path.as_posix()] = subprocess.Popen(
+            prepare_processes[path.as_posix()] = subprocess.Popen(
                 [sys.executable, "-m", "velocity.cli", "source", verb]
-                + [subject.slug, "--source", ref.name, *options],
+                + [*target, *options],
                 stdin=subprocess.DEVNULL,
                 stdout=log,
                 stderr=subprocess.STDOUT,
@@ -628,6 +648,46 @@ def build_app(
         _, ref, pdf = found
         request_cancel(pdf)
         return JSONResponse(prepare_status(ref, pdf))
+
+    # Preparing a library book (the Library tab): the whole book, by its library id. The
+    # prepared pages are kept per file, so the subjects using it (now or later) share them.
+
+    def library_pdf(request: Request):
+        """(entry, PdfSource) for a PDF in the library, or an error response."""
+        try:
+            entry = find_in_library(config, request.path_params["entry"])
+        except ConfigError as e:
+            return None, JSONResponse({"error": str(e)}, 404)
+        if entry.kind != "pdf":
+            return None, JSONResponse({"error": "only PDFs are prepared"}, 400)
+        return (entry, PdfSource(entry.path, ocr=None)), None
+
+    async def library_prepare(request: Request) -> Response:
+        """GET: how much is prepared, and the job's progress. POST: prepare the rest."""
+        found, error = await asyncio.to_thread(library_pdf, request)
+        if error:
+            return error
+        entry, pdf = found
+        if request.method == "POST":
+            process = prepare_processes.get(entry.path.as_posix())
+            if running(pdf) or (process is not None and process.poll() is None):
+                return JSONResponse({"error": "Already preparing this book."}, 409)
+            await asyncio.to_thread(
+                launch_job,
+                ["--file", entry.path.as_posix()],
+                entry.path,
+                pdf,
+                ["prepare", "--all"],
+            )
+        return JSONResponse(await asyncio.to_thread(prepare_status, entry, pdf))
+
+    async def library_prepare_cancel(request: Request) -> Response:
+        found, error = await asyncio.to_thread(library_pdf, request)
+        if error:
+            return error
+        entry, pdf = found
+        request_cancel(pdf)
+        return JSONResponse(await asyncio.to_thread(prepare_status, entry, pdf))
 
     # -- chat --------------------------------------------------------------------------
 
@@ -714,6 +774,12 @@ def build_app(
         Route("/api/vault/folders", vault_folders),
         Route("/api/library", library_list),
         Route("/api/library", library_upload, methods=["POST"]),
+        Route("/api/library/{entry}/prepare", library_prepare, methods=["GET", "POST"]),
+        Route(
+            "/api/library/{entry}/prepare/cancel",
+            library_prepare_cancel,
+            methods=["POST"],
+        ),
         Route("/api/library/{entry}/remove", library_remove, methods=["POST"]),
         Route(
             "/api/subjects/{slug}/sources/library",

@@ -21,7 +21,8 @@ from velocity.config import (
     list_subjects,
     load_subject,
 )
-from velocity.pdf_source import default_cache_dir
+from velocity.pdf_source import PdfSource, default_cache_dir
+from velocity.prepare import running
 from velocity.uploads import legacy_upload_dirs, library_dir
 
 
@@ -180,6 +181,8 @@ def remove(config: Config, entry: str) -> dict:
         raise ConfigError(
             f"{e.path.name} is still used by {names}; remove it there first."
         )
+    if e.kind == "pdf" and running(PdfSource(e.path, ocr=None)):
+        raise ConfigError(f"{e.path.name} is being prepared; cancel that first.")
     forget_library_file(e.path)
     if not e.managed:
         return {"filename": e.path.name, "deleted": False, "freed": 0}

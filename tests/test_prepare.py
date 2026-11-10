@@ -283,3 +283,35 @@ def test_web_starts_a_recheck(client, monkeypatch):
     client.post(url, json={"recheck": "all"}, headers=ORIGIN)
     command = " ".join(LAUNCHED[-1])
     assert command.endswith("velocity.cli source recheck calculus --source Book --all")
+
+
+# -- preparing a library book (the Library tab) --------------------------------------------
+
+
+def test_web_prepares_a_library_book(client, book, tmp_path, monkeypatch):
+    import velocity.web
+    from velocity.library import entry_id
+    from velocity.uploads import library_dir
+
+    monkeypatch.setattr(velocity.web.subprocess, "Popen", FakeProcess)
+    # A book in no subject: uploaded to the library only.
+    spare = library_dir() / "spare.pdf"
+    spare.parent.mkdir(parents=True, exist_ok=True)
+    spare.write_bytes(book.read_bytes() + b"\n% another copy\n")
+    url = f"/api/library/{entry_id(spare)}/prepare"
+    status = client.get(url).json()
+    assert status["pages"] == 25 and status["prepared"] == []
+
+    started = client.post(url, headers=ORIGIN)
+    assert started.status_code == 200 and started.json()["starting"]
+    tail = ["velocity.cli", "source", "prepare", "--file", spare.as_posix(), "--all"]
+    assert LAUNCHED[-1][-len(tail) :] == tail
+    assert client.post(url, headers=ORIGIN).status_code == 409  # one job per book
+
+    assert client.post(f"{url}/cancel", headers=ORIGIN).status_code == 200
+    assert cancel_file(PdfSource(spare, ocr=None)).exists()
+
+    notes = entry_id((tmp_path / "notes.md").resolve())
+    assert client.get(f"/api/library/{notes}/prepare").status_code == 400  # not a PDF
+    assert client.get("/api/library/nope/prepare").status_code == 404
+    assert client.post(url, headers={}).status_code == 403  # no Origin

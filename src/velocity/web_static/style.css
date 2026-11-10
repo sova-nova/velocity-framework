@@ -501,6 +501,7 @@ body.in-setup #settings-button, body.in-setup #workspace { display: none; }
   cursor: pointer;
 }
 .library-list .confirm button.danger { background: var(--danger); border-color: var(--danger); color: var(--bg); }
+.library-list .confirm button.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
 #add-source { max-width: 32rem; }
 #add-source .field { display: flex; flex-direction: column; gap: 0.25rem; margin: 0.75rem 0; }
 #add-source input[type="text"] {
