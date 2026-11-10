@@ -58,6 +58,15 @@ def test_page_and_static_files(client):
     reader = client.get("/static/reader.js")
     assert reader.status_code == 200 and "pdfjs-dist@6.4.299" in reader.text
     assert client.get("/static/style.css").status_code == 200
+    # The browser checks for newer page files each time, so an update never mixes old
+    # scripts with a new page; an unchanged file is a 304, not sent again.
+    assert page.headers["cache-control"] == "no-cache"
+    assert reader.headers["cache-control"] == "no-cache"
+    again = client.get(
+        "/static/reader.js", headers={"If-None-Match": reader.headers["etag"]}
+    )
+    assert again.status_code == 304
+    assert "cache-control" not in client.get("/api/subjects").headers
 
 
 def test_subjects(client, config):
