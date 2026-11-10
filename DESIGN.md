@@ -391,6 +391,10 @@ Tested on all of Section 2.4 (PDF pp. 136–145, plus neighbouring 2.3 exercises
 
 ## 5. Decisions Log
 
+- **2026-11-10 (the progress view, agreed in a grilling session):** learner state on the web page, one subject at a time, in two PRs.
+  - **PR 1, a Progress tab** (between History and Library, reloaded each time it opens): due for review (oldest first), weak spots (the last answer that wasn't right, with the tutor's note), open threads, all topics (a status chip, the source as a reader link, the next review as "overdue 2 days" / "review in 3 days"; click a topic for all its questions), and the last 10 questions. **Show-only**: the tutor stays the only writer of learner state, and the page says "to correct something, tell the tutor". Data: `GET /api/subjects/<slug>/progress` from `LearnerState.progress_view`.
+  - **PR 2:** "Where you are" on the Chat start panel, above the paused sessions (due topics, the weak spot, the open-threads count with the newest; at most three lines, plus "See all progress"; hidden when nothing is recorded; reloaded when shown). Practice buttons: **Review these** (due topics), **Work on this** (a thread), **Practice** (a topic). Each switches to Chat and starts a session with the current engine and model, or uses the chat already open, and puts a ready-made first message in the input box; the learner edits it and presses Send (they keep control).
+  - A cross-subject dashboard is a future direction (section 7).
 - **2026-11-10 (cut-off sessions, agreed in a grilling session):** a session is open only while it is the `ACTIVE` one; a record without an end event that isn't active was cut off (its process stopped, or another session took over) and counts as paused, with the same chip and Resume (`session_summaries`, so the page, `list_sessions` and the CLI agree). Resume continues a cut-off session as it is. A session that takes over `ACTIVE` from one that never ended first ends that one as paused (`hooks._pause_previous`). Existing records are not repaired, and a session left `ACTIVE` by a stopped process keeps the Chat tab's "close it here". The README no longer says the page shows progress; that returns with a progress view.
 - **2026-11-10 (M10: compaction):** the own loop uses the API's server-side compaction at a token threshold, not on-demand compaction or a summarizer of our own (one parameter on the existing requests; a tutoring chat doesn't need to control when it runs). The user chose the API's default trigger, 150K input tokens, fixed rather than a setting, and a tutor-specific summary prompt (`template/compaction.md`) over the API's general one. Details in "Notes: compaction".
 - **2026-11-09 (M10: the clarity pass, agreed on a design review page with screenshots and mockups):**
@@ -480,6 +484,8 @@ Tested on all of Section 2.4 (PDF pp. 136–145, plus neighbouring 2.3 exercises
 - None at the moment.
 
 ## 7. Future Directions
+
+- **A cross-subject dashboard** (the user's idea, 2026-11-10): a clickable overview of every subject's progress (due counts, weak spots, open threads), leading into each subject's Progress tab and practice buttons.
 
 - **Web UI on a phone:** a layout for narrow screens, so `velocity web` works from a phone on the same network. This needs more than CSS: the server listens only on 127.0.0.1, so reaching it from another device would need an explicit opt-in and some form of authentication.
 

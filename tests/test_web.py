@@ -303,3 +303,23 @@ def test_upload_names_and_paths(client):
         duplicate.status_code == 409
         and "already has a source" in duplicate.json()["error"]
     )
+
+
+def test_progress(client, config):
+    from datetime import date
+
+    from velocity.state import LearnerState, save_state
+
+    subject = load_subject(config, "calculus")
+    assert client.get("/api/subjects/calculus/progress").json()["topics"] == []
+    state = LearnerState()
+    state.record_question("Limits", "Explain a limit", "hinted", "s1", date.today())
+    save_state(state, subject.dir, subject.name, date.today())
+    view = client.get("/api/subjects/calculus/progress").json()
+    assert [(t["name"], t["days"]) for t in view["topics"]] == [("Limits", 1)]
+    assert view["weak"][0]["last"]["outcome"] == "hinted"
+    assert client.get("/api/subjects/nope/progress").status_code == 404
+
+    (subject.dir / "state.json").write_text("not json")
+    response = client.get("/api/subjects/calculus/progress")
+    assert response.status_code == 500 and "Could not read" in response.json()["error"]

@@ -113,3 +113,46 @@ def test_missing_state_is_empty_and_corrupt_state_errors(tmp_path):
     (tmp_path / "state.json").write_text("{not json")
     with pytest.raises(StateError, match="not valid"):
         load_state(tmp_path)
+
+
+def test_progress_view_for_the_web_page():
+    s = LearnerState()
+    s.record_question("Limits", "lim x->2 of x^2", "correct", "2026-11-04-1", D0)
+    s.record_question("Limits", "Explain a limit", "hinted", "2026-11-04-1", D0)
+    s.record_question("Derivatives", "What is f'(a)?", "correct", "2026-11-04-1", D0)
+    s.record_question("Derivatives", "d/dx x^2", "correct", "2026-11-04-1", day(1))
+    s.open_thread("Return to the derivative", "2026-11-04-1", D0)
+    closed = s.open_thread("Done already", "2026-11-04-1", D0)
+    s.close_thread(closed.id, D0)
+
+    view = s.progress_view(day(2), recent=3)
+    # Limits was due on day 1 (one day overdue); Derivatives (interval 2) on day 3.
+    assert view["due"] == [{"name": "Limits", "days": -1, "source": None}]
+    assert [(w["name"], w["last"]["question"]) for w in view["weak"]] == [
+        ("Limits", "Explain a limit")
+    ]
+    assert [t["text"] for t in view["threads"]] == ["Return to the derivative"]
+    # Topics by next review; each with its questions, newest first.
+    assert [(t["name"], t["days"]) for t in view["topics"]] == [
+        ("Limits", -1),
+        ("Derivatives", 1),
+    ]
+    assert [q["question"] for q in view["topics"][0]["questions"]] == [
+        "Explain a limit",
+        "lim x->2 of x^2",
+    ]
+    assert [(q["question"], q["topic_name"]) for q in view["recent"]] == [
+        ("d/dx x^2", "Derivatives"),
+        ("What is f'(a)?", "Derivatives"),
+        ("Explain a limit", "Limits"),
+    ]
+
+
+def test_progress_view_when_empty():
+    assert LearnerState().progress_view(D0) == {
+        "due": [],
+        "weak": [],
+        "threads": [],
+        "topics": [],
+        "recent": [],
+    }

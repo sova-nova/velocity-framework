@@ -32,7 +32,7 @@ An excerpt from a real session log, as it appears in Obsidian (math renders ther
 - **Teaching, not answering.** The tutor diagnoses what you know, gives hints before answers, mixes earlier material back into new questions, and says so when you (or it) are wrong.
 - **Optional sources.** Attach a textbook (PDF, EPUB, Markdown or HTML) and the tutor reads it section by section and cites it (`Stewart §2.4`). For PDFs: Math is OCR'd to LaTeX with [marker](https://github.com/datalab-to/marker) and cached locally. Text the OCR silently drops is detected against the PDF's text layer and restored. Without sources, it teaches from general knowledge and says so once per session.
 - **Session logs.** The dialogue is logged word for word by hooks, not by the model, to an append-only record and a markdown log in your vault. Text you type into the log is kept as your annotation. The tutor gives each session a title naming what it covered, so you can find it later. An interrupted session can be resumed; a finished one can be continued in a new session that picks up where it left off.
-- **Learner state.** Topics, every answered question, and open threads are stored per subject, with spaced review (a correct answer doubles a topic's review interval; a wrong one resets it). A summary loads at the start of every session, and a readable `progress.md` sits next to it.
+- **Learner state.** Topics, every answered question, and open threads are stored per subject, with spaced review (a correct answer doubles a topic's review interval; a wrong one resets it). A summary loads at the start of every session, and a readable `progress.md` sits next to it. The web page's Progress tab shows the same: what's due for review, weak spots, open threads, and every topic with its questions.
 - **Your notes stay yours.** The tutor can read the note folders you allow and critique them on request, but it can't write to them. This is enforced by Claude Code permission rules, a hook and a test, not only by the prompt. Notes marked `private: true` are never read.
 - **Skills.** Teaching behaviors you can invoke by name, or that the tutor picks up when they fit:
 
@@ -49,7 +49,7 @@ An excerpt from a real session log, as it appears in Obsidian (math renders ther
 
 Requirements: Linux or macOS (Windows is best effort) and [uv](https://docs.astral.sh/uv/). To chat on your Claude plan you need [Claude Code](https://claude.com/claude-code) 2.1.314 or later; for the API engine (`velocity chat`, or API chats on the web page), an Anthropic API key.
 
-**[Obsidian](https://obsidian.md) (free) is strongly recommended.** velocity keeps its session logs and progress as markdown in a folder of your notes, and Obsidian is the best way to work with them. Without it velocity still works, with any folder: the web page shows your chats, logs (math included) and books. What you'd miss:
+**[Obsidian](https://obsidian.md) (free) is strongly recommended.** velocity keeps its session logs and progress as markdown in a folder of your notes, and Obsidian is the best way to work with them. Without it velocity still works, with any folder: the web page shows your chats, logs (math included), books and progress. What you'd miss:
 
 - **Annotating your logs.** Write your own thoughts between the lines of a session log; the tutor reads them next session and responds.
 - **Your own notes.** The tutor can read (never change) the notes you keep, and critique them with `/review-notes`. Without a notes app there's nowhere convenient to write them.

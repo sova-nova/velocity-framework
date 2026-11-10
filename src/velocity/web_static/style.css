@@ -754,6 +754,48 @@ dialog form.dialog-actions { text-align: initial; }
 .card-name { font-size: 0.85rem; color: var(--muted); overflow-wrap: anywhere; }
 .card-meta { font-size: 0.9rem; margin-top: auto; padding-top: 0.25rem; }
 
+/* The Progress tab: show-only learner state. Topic chips use the state colors. */
+.chip.introduced { color: var(--muted); }
+.chip.practicing { color: var(--paused); }
+.chip.solid { color: var(--done); }
+.progress-section { margin-top: 1.6rem; }
+.progress-section h3 { margin: 0 0 0.4rem; font-size: 1.05rem; }
+.progress-section > .hint { margin: 0 0 0.5rem; }
+.progress-panel .meta { font-size: 0.82rem; color: var(--muted); }
+.progress-panel .rich > p { margin: 0; }
+.progress-panel .rich.note { color: var(--muted); font-size: 0.9rem; margin-top: 0.15rem; }
+.progress-panel ul { list-style: none; margin: 0; padding: 0; }
+.review { font-size: 0.85rem; color: var(--muted); white-space: nowrap; }
+.review.due { color: var(--warn); font-weight: 600; }
+.due-list { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.due-list li {
+  display: flex; gap: 0.5rem; align-items: baseline;
+  border: 1px solid var(--border); border-radius: 8px; padding: 0.35rem 0.7rem;
+}
+.thread-list li, .question-list > li, .topic-list > li {
+  border: 1px solid var(--border); border-radius: 10px; padding: 0.6rem 0.8rem; margin-bottom: 0.45rem;
+}
+.thread-list .meta { display: block; margin-top: 0.15rem; }
+.question { display: flex; gap: 0.7rem; align-items: flex-start; }
+.question .what { flex: 1; min-width: 0; }
+.question .meta { display: block; margin-top: 0.2rem; }
+.outcome {
+  flex: none; min-width: 2.4rem; text-align: center; font-size: 0.78rem; font-weight: 700;
+  border-radius: 999px; padding: 0.05rem 0.4rem; border: 1px solid currentColor;
+}
+.outcome.correct { color: var(--ok); }
+.outcome.hinted { color: var(--warn); }
+.outcome.incorrect { color: var(--danger); }
+.topic-head {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; width: 100%;
+  background: none; border: none; padding: 0; text-align: left; color: inherit; font: inherit; cursor: pointer;
+}
+.topic-head strong { flex: 1; min-width: 10rem; }
+.topic-head:hover strong { text-decoration: underline; }
+.topic .rich.source { font-size: 0.85rem; color: var(--muted); margin-top: 0.2rem; }
+.topic .questions { margin-top: 0.6rem; border-top: 1px solid var(--border); padding-top: 0.5rem; }
+.topic .questions > li { padding: 0.35rem 0; }
+
 @media (max-width: 700px) {
   .view { grid-template-columns: 1fr; height: auto; }
   aside { border-right: none; border-bottom: 1px solid var(--border); }

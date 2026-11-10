@@ -82,6 +82,7 @@ async function switchSubject(slug) {
   showNoSubjects(false);
   await resetReader(slug);
   await Promise.all([loadSessions(slug), loadChat()]);
+  if (activeView === "progress") loadProgress();
 }
 
 function dialogStatus(id, text, isError = false) {

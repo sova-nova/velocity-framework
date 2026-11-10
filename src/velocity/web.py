@@ -15,6 +15,7 @@ import re
 import subprocess
 import sys
 from dataclasses import asdict
+from datetime import date
 from importlib.resources import files
 from pathlib import Path
 
@@ -70,6 +71,7 @@ from velocity.session import (
     session_summaries,
 )
 from velocity.setup import VelocityApp, settings_routes
+from velocity.state import StateError, load_state
 from velocity.tools import ToolError, open_source, source_ref
 from velocity.uploads import MAX_UPLOAD_BYTES, UploadError, check_content, upload_path
 
@@ -311,6 +313,17 @@ def build_app(
             source = open_source(subject, ref.name)
             outlines[key] = [asdict(s) for s in source.outline()]
         return outlines[key]
+
+    async def progress(request: Request) -> Response:
+        """The learner state for the Progress tab (show-only: the tutor is its writer)."""
+        subject = subject_or_404(request.path_params["slug"])
+        if subject is None:
+            return JSONResponse({"error": "unknown subject"}, 404)
+        try:
+            state = load_state(subject.dir)
+        except (StateError, OSError, ValueError) as e:
+            return JSONResponse({"error": f"Could not read the progress: {e}"}, 500)
+        return JSONResponse(state.progress_view(date.today()))
 
     async def source_list(request: Request) -> Response:
         """The subject's sources with their outlines, for the reader's picker."""
@@ -815,6 +828,7 @@ def build_app(
             prepare_cancel,
             methods=["POST"],
         ),
+        Route("/api/subjects/{slug}/progress", progress),
         Route("/api/subjects/{slug}/sessions", sessions),
         Route("/api/subjects/{slug}/sessions/{session_id}", session_log),
         Route("/api/subjects/{slug}/chat", chat_status),
