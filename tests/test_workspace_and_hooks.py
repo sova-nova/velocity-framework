@@ -180,6 +180,7 @@ def test_resume_reattaches_to_the_same_log(config, subject):
 def test_new_launch_starts_a_new_log(config, subject):
     hook("session-start", config, subject, session_id="c1", source="startup")
     first = active_session_id("calculus")
+    hook("user-prompt", config, subject, session_id="c1", prompt="What is a limit?")
     hook("session-end", config, subject, session_id="c1", reason="prompt_input_exit")
     ctx = hook("session-start", config, subject, session_id="c2", source="startup")
     assert active_session_id("calculus") != first

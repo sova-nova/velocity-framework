@@ -257,6 +257,7 @@ def test_unparseable_tool_json_is_retried(config, subject):
 
 def test_end_session_closes_the_log_and_ends_the_chat(config, subject):
     api = FakeAPI(
+        response(text("A limit is...")),
         response(
             tool_use("t1", "end_session", {"recap": "- covered limits"}),
             stop="tool_use",
@@ -265,6 +266,7 @@ def test_end_session_closes_the_log_and_ends_the_chat(config, subject):
     )
     agent = make_agent(config, subject, api)
     path = agent.log_path
+    asyncio.run(agent.turn("What is a limit?"))
     asyncio.run(agent.turn("/end-session"))
     assert agent.ended
     log = Path(path).read_text()
@@ -479,3 +481,13 @@ def test_echo_content_keeps_compaction_before_a_fallback():
     summary = NS(type="compaction", content="s")
     content = [summary, NS(type="thinking"), NS(type="fallback"), text("hi")]
     assert echo_content(content) == [summary, content[3]]
+
+
+def test_end_session_in_an_empty_session_closes_it_without_the_tutor(config, subject):
+    api = FakeAPI()  # no response scripted: the API must not be called
+    agent = make_agent(config, subject, api)
+    path = Path(agent.log_path)
+    assert asyncio.run(agent.turn("/end-session")) == ""
+    assert api.requests == [] and agent.closed_empty and agent.ended
+    assert "Nothing to wrap up yet" in agent.out.getvalue()
+    assert not path.exists()  # the empty session was removed

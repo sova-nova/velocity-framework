@@ -274,6 +274,7 @@ class TutorAgent:
     web_ui: bool = False  # in the web UI (it shows the reminder, and a source reader)
     last_turn_usage: Usage = field(default_factory=Usage)
     stop_requested: bool = False  # the learner stopped the running turn
+    closed_empty: bool = False  # /end-session closed an empty session (it was removed)
     _streamed: str = ""  # the running turn's text so far
     _pending_context: list[str] = field(default_factory=list)
 
@@ -347,6 +348,12 @@ class TutorAgent:
         logged = hooks.user_prompt(
             self.config, self.subject, {"session_id": self.session_id, "prompt": text}
         )
+        if logged.get("decision") == "block":
+            # /end-session in an empty session: close it (and so remove it) instead.
+            self._write("\n" + hooks.NOTHING_TO_WRAP_UP + "\n")
+            self.finish()
+            self.closed_empty = True
+            return ""
         if logged:
             self._pending_context.append(
                 logged["hookSpecificOutput"]["additionalContext"]
@@ -710,7 +717,7 @@ async def chat(
                     out.write("\n[Rate limited; wait a moment and try again.]\n")
                 except anthropic.APIStatusError as e:
                     out.write(f"\n[API error {e.status_code}: {e.message}]\n")
-            if agent.ended:
+            if agent.ended and not agent.closed_empty:
                 out.write("\nSession wrapped up.\n")
         finally:
             agent.finish()

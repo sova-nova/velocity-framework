@@ -84,7 +84,7 @@ Runtime data lives outside the repo: config in `~/.config/velocity/`; subject co
 ## Conventions
 
 - **Learner notes are read-only to the tutor.** Tool and agent code never writes outside `<vault>/Tutor/`. This must be enforced (Claude Code permission deny rules, a hook, and a test), not only stated in prompts.
-- **Session logs are append-only.** Hooks capture the dialogue verbatim; the tutor only appends and never rewrites. The append-only session record outside the vault is the source of truth; learner edits in the markdown count as annotations. One exception (decided 2026-11-06): velocity updates the `title:` line of a log's properties block when the tutor sets the session's title. The dialogue itself is never rewritten.
+- **Session logs are append-only.** Hooks capture the dialogue verbatim; the tutor only appends and never rewrites. The append-only session record outside the vault is the source of truth; learner edits in the markdown count as annotations. One exception (decided 2026-11-06): velocity updates the `title:` line of a log's properties block when the tutor sets the session's title. The dialogue itself is never rewritten. A second (decided 2026-11-10): an **empty** session (nothing but its start and end) is removed when it ends, record and log, unless the learner wrote in its log.
 - Sources are optional. When present, tutor responses cite them by stable section ID; without them, the tutor says once per session that it teaches from general knowledge.
 - Tools are plain typed functions, unit-testable without a server; the MCP layer stays thin.
 - Skills follow the `SKILL.md` format: YAML header with `name` and `description`, then instructions. Only names and descriptions load up front; full text loads on demand.

@@ -631,6 +631,7 @@ function chatEnded(how) {
   const notes = {
     "wrapped-up": "Session wrapped up and the log is closed. Well done.",
     crashed: "The tutor stopped unexpectedly. Your session is saved: resume it from History.",
+    empty: "Nothing to wrap up yet, so the session was closed without a recap.",
   };
   showChat({ open: false }, notes[how] || "The session ended.");
   loadSessions(subject());
