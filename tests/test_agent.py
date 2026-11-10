@@ -6,6 +6,9 @@ from types import SimpleNamespace as NS
 import pytest
 
 from velocity.agent import (
+    COMPACT_AT,
+    COMPACT_BETA,
+    COMPACTED_NOTE,
     FALLBACK_BETA,
     TutorAgent,
     Usage,
@@ -53,7 +56,9 @@ class FakeStream:
         if isinstance(self.result, Exception):
             raise self.result
         for block in self.result.content:
-            if block.type == "text":
+            if block.type == "compaction":
+                yield NS(type="content_block_start", content_block=block)
+            elif block.type == "text":
                 yield NS(type="text", text=block.text)
 
     def __aiter__(self):
@@ -169,15 +174,30 @@ def test_request_parameters(config, subject):
     assert params["model"] == "claude-opus-5-5"
     assert params["cache_control"] == {"type": "ephemeral"}
     assert params["output_config"] == {"effort": "medium"}
-    assert params["fallbacks"] == "default" and params["betas"] == [FALLBACK_BETA]
+    assert params["fallbacks"] == "default"
+    assert params["betas"] == [FALLBACK_BETA, COMPACT_BETA]
+    (edit,) = params["context_management"]["edits"]
+    assert edit["type"] == "compact_20260112"
+    assert edit["trigger"] == {"type": "input_tokens", "value": COMPACT_AT}
+    assert "tutoring session" in edit["instructions"]
     assert "# You are a tutor for: Calculus" in params["system"]
     assert "`quiz`:" in params["system"]  # skill catalogue
 
+    # Haiku: compaction, no fallbacks.
     api = FakeAPI(response(text("hi")))
     asyncio.run(
         make_agent(config, subject, api, model="claude-haiku-5-5").turn("hello")
     )
-    assert "fallbacks" not in api.requests[0] and "betas" not in api.requests[0]
+    assert "fallbacks" not in api.requests[0]
+    assert api.requests[0]["betas"] == [COMPACT_BETA]
+
+    # A model without compaction gets neither.
+    api = FakeAPI(response(text("hi")))
+    asyncio.run(
+        make_agent(config, subject, api, model="claude-haiku-4-5").turn("hello")
+    )
+    assert "betas" not in api.requests[0]
+    assert "context_management" not in api.requests[0]
 
 
 def test_slash_command_injects_skill_instructions(config, subject):
@@ -392,3 +412,70 @@ def test_failed_tool_calls_are_recorded_as_errors(config, subject):
     asyncio.run(agent.turn("hi"))
     tools = [e for e in _session_events(subject) if e.kind == "tool"]
     assert tools[0].meta == {"input": {"name": "nope"}, "error": True}
+
+
+def test_compaction_is_shown_kept_and_counted(config, subject):
+    summary = NS(type="compaction", content="The learner is on one-sided limits.")
+    compacted = response(summary, text("Where were we? One-sided limits."))
+    compacted.usage.iterations = [
+        NS(
+            type="compaction",
+            input_tokens=150_000,
+            output_tokens=2_000,
+            cache_read_input_tokens=0,
+            cache_creation_input_tokens=0,
+        ),
+        NS(
+            type="message",
+            input_tokens=100,
+            output_tokens=50,
+            cache_read_input_tokens=1000,
+            cache_creation_input_tokens=0,
+        ),
+    ]
+    api = FakeAPI(compacted, response(text("Next question...")))
+    agent = make_agent(config, subject, api)
+    events = []
+    agent.on_event = events.append
+    asyncio.run(agent.turn("Go on."))
+
+    assert ("note", COMPACTED_NOTE) in [(e.type, e.text) for e in events]
+    assert COMPACTED_NOTE in agent.out.getvalue()
+    # The summary goes back to the API with the reply, so the next request uses it.
+    assert agent.messages[-1]["content"][0] is summary
+    # The compaction step is counted in the cost.
+    usage = agent.last_turn_usage
+    assert (usage.input, usage.output, usage.cache_read) == (150_100, 2_050, 1000)
+    # Only the reply is logged, not the summary.
+    assert "One-sided limits." in log_text(agent)
+    assert "The learner is on" not in log_text(agent)
+
+    asyncio.run(agent.turn("ok"))
+    assert any(
+        isinstance(m["content"], list) and summary in m["content"]
+        for m in api.requests[1]["messages"]
+    )
+
+
+def test_stop_keeps_a_compaction_summary(config, subject):
+    agent = make_agent(config, subject, FakeAPI())
+    summary = NS(type="compaction", content="Summary so far.")
+    agent.messages = [
+        {"role": "user", "content": "Go on."},
+        {"role": "assistant", "content": [summary, tool_use("t1", "read", {})]},
+        {"role": "user", "content": [{"type": "tool_result", "tool_use_id": "t1"}]},
+    ]
+    agent._streamed = "Once upon"
+    agent._keep_stopped(1)
+
+    (reply,) = agent.messages[1:]
+    assert reply["content"] == [
+        summary,
+        {"type": "text", "text": "Once upon\n\n[The learner stopped this reply here.]"},
+    ]
+
+
+def test_echo_content_keeps_compaction_before_a_fallback():
+    summary = NS(type="compaction", content="s")
+    content = [summary, NS(type="thinking"), NS(type="fallback"), text("hi")]
+    assert echo_content(content) == [summary, content[3]]
