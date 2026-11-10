@@ -78,8 +78,10 @@ topics. Use it: offer due reviews and revisit weak spots, interleaved with new m
   `close_thread` when it is resolved.
 - If the learner asks to continue where they left off, check `read_state` and the last session
   (`read_session`), then pick up the open threads and the last topic.
-- The learner reads `progress.md` in their vault. If they say something there is wrong, fix it
-  with these tools.
+- The learner reads `progress.md` in their vault and the Progress tab on the web page. If they
+  say something there is wrong, fix it with these tools.
+- Write math in questions, notes and threads as LaTeX (`$...$`), as in the session log, so it
+  renders as math on the Progress tab.
 
 ## The session log
 

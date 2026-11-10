@@ -1,8 +1,11 @@
-// velocity web UI: the Progress tab (decided 2026-11-10). Show-only: the learner state the
-// tutor records, in the order the learner decides what to do next: due for review, weak
-// spots, open threads, all topics (click one for its questions), the latest questions.
-// To correct something, the learner tells the tutor. Uses $, getJSON, currentSlug,
-// renderMarkdown and linkifyCitations.
+// velocity web UI: the learner's progress (decided 2026-11-10), shown, never edited (to
+// correct something, the learner tells the tutor).
+// - The Progress tab: due for review, weak spots, open threads, all topics (click one for
+//   its questions), the latest questions. Each section is a card with its own color.
+// - "Where you are" on the Chat start panel: due topics, a weak spot, open threads.
+// - Practice buttons (Review these, Work on this, Practice) put a ready-made message in the
+//   chat (practice() in app.js); the learner edits it and sends it.
+// Uses $, getJSON, currentSlug, renderMarkdown, linkifyCitations, practice and showView.
 
 function el(tag, props = {}, ...children) {
   const node = Object.assign(document.createElement(tag), props);
@@ -34,6 +37,25 @@ function reviewText(days) {
   return `review in ${days} days`;
 }
 
+// "a, b and c"
+function listText(names) {
+  return names.length < 2 ? names.join("") : `${names.slice(0, -1).join(", ")} and ${names.at(-1)}`;
+}
+
+// The ready-made messages. Thread text is quoted as the tutor wrote it.
+const reviewMessage = (due) => `Let's review the topics that are due: ${listText(due.map((t) => t.name))}.`;
+const threadMessage = (t) => `Let's work on this open thread: ${t.text}`;
+const topicMessage = (t) => `Let's practice ${t.name}.`;
+
+function practiceButton(label, message, title) {
+  const button = el("button", { className: "practice", textContent: label, title });
+  button.addEventListener("click", (event) => {
+    event.stopPropagation();
+    practice(message);
+  });
+  return button;
+}
+
 const OUTCOME = { correct: ["✓", "correct"], hinted: ["hint", "hinted"], incorrect: ["✗", "incorrect"] };
 
 function outcomeMark(outcome) {
@@ -41,8 +63,17 @@ function outcomeMark(outcome) {
   return el("span", { className: `outcome ${outcome}`, textContent: mark, title: label });
 }
 
-function section(title, ...content) {
-  return el("section", { className: "progress-section" }, el("h3", { textContent: title }), ...content);
+// A card: a colored bar on the left, a title with a count, an optional action on the right.
+function section(kind, title, count, action, ...content) {
+  const head = el(
+    "div",
+    { className: "section-head" },
+    el("h3", { textContent: title }),
+    count === null ? null : el("span", { className: "count", textContent: String(count) }),
+    el("span", { className: "spacer" }),
+    action,
+  );
+  return el("section", { className: `progress-section ${kind}` }, head, ...content);
 }
 
 function questionItem(q, { showTopic = false } = {}) {
@@ -79,9 +110,24 @@ function topicItem(t) {
     questions.hidden = !questions.hidden;
     head.setAttribute("aria-expanded", String(!questions.hidden));
   });
+  const row = el(
+    "div",
+    { className: "topic-row" },
+    head,
+    practiceButton("Practice", topicMessage(t), "Start practicing this topic in the chat"),
+  );
   // The source sits outside the button, so its citation link opens the reader.
   const source = t.source ? richText(t.source, "rich source") : null;
-  return el("li", { className: "topic" }, head, source, questions);
+  return el("li", { className: "topic" }, row, source, questions);
+}
+
+function threadItem(t) {
+  return el(
+    "li",
+    { className: "thread" },
+    el("div", { className: "what" }, richText(t.text), el("span", { className: "meta", textContent: `since ${dayText(t.opened)}` })),
+    practiceButton("Work on this", threadMessage(t), "Pick this thread up in the chat"),
+  );
 }
 
 function drawProgress(p) {
@@ -99,7 +145,10 @@ function drawProgress(p) {
   if (p.due.length) {
     body.append(
       section(
+        "due",
         "Due for review",
+        p.due.length,
+        practiceButton("Review these", reviewMessage(p.due), "Review the due topics in the chat"),
         el(
           "ul",
           { className: "due-list" },
@@ -113,60 +162,121 @@ function drawProgress(p) {
   if (p.weak.length) {
     body.append(
       section(
+        "weak",
         "Weak spots",
+        p.weak.length,
+        null,
         el("p", { className: "hint", textContent: "Topics whose last answer wasn't fully right." }),
-        el(
-          "ul",
-          { className: "question-list" },
-          ...p.weak.map((w) => questionItem(w.last, { showTopic: true })),
-        ),
+        el("ul", { className: "item-list" }, ...p.weak.map((w) => questionItem(w.last, { showTopic: true }))),
       ),
     );
   }
   if (p.threads.length) {
     body.append(
-      section(
-        "Open threads",
-        el(
-          "ul",
-          { className: "thread-list" },
-          ...p.threads.map((t) =>
-            el("li", {}, richText(t.text), el("span", { className: "meta", textContent: `since ${dayText(t.opened)}` })),
-          ),
-        ),
-      ),
+      section("threads", "Open threads", p.threads.length, null, el("ul", { className: "item-list" }, ...p.threads.map(threadItem))),
     );
   }
   body.append(
     section(
+      "topics",
       "All topics",
+      p.topics.length,
+      null,
       el("p", { className: "hint", textContent: "Click a topic for its questions." }),
-      el("ul", { className: "topic-list" }, ...p.topics.map(topicItem)),
+      el("ul", { className: "item-list" }, ...p.topics.map(topicItem)),
     ),
   );
   if (p.recent.length) {
     body.append(
       section(
+        "recent",
         "Recent questions",
-        el("ul", { className: "question-list" }, ...p.recent.map((q) => questionItem(q, { showTopic: true }))),
+        null,
+        null,
+        el("ul", { className: "item-list" }, ...p.recent.map((q) => questionItem(q, { showTopic: true }))),
       ),
     );
   }
+}
+
+async function fetchProgress(slug) {
+  return getJSON(`/api/subjects/${slug}/progress`);
 }
 
 // Reloaded each time the tab opens: the tutor records progress during chats.
 async function loadProgress() {
   const status = $("#progress-status");
   status.hidden = true;
-  if (!currentSlug) {
+  const slug = currentSlug;
+  if (!slug) {
     $("#progress-body").innerHTML = "";
     return;
   }
   try {
-    drawProgress(await getJSON(`/api/subjects/${currentSlug}/progress`));
+    const p = await fetchProgress(slug);
+    if (slug === currentSlug) drawProgress(p);
   } catch (error) {
     $("#progress-body").innerHTML = "";
     status.hidden = false;
     status.textContent = `Could not load the progress: ${error.message}`;
   }
+}
+
+// -- "Where you are" on the Chat start panel ------------------------------------------
+
+const WHERE_NAMES = 2;
+
+function whereLine(label, text, action = null) {
+  return el(
+    "li",
+    {},
+    el("span", { className: "what" }, el("strong", { textContent: `${label}: ` }), text),
+    action,
+  );
+}
+
+// At most three lines: due topics, a weak spot, open threads. Hidden when nothing is
+// recorded, or when progress can't be read (the Progress tab says why).
+async function loadWhere() {
+  const box = $("#where");
+  const slug = currentSlug;
+  if (!slug) {
+    box.hidden = true;
+    return;
+  }
+  const p = await fetchProgress(slug).catch(() => null);
+  if (slug !== currentSlug) return; // switched meanwhile
+  const list = $("#where-list");
+  list.innerHTML = "";
+  if (p?.due.length) {
+    const names = p.due.slice(0, WHERE_NAMES).map((t) => t.name);
+    const more = p.due.length - names.length;
+    list.append(
+      whereLine(
+        "Due for review",
+        names.join(", ") + (more ? ` and ${more} more` : ""),
+        practiceButton("Review these", reviewMessage(p.due), "Review the due topics in the chat"),
+      ),
+    );
+  }
+  if (p?.weak.length) {
+    const more = p.weak.length - 1;
+    list.append(whereLine("Weak spot", p.weak[0].name + (more ? ` (and ${more} more)` : "")));
+  }
+  if (p?.threads.length) {
+    const newest = p.threads.at(-1);
+    const text = el("span", {}, `${p.threads.length}. Newest: `, richText(newest.text, "rich inline"));
+    list.append(
+      whereLine(
+        "Open threads",
+        text,
+        practiceButton("Work on this", threadMessage(newest), "Pick the newest thread up in the chat"),
+      ),
+    );
+  }
+  box.hidden = !list.children.length;
+}
+
+function setUpProgress() {
+  $("#where-all").addEventListener("click", () => showView("progress"));
 }
