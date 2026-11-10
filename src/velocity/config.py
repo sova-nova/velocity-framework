@@ -254,6 +254,104 @@ def _set_top_level(path: Path, key: str, value: str | None) -> None:
     path.write_text(new, encoding="utf-8")
 
 
+def _set_in_table(path: Path, table: str, key: str, value: str | None) -> None:
+    """Set (or with None, remove) `key` in the `[table]` of a TOML file, adding the
+    table at the end if it isn't there; the rest of the file stays as it is."""
+    text = path.read_text(encoding="utf-8")
+    header = re.search(rf"^\[{re.escape(table)}\][ \t]*$", text, flags=re.MULTILINE)
+    line = f"{key} = {value}\n" if value is not None else ""
+    if header is None:
+        if value is None:
+            return
+        new = text.rstrip("\n") + f"\n\n[{table}]\n{line}"
+    else:
+        after = re.search(r"^\[", text[header.end() :], flags=re.MULTILINE)
+        end = header.end() + after.start() if after else len(text)
+        body = text[header.end() : end]
+        pattern = re.compile(rf"^{key}[ \t]*=[ \t]*{_VALUE}[ \t]*\n?", re.MULTILINE)
+        if pattern.search(body):
+            body = pattern.sub(lambda _: line, body, count=1)
+        elif value is not None:
+            body = "\n" + line + body.lstrip("\n")
+        new = text[: header.end()] + body + text[end:]
+    tomllib.loads(new)
+    path.write_text(new, encoding="utf-8")
+
+
+# -- global settings (config.toml), also edited on the web page (M10) ---------------------
+
+EFFORTS = ("low", "medium", "high", "xhigh", "max")
+MODEL_SHORT_NAMES = ("opus", "sonnet", "haiku")
+
+_CONFIG_TEMPLATE = """\
+# velocity settings. Edit freely, or use the settings on the web page (velocity web).
+
+# Your notes folder: an Obsidian vault, or any folder. velocity keeps its own files in a
+# Tutor/ folder inside it, and only ever reads the rest.
+vault_path = {vault}
+
+# llama.cpp's llama-server, for reading PDFs (OCR) without an NVIDIA GPU (optional):
+# llama_cpp_binary = "~/llama.cpp/llama-server"
+
+# Defaults for the API engine (velocity chat, and API chats on the web page):
+# [api]
+# model = "sonnet"   # opus, sonnet, haiku, or a full model id
+# effort = "medium"  # low, medium, high, xhigh, max
+"""
+
+
+def config_path() -> Path:
+    return config_dir() / "config.toml"
+
+
+def save_settings(changes: dict, create_vault: bool = False) -> Config:
+    """Change the global settings in config.toml (creating it on first run). `changes`
+    holds only what changes: vault_path, llama_cpp_binary, api_model, api_effort; an
+    empty value removes an optional setting. Checked before anything is written."""
+    lines: dict[str, tuple[str | None, str | None]] = {}  # key -> (table, TOML value)
+    if "vault_path" in changes:
+        vault = Path(str(changes["vault_path"]).strip()).expanduser()
+        if not str(changes["vault_path"]).strip() or not vault.is_absolute():
+            raise ConfigError("Give the full path of your notes folder.")
+        if not vault.is_dir():
+            if not create_vault:
+                raise ConfigError(f"{vault} is not a folder.")
+            vault.mkdir(parents=True)
+        lines["vault_path"] = (None, _toml_string(vault.resolve().as_posix()))
+    if "llama_cpp_binary" in changes:
+        llama = str(changes["llama_cpp_binary"] or "").strip()
+        if llama and not Path(llama).expanduser().is_file():
+            raise ConfigError(f"{llama} is not a file.")
+        lines["llama_cpp_binary"] = (None, _toml_string(llama) if llama else None)
+    if "api_model" in changes:
+        model = str(changes["api_model"] or "").strip()
+        if model and model not in MODEL_SHORT_NAMES and not model.startswith("claude-"):
+            raise ConfigError(
+                f"Unknown model {model!r}: use opus, sonnet, haiku or a full id."
+            )
+        lines["model"] = ("api", _toml_string(model) if model else None)
+    if "api_effort" in changes:
+        effort = str(changes["api_effort"] or "").strip()
+        if effort and effort not in EFFORTS:
+            raise ConfigError(f"Unknown effort {effort!r}: use {', '.join(EFFORTS)}.")
+        lines["effort"] = ("api", _toml_string(effort) if effort else None)
+
+    path = config_path()
+    if not path.exists():
+        if "vault_path" not in lines:
+            raise ConfigError("Choose your notes folder first.")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            _CONFIG_TEMPLATE.format(vault=lines.pop("vault_path")[1]), encoding="utf-8"
+        )
+    for key, (table, value) in lines.items():
+        if table:
+            _set_in_table(path, table, key, value)
+        else:
+            _set_top_level(path, key, value)
+    return load_config()
+
+
 def _toml_string(text: str) -> str:
     """A TOML string that reads back exactly as `text` (JSON strings are valid TOML)."""
     return json.dumps(text, ensure_ascii=False)

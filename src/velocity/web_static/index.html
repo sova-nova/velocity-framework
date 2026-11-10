@@ -13,6 +13,7 @@
   <script defer src="/static/reader.js"></script>
   <script defer src="/static/subjects.js"></script>
   <script defer src="/static/library.js"></script>
+  <script defer src="/static/setup.js"></script>
 </head>
 <body>
   <header>
@@ -26,8 +27,24 @@
       <button class="tab" data-view="history">History</button>
       <button class="tab" data-view="library" title="All your books, in every subject">Library</button>
       <button id="book-button" class="tab" title="Open the source reader beside the chat">Book</button>
+      <button id="settings-button" class="icon-button" title="Settings: notes folder, OCR, API">Settings</button>
     </nav>
   </header>
+  <section id="setup" class="setup" hidden>
+    <h2>Welcome to velocity</h2>
+    <p>One thing before you start: <strong>where should velocity keep its files?</strong>
+      Pick your notes folder (an Obsidian vault works well), or any folder. velocity only
+      writes inside a <code>Tutor</code> folder there, and never changes your own notes.</p>
+    <div id="setup-suggestions" class="suggestions"></div>
+    <label class="field">Notes folder
+      <input type="text" id="setup-vault" placeholder="/home/you/Documents/Notes">
+    </label>
+    <label class="check"><input type="checkbox" id="setup-create"> Create this folder if it doesn't exist</label>
+    <p id="setup-status" class="hint" hidden></p>
+    <div class="actions"><button id="setup-go" class="primary">Start</button></div>
+    <h3>On this computer</h3>
+    <ul id="setup-checks" class="checks"></ul>
+  </section>
   <div id="workspace">
   <main id="chat" class="view chat-view">
     <section id="no-subjects" class="start-panel" hidden>
@@ -110,6 +127,34 @@
       <button id="switch-back">Go back and end it properly</button>
       <button id="switch-cancel">Cancel</button>
     </div>
+  </dialog>
+  <dialog id="app-settings">
+    <h2>Settings</h2>
+    <label class="field">Notes folder
+      <input type="text" id="app-vault">
+    </label>
+    <span class="hint">Changing it shows the subjects in that folder instead. Nothing is
+      moved or deleted.</span>
+    <label class="field">llama.cpp program (llama-server), for reading PDFs without an NVIDIA GPU
+      <input type="text" id="app-llama" placeholder="optional, e.g. ~/llama.cpp/llama-server">
+    </label>
+    <div class="field">
+      <span>API engine defaults</span>
+      <div class="inline">
+        <select id="app-model" aria-label="Model"></select>
+        <select id="app-effort" aria-label="Effort"></select>
+      </div>
+      <span class="hint">Used by <code>velocity chat</code>, and for effort on the page's API
+        chats (you pick the model when you start one).</span>
+    </div>
+    <h3>On this computer</h3>
+    <ul id="app-checks" class="checks"></ul>
+    <p id="app-settings-status" class="hint" hidden></p>
+    <div class="dialog-actions">
+      <button id="app-settings-save" class="primary">Save</button>
+      <button id="app-settings-close">Close</button>
+    </div>
+    <p class="hint">Saved in <code id="app-config-path"></code>.</p>
   </dialog>
   <dialog id="new-subject">
     <h2>New subject</h2>

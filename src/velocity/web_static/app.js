@@ -588,6 +588,12 @@ function setUpChat() {
 // -- start -----------------------------------------------------------------------------
 
 async function start() {
+  const settings = await getJSON("/api/settings");
+  if (!settings.configured) {
+    showSetup(settings); // first run: only the setup screen
+    return;
+  }
+  setUpSettings();
   const wanted = new URLSearchParams(location.search).get("subject");
   const slug = await loadSubjects(wanted);
   engines = await getJSON("/api/engines");

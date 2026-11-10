@@ -127,13 +127,26 @@ def test_cli_web_starts_uvicorn_on_localhost(config, monkeypatch, capsys):
     from velocity import cli
 
     calls = {}
-    monkeypatch.setattr(cli, "load_config", lambda: config)
+    monkeypatch.setattr("velocity.setup.load_config", lambda: config)
     monkeypatch.setattr(
         "uvicorn.run", lambda app, **kwargs: calls.update(kwargs, app=app)
     )
     assert cli.main(["web", "calculus", "--no-browser", "--port", "9000"]) == 0
     assert calls["host"] == "127.0.0.1" and calls["port"] == 9000
     assert "http://127.0.0.1:9000/?subject=calculus" in capsys.readouterr().out
+    assert calls["app"].config == config  # the full app, not the setup screen
+
+
+def test_cli_web_starts_on_the_setup_screen_without_a_config(monkeypatch, capsys):
+    from velocity import cli
+
+    calls = {}
+    monkeypatch.setattr(
+        "uvicorn.run", lambda app, **kwargs: calls.update(kwargs, app=app)
+    )
+    assert cli.main(["web", "--no-browser"]) == 0  # no config.toml in this test
+    assert calls["app"].config is None
+    assert "will ask for your notes folder" in capsys.readouterr().out
 
 
 # -- the source reader (M9) --------------------------------------------------------------
