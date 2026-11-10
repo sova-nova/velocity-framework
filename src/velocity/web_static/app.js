@@ -56,11 +56,6 @@ function renderCallouts(container) {
 
 // -- history ---------------------------------------------------------------------------
 
-const ENDED = {
-  "wrapped-up": "wrapped up",
-  "no-wrap-up": "paused",
-};
-
 async function loadSessions(slug) {
   const list = $("#sessions");
   list.innerHTML = "";
@@ -78,57 +73,100 @@ async function loadSessions(slug) {
     const item = document.createElement("li");
     const button = document.createElement("button");
     button.className = "session";
-    const status = s.ended ? ENDED[s.ended] : "open now";
-    button.innerHTML = `<strong></strong><span class="meta"></span><span class="preview"></span>`;
-    button.querySelector("strong").textContent = s.title || s.id;
-    const meta = [s.title ? s.id : null, `${s.turns} messages`, status];
-    if (s.continues) meta.push(`continues ${s.continues}`);
-    button.querySelector(".meta").textContent = meta.filter(Boolean).join(" · ");
-    button.querySelector(".preview").textContent = s.title ? "" : s.first_message;
-    button.addEventListener("click", () => showSession(slug, s.id, button));
+    // Readable rows (H1): the title (or the first message), when, and a status chip.
+    button.innerHTML = `<span class="top"><strong></strong><span class="chip"></span></span><span class="meta"></span>`;
+    button.querySelector("strong").textContent = sessionName(s);
+    const [chip, state] = s.ended ? STATUS[s.ended] : ["Open now", "open"];
+    button.querySelector(".chip").textContent = chip;
+    button.querySelector(".chip").classList.add(state);
+    button.querySelector(".meta").textContent = sessionFacts(s);
+    button.title = s.id;
+    button.addEventListener("click", () => showSession(slug, s, button));
     item.append(button);
-    // Paused sessions can be resumed in place; finished ones continued in a new session.
-    const action =
-      s.ended === "no-wrap-up" ? ["Resume", { resume: s.id }]
-      : s.ended === "wrapped-up" ? ["Continue", { continues: s.id }]
-      : null;
-    if (action) {
-      const go = document.createElement("button");
-      go.className = "session-action";
-      go.textContent = action[0];
-      const target = s.title || s.id;
-      const goOn = (options) => {
-        if (chatStatus.open) {
-          askToSwitch(action[0], target, options);
-          return;
-        }
-        showView("chat");
-        startChat(options);
-      };
-      go.addEventListener("click", () =>
-        action[0] === "Resume"
-          ? askResume(target, s.last_engine || {}, (choice) => goOn({ ...action[1], ...choice }))
-          : goOn(action[1]),
-      );
-      item.append(go);
-    }
     list.append(item);
   }
 }
 
-async function showSession(slug, id, button) {
+// [chip text, chip class] for a session's state.
+const STATUS = { "wrapped-up": ["Done", "done"], "no-wrap-up": ["Paused", "paused"] };
+
+const sessionName = (s) => s.title || s.first_message || "Untitled session";
+
+function sessionFacts(s) {
+  const facts = [whenText(s.started) || s.id, `${s.turns} message${s.turns === 1 ? "" : "s"}`];
+  if (s.continues) facts.push(`continues ${s.continues}`);
+  return facts.join(" · ");
+}
+
+// The one action for a session (H2), at the top of its open log: paused sessions resume
+// in place; finished ones continue in a new session.
+function sessionAction(s) {
+  const action =
+    s.ended === "no-wrap-up" ? ["Resume", { resume: s.id }]
+    : s.ended === "wrapped-up" ? ["Continue", { continues: s.id }]
+    : null;
+  if (!action) return null;
+  const go = document.createElement("button");
+  go.className = "primary";
+  go.textContent = action[0];
+  go.title =
+    action[0] === "Resume"
+      ? "Carry on with this session, in the same log"
+      : "Start a new session that picks up from this one";
+  const target = sessionName(s);
+  const goOn = (options) => {
+    if (chatStatus.open) {
+      askToSwitch(action[0], target, options);
+      return;
+    }
+    showView("chat");
+    startChat(options);
+  };
+  go.addEventListener("click", () =>
+    action[0] === "Resume"
+      ? askResume(target, s.last_engine || {}, (choice) => goOn({ ...action[1], ...choice }))
+      : goOn(action[1]),
+  );
+  return go;
+}
+
+async function showSession(slug, s, button) {
   for (const b of document.querySelectorAll(".session")) b.classList.remove("active");
   button.classList.add("active");
-  const log = await getJSON(`/api/subjects/${slug}/sessions/${id}`);
+  const log = await getJSON(`/api/subjects/${slug}/sessions/${s.id}`);
   const article = $("#log");
   article.innerHTML = "";
+  // The session's name, its facts, and its one action; the log's own "# Subject — date"
+  // heading below would only repeat them.
+  const head = document.createElement("div");
+  head.className = "log-head";
+  const name = document.createElement("h1");
+  name.textContent = sessionName(s);
+  head.append(name);
+  const action = sessionAction(s);
+  if (action) head.append(action);
+  const facts = document.createElement("p");
+  facts.className = "hint log-facts";
+  const ran = s.last_engine || {};
+  const engine = engines[ran.engine];
+  facts.textContent = [
+    sessionFacts(s),
+    engine && engine.label.replace(/ \(.*\)$/, ""),
+    engine?.models[ran.model],
+    s.id,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  article.append(head, facts);
   if (!log.from_log) {
     const note = document.createElement("p");
     note.className = "hint";
     note.textContent = "The markdown log is missing; this is rebuilt from the session record.";
     article.append(note);
   }
-  article.append(renderMarkdown(log.markdown));
+  const body = renderMarkdown(log.markdown);
+  if (body.firstElementChild?.tagName === "H1") body.firstElementChild.remove();
+  article.append(body);
   linkifyCitations(article);
 }
 
@@ -264,15 +302,14 @@ async function loadPickUp() {
     const what = document.createElement("span");
     what.className = "what";
     const title = document.createElement("strong");
-    title.textContent = s.title || s.first_message || s.id;
+    title.textContent = sessionName(s);
     const when = document.createElement("small");
-    const messages = `${s.turns} message${s.turns === 1 ? "" : "s"}`;
-    when.textContent = [whenText(s.started), messages].filter(Boolean).join(" · ");
+    when.textContent = sessionFacts(s);
     what.append(title, when);
     const go = document.createElement("button");
     go.textContent = "Resume";
     go.addEventListener("click", () =>
-      askResume(s.title || s.id, s.last_engine || {}, (choice) => startChat({ resume: s.id, ...choice })),
+      askResume(sessionName(s), s.last_engine || {}, (choice) => startChat({ resume: s.id, ...choice })),
     );
     item.append(what, go);
     list.append(item);

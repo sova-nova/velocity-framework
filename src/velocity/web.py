@@ -100,9 +100,34 @@ class SameOriginMiddleware:
         await self.app(scope, receive, send)
 
 
+class RevalidatePageMiddleware:
+    """Make the browser ask for the page and its scripts each time (`no-cache`), so it
+    never mixes a new page with old scripts after velocity is updated. An unchanged file
+    still isn't sent again: StaticFiles answers 304 to the ETag. Books are left alone."""
+
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        path = scope.get("path", "") if scope["type"] == "http" else None
+        if path != "/" and not (path or "").startswith("/static/"):
+            await self.app(scope, receive, send)
+            return
+
+        async def send_revalidating(message: dict) -> None:
+            if message["type"] == "http.response.start":
+                headers = list(message.get("headers", []))
+                headers.append((b"cache-control", b"no-cache"))
+                message = {**message, "headers": headers}
+            await send(message)
+
+        await self.app(scope, receive, send_revalidating)
+
+
 MIDDLEWARE = [
     Middleware(TrustedHostMiddleware, allowed_hosts=ALLOWED_HOSTS),
     Middleware(SameOriginMiddleware),
+    Middleware(RevalidatePageMiddleware),
 ]
 
 
