@@ -109,18 +109,22 @@ def _web(subject_slug: str | None, port: int, open_browser: bool) -> int:
     import uvicorn
 
     from velocity.config import load_subject
-    from velocity.web import HOST, build_app
+    from velocity.setup import load_config_or_none
+    from velocity.web import HOST, serve_app
 
-    config = load_config()
-    if subject_slug:
+    # Without a config, the page opens on the setup screen.
+    config = load_config_or_none()
+    if config and subject_slug:
         load_subject(config, subject_slug)  # fail early on an unknown subject
     url = f"http://{HOST}:{port}/" + (
         f"?subject={subject_slug}" if subject_slug else ""
     )
     print(f"velocity web UI at {url} (Ctrl+C to stop)")
+    if config is None:
+        print("velocity isn't set up yet: the page will ask for your notes folder.")
     if open_browser:
         threading.Timer(1.0, webbrowser.open, [url]).start()
-    uvicorn.run(build_app(config), host=HOST, port=port, log_level="warning")
+    uvicorn.run(serve_app(config), host=HOST, port=port, log_level="warning")
     return 0
 
 

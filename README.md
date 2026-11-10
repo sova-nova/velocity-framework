@@ -57,7 +57,9 @@ uv sync
 
 `uv sync` also installs the OCR dependencies (marker and CPU-only PyTorch, a few GB). Without textbook sources you can skip them: run `uv sync --no-group ocr` and use `uv run --no-sync velocity ...` instead of `uv run velocity ...`.
 
-Create `~/.config/velocity/config.toml`:
+The easiest start is the web page: run `uv run velocity web`. On the first run it asks for your notes folder (suggesting the Obsidian vaults it finds), shows what this computer can do (Claude Code, an API key, OCR), and from there you create subjects, add books and chat. The same settings are under **Settings** later.
+
+For the terminal only, create `~/.config/velocity/config.toml` yourself (the web page writes the same file):
 
 ```toml
 vault_path = "~/Documents/MyVault"   # velocity writes only inside <vault>/Tutor/

@@ -67,6 +67,7 @@ from velocity.session import (
     record_dir,
     session_summaries,
 )
+from velocity.setup import VelocityApp, settings_routes
 from velocity.tools import ToolError, open_source, source_ref
 from velocity.uploads import MAX_UPLOAD_BYTES, UploadError, check_content, upload_path
 
@@ -99,7 +100,18 @@ class SameOriginMiddleware:
         await self.app(scope, receive, send)
 
 
-def build_app(config: Config, chats: ChatManager | None = None) -> Starlette:
+MIDDLEWARE = [
+    Middleware(TrustedHostMiddleware, allowed_hosts=ALLOWED_HOSTS),
+    Middleware(SameOriginMiddleware),
+]
+
+
+def build_app(
+    config: Config, chats: ChatManager | None = None, host: VelocityApp | None = None
+) -> Starlette:
+    """The full app on `config`. `host` (velocity web's VelocityApp) rebuilds it when
+    the settings are saved; without it (tests), settings are saved but the app is not
+    rebuilt."""
     chats = chats or ChatManager(config)
 
     def subject_or_404(slug: str):
@@ -677,13 +689,38 @@ def build_app(config: Config, chats: ChatManager | None = None) -> Starlette:
         Route("/api/subjects/{slug}/chat/stop", chat_stop, methods=["POST"]),
         Mount("/static", StaticFiles(directory=STATIC), name="static"),
     ]
-    middleware = [
-        Middleware(TrustedHostMiddleware, allowed_hosts=ALLOWED_HOSTS),
-        Middleware(SameOriginMiddleware),
-    ]
-    app = Starlette(routes=routes, middleware=middleware, lifespan=lifespan)
+    routes += settings_routes(
+        lambda: config,
+        host.reload if host else None,
+        can_save=lambda: not chats.chats,
+    )
+    app = Starlette(routes=routes, middleware=MIDDLEWARE, lifespan=lifespan)
     app.state.chats = chats
     return app
+
+
+def build_setup_app(host: VelocityApp) -> Starlette:
+    """Before velocity is set up (no config): the page, which shows the setup screen,
+    and the settings that create the config."""
+
+    async def index(request: Request) -> Response:
+        return FileResponse(STATIC / "index.html")
+
+    routes = [
+        Route("/", index),
+        Mount("/static", StaticFiles(directory=STATIC), name="static"),
+        *settings_routes(lambda: None, host.reload),
+    ]
+    return Starlette(routes=routes, middleware=MIDDLEWARE)
+
+
+def serve_app(config: Config | None) -> VelocityApp:
+    """What `velocity web` runs: setup first if needed, then the full app."""
+    return VelocityApp(
+        config,
+        lambda cfg, host: build_app(cfg, host=host),
+        build_setup_app,
+    )
 
 
 MAX_VAULT_FOLDERS = 2000
