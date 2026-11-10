@@ -424,6 +424,15 @@ def set_note_folders(config: Config, slug: str, folders: list[str]) -> Subject:
     return load_subject(config, slug)
 
 
+def set_color(config: Config, slug: str, color: str | None) -> Subject:
+    """The subject's color on the page ("#rrggbb"); None goes back to the picked one."""
+    if color is not None and not _COLOR.match(color):
+        raise ConfigError(f"{color!r} is not a color like #2a9d8f")
+    value = _toml_string(color.lower()) if color is not None else None
+    _set_top_level(subject_toml(config, slug), "color", value)
+    return load_subject(config, slug)
+
+
 def set_archived(config: Config, slug: str, archived: bool) -> Subject:
     """Archive a subject (hidden in lists, everything kept) or recover it."""
     _set_top_level(subject_toml(config, slug), "archived", "true" if archived else None)

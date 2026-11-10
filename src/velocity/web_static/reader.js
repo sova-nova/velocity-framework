@@ -539,28 +539,34 @@ async function openPrepareDialog() {
   }
   const st = prepare.status;
   const estimate = (pages) => formatDuration(st.startup_seconds + pages * st.seconds_per_page);
-  const chapterChoice = document.querySelector('input[name="prepare-scope"][value="chapter"]');
-  const allChoice = document.querySelector('input[name="prepare-scope"][value="all"]');
+  const choice = (value) => document.querySelector(`input[name="prepare-scope"][value="${value}"]`);
   $("#prepare-source").textContent = source.name;
 
-  const chapter = chapterAt(source, reader.page || 1);
-  const chapterLeft = chapter ? missingIn(chapter.start_page, chapter.end_page) : 0;
-  chapterChoice.closest("label").hidden = !chapter;
-  chapterChoice.disabled = !chapterLeft;
-  if (chapter) {
-    const pages = chapter.end_page - chapter.start_page + 1;
-    chapterChoice.dataset.section = chapter.id;
-    $("#prepare-chapter").textContent = chapterLeft
-      ? `This chapter, ${chapter.title} (pp. ${chapter.start_page}–${chapter.end_page}): ` +
-        `${chapterLeft} of ${pages} pages to go, ${estimate(chapterLeft)}`
-      : `This chapter, ${chapter.title}: already prepared`;
-  }
-  const allLeft = missingIn(1, st.pages);
-  allChoice.disabled = !allLeft;
-  $("#prepare-all").textContent = allLeft
-    ? `The whole book: ${allLeft.toLocaleString()} of ${st.pages.toLocaleString()} pages ` +
-      `to go, ${estimate(allLeft)}`
-    : "The whole book: already prepared";
+  // One card per choice (D2 of the clarity pass): what it covers, pages to go and time.
+  const card = (value, entry, first, last) => {
+    const input = choice(value);
+    const left = missingIn(first, last);
+    const pages = last - first + 1;
+    input.disabled = !left;
+    if (entry) {
+      input.dataset.section = entry.id;
+      $(`#prepare-${value}-name`).textContent = `${entry.title} · pp. ${first}–${last}`;
+    }
+    $(`#prepare-${value}`).textContent = left
+      ? `${left.toLocaleString()} of ${pages.toLocaleString()} pages · ${estimate(left)}`
+      : "Already prepared";
+    return left;
+  };
+  const page = reader.page || 1;
+  const chapter = chapterAt(source, page);
+  // The section the page is in, when it is smaller than its chapter.
+  const found = sectionAt(source, page);
+  const section = found && found.level > 1 && found.end_page >= page ? found : null;
+  const sectionLeft = section ? card("section", section, section.start_page, section.end_page) : 0;
+  choice("section").closest("label").hidden = !section;
+  const chapterLeft = chapter ? card("chapter", chapter, chapter.start_page, chapter.end_page) : 0;
+  choice("chapter").closest("label").hidden = !chapter;
+  const allLeft = card("all", null, 1, st.pages);
 
   // Reading prepared pages again: those prepared before the dropped-text check, or all
   // (when a section's text looks wrong).
@@ -574,12 +580,11 @@ async function openPrepareDialog() {
     `Read all ${prepared.toLocaleString()} prepared pages again, ${estimate(prepared)} ` +
     "(if a section's text looks wrong)";
 
-  (chapterLeft ? chapterChoice : allLeft ? allChoice : null)?.click();
-  if (!chapterLeft && !allLeft) {
-    const again = st.unchecked ? "recheck-unchecked" : "recheck-all";
-    document.querySelector(`input[name="prepare-scope"][value="${again}"]`).checked = true;
-  }
-  $("#prepare-go").disabled = !(chapterLeft || allLeft || prepared);
+  const left = chapterLeft || sectionLeft || allLeft;
+  const preselected = chapterLeft ? "chapter" : sectionLeft ? "section" : allLeft ? "all"
+    : st.unchecked ? "recheck-unchecked" : "recheck-all";
+  choice(preselected).checked = true;
+  $("#prepare-go").disabled = !(left || prepared);
   $("#prepare-dialog").showModal();
 }
 
@@ -588,6 +593,7 @@ async function startPrepare() {
   $("#prepare-dialog").close();
   if (!choice) return;
   const bodies = {
+    section: { section: choice.dataset.section },
     chapter: { section: choice.dataset.section },
     "recheck-unchecked": { recheck: "unchecked" },
     "recheck-all": { recheck: "all" },
@@ -626,22 +632,41 @@ function addStatus(text, isError = false) {
 let libraryEntries = []; // books this subject could add from the library
 
 async function openAddDialog() {
-  $("#add-file").value = "";
-  $("#add-name").value = "";
-  $("#add-cite").textContent = "Name";
   $("#add-go").disabled = false;
+  $("#add-go").hidden = false;
+  $("#add-close").textContent = "Cancel";
   $("#add-prepare").hidden = true;
+  $("#add-prepare").classList.remove("primary");
   addedSource = null;
   addStatus("");
   await fillLibraryPicker();
+  // Two tabs (D3 of the clarity pass), when the library has books for this subject.
+  $("#add-tabs").hidden = !libraryEntries.length;
+  showAddTab(libraryEntries.length ? "library" : "upload");
   $("#add-source").showModal();
+  (libraryEntries.length ? $("#add-library-pick") : $("#add-file")).focus();
 }
+
+// One or the other: switching tabs clears the choice and the name.
+function showAddTab(tab) {
+  for (const button of document.querySelectorAll("#add-tabs .dialog-tab")) {
+    button.setAttribute("aria-selected", String(button.dataset.tab === tab));
+  }
+  $("#add-library").hidden = tab !== "library";
+  $("#add-upload").hidden = tab !== "upload";
+  $("#add-file").value = "";
+  $("#add-library-pick").value = "";
+  $("#add-library-hint").textContent = "";
+  $("#add-name").value = "";
+  $("#add-cite").textContent = "Name";
+}
+
+const addTab = () => ($("#add-upload").hidden ? "library" : "upload");
 
 // The library's books that this subject doesn't use yet, with where each is used.
 async function fillLibraryPicker() {
   const all = await getJSON("/api/library").catch(() => []);
   libraryEntries = all.filter((e) => !e.uses.some((u) => u.subject === subject()));
-  $("#add-library").hidden = !libraryEntries.length;
   const pick = $("#add-library-pick");
   pick.innerHTML = "";
   pick.append(new Option("Choose a book…", ""));
@@ -655,7 +680,6 @@ function onLibraryPick() {
     $("#add-library-hint").textContent = "";
     return;
   }
-  $("#add-file").value = ""; // one or the other
   $("#add-name").value = entry.suggested_name;
   $("#add-cite").textContent = entry.suggested_name;
   const where = entry.uses.map((u) => `${u.subject_name} as “${u.name}”`);
@@ -680,10 +704,12 @@ function nameFromFile(filename) {
 }
 
 async function addSource() {
-  const file = $("#add-file").files[0];
-  const fromLibrary = $("#add-library-pick").value;
+  const fromLibrary = addTab() === "library" ? $("#add-library-pick").value : "";
+  const file = addTab() === "upload" ? $("#add-file").files[0] : null;
   const name = $("#add-name").value.trim();
-  if (!file && !fromLibrary) return addStatus("Choose a book from your library, or a file.", true);
+  if (!file && !fromLibrary) {
+    return addStatus(addTab() === "library" ? "Choose a book." : "Choose a file.", true);
+  }
   if (!name) return addStatus("Give it a name.", true);
   $("#add-go").disabled = true;
   try {
@@ -716,7 +742,11 @@ async function addSource() {
     `Added ${addedSource.name}. ${found} The tutor can use it from your next session ` +
       "(start a new one, or pause and resume).",
   );
+  // Added: Done closes, and a PDF can be prepared right away.
+  $("#add-go").hidden = true;
+  $("#add-close").textContent = "Done";
   $("#add-prepare").hidden = addedSource.kind !== "pdf";
+  $("#add-prepare").classList.add("primary");
   await loadReaderSources(subject());
   fillSources();
   await openAt(addedSource.name);
@@ -778,13 +808,13 @@ function setUpReader() {
   $("#add-go").addEventListener("click", addSource);
   $("#add-prepare").addEventListener("click", prepareAdded);
   $("#add-close").addEventListener("click", () => $("#add-source").close());
+  for (const tab of document.querySelectorAll("#add-tabs .dialog-tab")) {
+    tab.addEventListener("click", () => {
+      if (tab.dataset.tab !== addTab()) showAddTab(tab.dataset.tab);
+    });
+  }
   $("#add-file").addEventListener("change", () => {
     const file = $("#add-file").files[0];
-    if (file && $("#add-library-pick").value) {
-      $("#add-library-pick").value = ""; // one or the other
-      $("#add-library-hint").textContent = "";
-      $("#add-name").value = "";
-    }
     if (file && !$("#add-name").value.trim()) $("#add-name").value = nameFromFile(file.name);
     $("#add-cite").textContent = $("#add-name").value.trim() || "Name";
   });
