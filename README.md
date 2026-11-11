@@ -107,9 +107,12 @@ This opens Claude Code in a tutor workspace that velocity regenerates on every l
 export ANTHROPIC_API_KEY=...
 uv run velocity chat calculus --model sonnet
 uv run velocity chat calculus --resume    # resume the last paused session (or --resume <session>)
+uv run velocity chat calculus --engine openai    # a free model instead (see Free models)
 ```
 
-The same tutor in your terminal, streamed from the Anthropic API. `--resume` picks up a paused session from any front end on the model it last ran on, and shows the last three messages so you know where you were. Type `/model` to see or switch the model mid-chat (`/model haiku`), and `/exit` or Ctrl+D to leave. On exit it prints the session's token use and estimated cost per model.
+The same tutor in your terminal, streamed from the Anthropic API. `--resume` picks up a paused session from any front end on the engine and model it last ran on, and shows the last three messages so you know where you were. Type `/model` to see or switch the model mid-chat (`/model haiku`), and `/exit` or Ctrl+D to leave. On exit it prints the session's token use and estimated cost per model.
+
+With `--engine openai`, the chat runs on the [free model](#free-models) set up in Settings (or `--model qwen3:8b` for another one on the same server). It needs no API key and shows no cost.
 
 ### Choosing a model
 
@@ -121,7 +124,7 @@ The same tutor in your terminal, streamed from the Anthropic API. `--resume` pic
 
 ### Free models
 
-On the web page, the **Free model (weaker)** engine runs the same tutor on any server that speaks the OpenAI chat API: a model on your own computer, or a hosted free tier. It costs nothing, but it is **noticeably weaker** than Claude. Small models follow the tutor's instructions less reliably, often forget to record your progress, and can grade a wrong answer as right, so double-check anything important. Set it up under **Settings → Free / other model** (pick a preset, then press **Test**).
+On the web page (and in the terminal with `velocity chat <subject> --engine openai`), the **Free model (weaker)** engine runs the same tutor on any server that speaks the OpenAI chat API: a model on your own computer, or a hosted free tier. It costs nothing, but it is **noticeably weaker** than Claude. Small models follow the tutor's instructions less reliably, often forget to record your progress, and can grade a wrong answer as right, so double-check anything important. Set it up under **Settings → Free / other model** (pick a preset, then press **Test**).
 
 **On your computer, with [Ollama](https://ollama.com/download).** Free and private: nothing leaves your computer.
 

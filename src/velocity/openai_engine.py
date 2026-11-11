@@ -20,6 +20,7 @@ it doesn't have: prompt caching, compaction, cost estimates. Instead:
 
 import asyncio
 import contextlib
+import dataclasses
 import json
 import os
 import uuid
@@ -29,12 +30,12 @@ from typing import Any
 from urllib.parse import urlparse
 
 from velocity import hooks
-from velocity.agent import ToolCaller, system_prompt, unknown_command
+from velocity.agent import ToolCaller, resume_recap, system_prompt, unknown_command
 from velocity.api_engine import ApiChat, Connector, connect_mcp
 from velocity.config import Config, Subject
-from velocity.engine import STOPPED_MARK, ChatEvent, EngineError
+from velocity.engine import FREE, STOPPED_MARK, ChatEvent, EngineError
 from velocity.history import rebuild_messages
-from velocity.session import Session, record_dir
+from velocity.session import Session, active_session_id, record_dir
 from velocity.skills import Skill, load_skills, parse_slash_command
 
 LABEL = "Free model (weaker)"
@@ -425,12 +426,27 @@ class FreeAgent:
                 "reopen": self.reopen,
                 "history": bool(self.reopen),
                 "web_ui": self.web_ui,
+                # In the terminal, velocity prints privacy_note() itself.
+                "reminder_shown": True,
             },
         )
         self._pending_context.append(result["hookSpecificOutput"]["additionalContext"])
 
     def finish(self) -> None:
         hooks.session_end(self.config, self.subject, {"reason": "prompt_input_exit"})
+
+    @property
+    def ended(self) -> bool:
+        return active_session_id(self.subject.slug) is None
+
+    @property
+    def log_path(self) -> str:
+        session_id = active_session_id(self.subject.slug)
+        return (
+            (self.subject.sessions_dir / f"{session_id}.md").as_posix()
+            if session_id
+            else ""
+        )
 
     @property
     def system(self) -> str:
@@ -699,6 +715,111 @@ _LOAD_SKILL = {
         },
     },
 }
+
+
+# -- the terminal: velocity chat --engine openai (2026-11-11) ------------------------
+
+
+async def chat(
+    config: Config,
+    subject: Subject,
+    out: Any,
+    read_line: Callable[[str], str],
+    model: str | None = None,
+    continues: str | None = None,
+    reopen: str | None = None,
+    client: Any = None,
+    connect: Connector = connect_mcp,
+) -> None:
+    """`velocity chat` on the free engine: the same terminal chat as on the API, with the
+    model from `--model` or Settings, and velocity's own privacy line instead of the
+    tutor's reminder (which names Anthropic)."""
+    if model:
+        config = dataclasses.replace(config, openai_model=model)
+    reason = unavailable_reason(config)
+    if reason:
+        raise EngineError(reason)
+    client = client or make_client(config)
+
+    def show(event: ChatEvent) -> None:
+        if event.type == "text":
+            out.write(event.text)
+        elif event.type == "tool":
+            args = ", ".join(f"{k}={v!r}"[:60] for k, v in (event.input or {}).items())
+            out.write(f"\n  · {event.name}({args})\n")
+        elif event.type == "note":
+            out.write(f"\n[{event.text}]\n")
+        out.flush()
+
+    async with connect(subject) as (call_tool, tools):
+        skills = load_skills()
+        agent = FreeAgent(
+            config=config,
+            subject=subject,
+            create=client.chat.completions.create,
+            call_tool=call_tool,
+            tools=openai_tools(
+                [t for t in tools if t["name"] != "load_skill"], config.openai_images
+            ),
+            skills=skills,
+            model=config.openai_model,
+            context_size=config.openai_context_size,
+            on_event=show,
+            continues=continues,
+            reopen=reopen,
+            web_ui=False,
+        )
+        agent.start()
+        # As web chats do, so --resume (and the page's Resume) default to this engine.
+        Session(
+            subject.slug,
+            active_session_id(subject.slug),
+            record_dir(subject.slug),
+            subject.sessions_dir,
+        ).append(
+            "event", FREE, kind="engine", meta={"engine": FREE, "model": agent.model}
+        )
+        out.write(
+            f"velocity: {subject.name} with {agent.model}, a free model (weaker).\n"
+            f"{NOTE}\n{privacy_note(config)}\n"
+            f"Log: {agent.log_path}\n"
+            f"Skills: {', '.join('/' + s for s in skills)}. Exit with /exit or Ctrl+D.\n"
+        )
+        if reopen:
+            session = Session(
+                subject.slug, reopen, record_dir(subject.slug), subject.sessions_dir
+            )
+            out.write("\n" + resume_recap(session, cost_note=False))
+        try:
+            while not agent.ended:
+                try:
+                    line = await asyncio.to_thread(read_line, "\nyou> ")
+                except EOFError:
+                    break
+                if line.strip() in ("/exit", "/quit"):
+                    break
+                if not line.strip():
+                    continue
+                if line.strip() == "/model" or line.strip().startswith("/model "):
+                    out.write(
+                        f"This chat runs on {agent.model}. To use another free model, "
+                        "start the chat with --model, or change it in Settings on the "
+                        "web page.\n"
+                    )
+                    continue
+                if message := unknown_command(line, skills):
+                    out.write(message + "\n")
+                    continue
+                out.write("\n")
+                try:
+                    await agent.turn(line)
+                except Exception as e:  # noqa: BLE001 - shown, and the chat goes on
+                    out.write(f"\n[{api_error(e, config)}]\n")
+                out.write("\n")
+            if agent.ended and not agent.closed_empty:
+                out.write("\nSession wrapped up.\n")
+        finally:
+            agent.finish()
 
 
 # -- the web chat engine -------------------------------------------------------------

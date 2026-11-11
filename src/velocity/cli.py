@@ -104,12 +104,16 @@ def _chat(
     model: str | None,
     continues: str | None = None,
     resume: str | bool | None = None,
+    engine: str | None = None,
 ) -> int:
-    """`resume` is True for the newest paused session, or a session ID."""
+    """`resume` is True for the newest paused session, or a session ID. `engine` is "api"
+    (the default) or "openai" (the free engine); on --resume, the engine that ran the
+    session last, unless given."""
     import asyncio
 
     from velocity.agent import DEFAULT_MODEL, chat, resolve_model
     from velocity.config import load_subject
+    from velocity.engine import FREE, OWN_LOOP
 
     try:
         import readline  # noqa: F401  (line editing and history for input())
@@ -122,13 +126,35 @@ def _chat(
         if continues:
             raise ConfigError("use either --resume or --continue, not both")
         reopen = _resumable(subject, None if resume is True else resume)
-        model = model or _last_api_model(subject, reopen)
+        last = _last_engine(subject, reopen)
+        engine = engine or (FREE if last["engine"] == FREE else OWN_LOOP)
+        if engine == OWN_LOOP:
+            model = model or (last["model"] if last["engine"] == OWN_LOOP else None)
+    if continues:
+        continues = _continuable(subject, continues)
+    if engine == FREE:
+        from velocity import openai_engine
+        from velocity.engine import EngineError
+
+        try:
+            asyncio.run(
+                openai_engine.chat(
+                    config,
+                    subject,
+                    sys.stdout,
+                    input,
+                    model=model,
+                    continues=continues,
+                    reopen=reopen,
+                )
+            )
+        except EngineError as e:
+            raise ConfigError(str(e)) from None
+        return 0
     try:
         model = resolve_model(model or config.api_model or DEFAULT_MODEL)
     except ValueError as e:
         raise ConfigError(str(e)) from None
-    if continues:
-        continues = _continuable(subject, continues)
     asyncio.run(
         chat(
             config,
@@ -143,18 +169,16 @@ def _chat(
     return 0
 
 
-def _last_api_model(subject, session_id: str) -> str | None:
-    """The model a resumed session ran on last, if the own loop ran it (as the web page's
-    Resume does); None after Claude Code, so config.toml's model applies."""
+def _last_engine(subject, session_id: str) -> dict:
+    """The engine and model that ran a resumed session last (as the web page's Resume
+    uses them): {"engine": ..., "model": ...}."""
     from velocity.chat import last_engine
-    from velocity.engine import OWN_LOOP
     from velocity.session import Session, record_dir
 
     session = Session(
         subject.slug, session_id, record_dir(subject.slug), subject.sessions_dir
     )
-    last = last_engine(subject, session)
-    return last["model"] if last["engine"] == OWN_LOOP else None
+    return last_engine(subject, session)
 
 
 def _sessions(subject_slug: str, search: str | None = None) -> int:
@@ -562,13 +586,23 @@ def main(argv: list[str] | None = None) -> int:
     )
 
     chat = commands.add_parser(
-        "chat", help="tutor in the terminal via the Anthropic API (needs an API key)"
+        "chat",
+        help="tutor in the terminal via the Anthropic API (needs an API key), or a "
+        "free model with --engine openai",
     )
     chat.add_argument("subject", help="subject id, e.g. calculus")
     chat.add_argument(
+        "--engine",
+        choices=("api", "openai"),
+        help="api: the Anthropic API (the default); openai: the free model set up in "
+        "Settings (Ollama, or a hosted free tier; weaker). With --resume, by default "
+        "the engine the session ran on last",
+    )
+    chat.add_argument(
         "--model",
         help="opus, sonnet, haiku, or a full model ID (overrides [api] model in "
-        "config.toml; switch during a chat with /model)",
+        "config.toml; switch during a chat with /model). With --engine openai: the "
+        "free model's name, e.g. qwen3:4b (overrides [openai] model)",
     )
     chat.add_argument(
         "--continue",
@@ -708,7 +742,9 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "tutor":
             return _tutor(args.subject, args.resume, args.continues)
         if args.command == "chat":
-            return _chat(args.subject, args.model, args.continues, args.resume)
+            return _chat(
+                args.subject, args.model, args.continues, args.resume, args.engine
+            )
         if args.command == "sessions":
             if args.remove_empty and args.search is not None:
                 parser.error("sessions: use --search or --remove-empty, not both")

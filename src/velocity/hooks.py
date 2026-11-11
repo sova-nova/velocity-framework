@@ -204,6 +204,14 @@ def session_start(config: Config, subject: Subject, payload: dict) -> dict:
             "The learner has already seen the third-party reminder on the page: don't "
             "repeat it. Open with the rest of the start of session from your instructions."
         )
+    elif not resumed and payload.get("reminder_shown"):
+        # The free engine in the terminal: velocity printed where messages go (maybe
+        # nowhere: a model on this computer), which the template's reminder would get wrong.
+        context.append(
+            "velocity has already told the learner where their messages go: skip the "
+            "third-party reminder. Open with the rest of the start of session from your "
+            "instructions."
+        )
     elif not resumed:
         context.append("Open with the third-party reminder from your instructions.")
     return {
