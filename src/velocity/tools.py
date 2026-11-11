@@ -362,14 +362,24 @@ class TutorTools:
         Write math in question and note as LaTeX ($...$), as in the session log.
         """
         session = active_session_id(self.subject.slug) or ""
+        recorded = {}
 
         def change(state: LearnerState, today: date) -> str:
             t = state.record_question(
                 topic, question, outcome, session, today, note, source
             )
+            recorded["topic"] = t.name
             return f"Recorded ({outcome}). {t.name}: {t.status}, next review {t.next_review}."
 
-        return self._update_state(change)
+        message = self._update_state(change)
+        if session and recorded:
+            # A line in the log where the answer was recorded (decided 2026-11-10).
+            log = self._session(session)
+            if not log.ended:
+                log.append(
+                    "event", outcome, kind="recorded", meta={"topic": recorded["topic"]}
+                )
+        return message
 
     def set_topic_status(
         self, topic: str, status: Status, source: str | None = None

@@ -389,4 +389,7 @@ def conversation(session: Session) -> list[dict]:
             out.append({"role": e.role, "text": e.text})
         elif e.role == "block":
             out.append({"role": "block", "text": e.text, "title": e.title or ""})
+        elif e.kind == "recorded":  # a recorded answer: drawn as a divider
+            topic = (e.meta or {}).get("topic", "")
+            out.append({"role": "recorded", "text": e.text, "title": topic})
     return out
