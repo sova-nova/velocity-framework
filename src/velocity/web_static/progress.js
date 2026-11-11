@@ -56,7 +56,12 @@ function practiceButton(label, message, title) {
   return button;
 }
 
-const OUTCOME = { correct: ["✓", "correct"], hinted: ["hint", "hinted"], incorrect: ["✗", "incorrect"] };
+const OUTCOME = {
+  correct: ["✓", "correct"],
+  hinted: ["hint", "hinted"],
+  partial: ["◐", "partly right"],
+  incorrect: ["✗", "incorrect"],
+};
 
 function outcomeMark(outcome) {
   const [mark, label] = OUTCOME[outcome] || [outcome, outcome];

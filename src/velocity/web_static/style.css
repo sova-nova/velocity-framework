@@ -21,6 +21,7 @@
   --ok: #2e7d32;
   --paused: #c98a14;
   --done: #3f9a5c;
+  --partial: #c2621f; /* a partly right answer: warm, and not the red of a wrong one */
   --progress: #3b82c4;
   --found: rgba(59, 130, 196, 0.22); /* search matches; not the citations' yellow */
   --subject: #2a9d8f; /* the open subject's color; set by subjects.js */
@@ -49,6 +50,7 @@
     --found: rgba(110, 170, 230, 0.32);
     --progress: #6fa8dc;
     --done: #6cc489;
+    --partial: #ee9a5c;
     color-scheme: dark;
   }
 }
@@ -301,15 +303,17 @@ blockquote {
    Other callouts (examples, recaps, notes in the log) keep the look above. */
 .callout-question { --tone: var(--progress); }
 .callout-success { --tone: var(--done); }
+.callout-partial { --tone: var(--partial); } /* added 2026-11-11 */
 .callout-failure { --tone: var(--danger); }
 .callout-tip { --tone: var(--paused); }
-.callout-question, .callout-success, .callout-failure, .callout-tip {
+.callout-question, .callout-success, .callout-partial, .callout-failure, .callout-tip {
   border-left: 4px solid var(--tone);
   background: color-mix(in srgb, var(--tone) 9%, var(--bg));
 }
-:is(.callout-question, .callout-success, .callout-failure, .callout-tip) .callout-title { color: var(--tone); }
+:is(.callout-question, .callout-success, .callout-partial, .callout-failure, .callout-tip) .callout-title { color: var(--tone); }
 .callout-question .callout-title::before { content: "? "; }
 .callout-success .callout-title::before { content: "✓ "; }
+.callout-partial .callout-title::before { content: "◐ "; }
 .callout-failure .callout-title::before { content: "✗ "; }
 .callout-tip .callout-title::before { content: "💡 "; }
 
@@ -327,6 +331,7 @@ blockquote {
 .recorded::before, .recorded::after { content: ""; flex: 1; border-top: 2px solid var(--tone); opacity: 0.45; }
 .recorded.correct { --tone: var(--done); }
 .recorded.hinted { --tone: var(--paused); }
+.recorded.partial { --tone: var(--partial); }
 .recorded.incorrect { --tone: var(--danger); }
 
 pre, code { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.9em; }
@@ -880,6 +885,7 @@ dialog form.dialog-actions { text-align: initial; }
 }
 .outcome.correct { color: var(--ok); }
 .outcome.hinted { color: var(--warn); }
+.outcome.partial { color: var(--partial); }
 .outcome.incorrect { color: var(--danger); }
 .topic-row { display: flex; align-items: center; gap: 0.6rem; }
 .topic-head {

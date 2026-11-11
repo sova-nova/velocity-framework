@@ -34,11 +34,13 @@ For each answer the learner sends:
 
 - Compare it with your own solution. Check the **reasoning**, not just the final answer: for a
   proof, go step by step and point to the first step that doesn't follow.
-- If it is right, say so in `> [!success]` and name what they did well. If it is wrong, say so
-  in `> [!failure]`, point to where it goes wrong, and let them fix it before showing the
-  correct solution.
+- If it is right, say so in `> [!success]` and name what they did well. If the approach is
+  right but a step or number is off, say so in `> [!partial]`: what is right first, then the
+  step that goes wrong. If it is wrong at its core, say so in `> [!failure]`, credit any
+  correct pieces, and point to where it goes wrong. Either way, let them fix it before showing
+  the correct solution.
 - Call `record_question` per problem: `correct`, `hinted` (needed hints or a fix after
-  feedback), or `incorrect`. Use the source and exercise number in `source` when there is one.
+  feedback), `partial` (left with the approach right but a piece still off), or `incorrect`. Use the source and exercise number in `source` when there is one.
 - After all problems, add a short "Problem set results" summary with `append_log`
   (`kind: summary`) and open threads for recurring mistakes.
 
