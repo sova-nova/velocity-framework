@@ -357,6 +357,16 @@ Long own-loop chats (`velocity chat`, and web chats on the own loop) use the API
 - **Known gap: earlier tool calls aren't in the replayed history.** Session records store what the tutor said, not its tool calls, so a replayed tutor can't see that it already recorded a question in an earlier turn. Sonnet re-recorded quiz question 1 in `2026-11-05-1-t5` for this reason. No check penalizes it. **Fixed for new sessions (2026-11-06):** session records now store each tool call's name and input (not its result, which can contain source text) as a `tool` event, through a `PostToolUse` hook in Claude Code and directly in `velocity chat`. A replay puts these calls into the tutor's history (with a placeholder result) and runs the state-changing ones again, so the rebuilt state matches. The committed records predate this and keep using `session_state`.
 - **Labels** (`evals/label.py`): `export` samples replies from a run (alternating models, fixed seed) into a Markdown file for Obsidian, hiding the model and the judge's verdicts; `agree` reports agreement and Cohen's kappa per criterion and lists every disagreement with the judge's reason. Labels are committed in `evals/labels/`.
 
+### Notes: evals on free models (2026-11-11)
+
+- **Target:** `--models free:<model>` replays a case on the free engine's loop (`FreeAgent`) against any OpenAI-compatible server (`--free-url`, default Ollama on this computer; `--free-key-env`; `--free-context`, default 32,768). The seeded history is built in the Anthropic shape, as for Claude, and converted (`convert_history`). Free models run one case at a time (a local server answers one request at a time) and need no Anthropic key with `--judge none`; the judge, when used, is still Claude and costs money.
+- **First run (code checks only, 38 cases, Ollama 0.12.10 with `OLLAMA_CONTEXT_LENGTH=32768`, RX 7700 XT 12 GB, 48 minutes for both):**
+  - `qwen3:4b`: 23/38 cases pass every check (37/54 checks); `record_question` when expected 3/7; some tool call in 18/38 cases (mostly `set_session_title`); about 50 s a reply.
+  - `qwen3:8b`: 18/38 (30/54); `record_question` 0/7; some tool call in only 7/38 cases; about 30 s a reply.
+  - Both graded imprecise answers fully "Correct" (e.g. "undefined" for a limit that does not exist), and opened replies with a verdict callout (sometimes inside bold). The README's "Free models" section reports this; `qwen3:4b` stays the Ollama preset.
+  - No full Claude baseline exists yet (the 2026-11-05 runs covered 3 cases, all passed by Opus and Sonnet); the postponed full Claude run would give one.
+- **Not measured yet:** grading accuracy (the judge's "correct" and "honest feedback"), which matters most for a weaker tutor. Judging both free runs with Sonnet would cost about $1–2; the user decides.
+
 ### M3 notes (2026-11-04)
 
 - **Decisions:** what is tracked, who writes it, format and location (see §2.4).
