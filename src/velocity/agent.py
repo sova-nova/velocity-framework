@@ -652,9 +652,10 @@ RESUME_COST_NOTE = (
 )
 
 
-def resume_recap(session: Session) -> str:
+def resume_recap(session: Session, cost_note: bool = True) -> str:
     """What `velocity chat --resume` prints before the first prompt (decided 2026-11-10):
-    the session's name, its last few messages in full, and the cost of the first reply."""
+    the session's name, its last few messages in full, and the cost of the first reply
+    (not on the free engine, which costs nothing)."""
     name = f'"{session.title}" ({session.id})' if session.title else session.id
     lines = [f"Resuming {name}."]
     messages = [e for e in session.events() if e.role in ("learner", "tutor")]
@@ -667,7 +668,8 @@ def resume_recap(session: Session) -> str:
         for e in last:
             who = "you" if e.role == "learner" else "tutor"
             lines.append(f"\n{who}> {e.text.strip()}")
-    lines.append(f"\n{RESUME_COST_NOTE}")
+    if cost_note:
+        lines.append(f"\n{RESUME_COST_NOTE}")
     return "\n".join(lines) + "\n"
 
 

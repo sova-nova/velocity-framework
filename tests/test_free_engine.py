@@ -430,3 +430,95 @@ def test_the_tool_server_gets_the_whole_environment(monkeypatch):
         asyncio.run(run())
     assert seen["env"]["LLAMA_CPP_BINARY"] == "/opt/llama-server"
     assert seen["env"]["XDG_DATA_HOME"]
+
+
+# -- the terminal: velocity chat --engine openai -----------------------------------------
+
+
+def run_terminal_chat(config, server, lines, **options) -> str:
+    """openai_engine.chat with scripted input and the real tools in process."""
+    import io
+
+    @contextlib.asynccontextmanager
+    async def in_process(subject):
+        async with Client(build_server(TutorTools(config, subject))) as mcp:
+            yield mcp_tool_caller(mcp), mcp_tool_params((await mcp.list_tools()).tools)
+
+    typed = iter(lines)
+
+    def read_line(prompt):
+        try:
+            return next(typed)
+        except StopIteration:
+            raise EOFError from None
+
+    out = io.StringIO()
+    asyncio.run(
+        openai_engine.chat(
+            config,
+            load_subject(config, "calculus"),
+            out,
+            read_line,
+            client=server,
+            connect=in_process,
+            **options,
+        )
+    )
+    return out.getvalue()
+
+
+def test_terminal_chat_on_the_free_engine(config, server):
+    server.replies += [says("<think>hm</think>Hi! What shall we study?")]
+    out = run_terminal_chat(config, server, ["hello", "/model", "/exit"])
+    assert "with qwen3:4b, a free model (weaker)." in out
+    assert "nothing you share leaves it" in out and "Anthropic" not in out
+    assert "Hi! What shall we study?" in out and "hm" not in out
+    assert "start the chat with --model" in out  # /model doesn't switch here
+    # The tutor was told not to give its own (Anthropic) reminder.
+    note = server.requests[0]["messages"][1]["content"]
+    assert "skip the third-party reminder" in note
+    assert "Open with the third-party reminder" not in note
+    # The session records its engine, so --resume picks the free engine again.
+    from velocity.chat import last_engine
+    from velocity.session import session_summaries
+
+    subject = load_subject(config, "calculus")
+    paused = session_summaries("calculus", subject.sessions_dir)[0]
+    session = Session(
+        "calculus", paused.id, record_dir("calculus"), subject.sessions_dir
+    )
+    assert last_engine(subject, session) == {"engine": FREE, "model": "qwen3:4b"}
+
+
+def test_terminal_chat_model_flag_and_missing_settings(config, server):
+    server.replies += [says("Hello.")]
+    run_terminal_chat(config, server, ["hi"], model="qwen3:8b")
+    assert server.requests[0]["model"] == "qwen3:8b"
+    unset = config.__class__(config.vault_path)
+    with pytest.raises(openai_engine.EngineError, match="Settings"):
+        run_terminal_chat(unset, server, [])
+
+
+def test_resume_in_the_terminal_defaults_to_the_engine_that_ran_last(
+    config, server, monkeypatch
+):
+    from velocity import cli
+
+    server.replies += [says("Hello.")]
+    run_terminal_chat(
+        config, server, ["hi"]
+    )  # a paused session, run on the free engine
+    seen = {}
+
+    async def fake(config, subject, out, read_line, model=None, **options):
+        seen.update(engine="openai", model=model, **options)
+
+    async def fake_api(config, subject, out, read_line, model=None, **options):
+        seen.update(engine="api", model=model, **options)
+
+    monkeypatch.setattr(openai_engine, "chat", fake)
+    monkeypatch.setattr("velocity.agent.chat", fake_api)
+    assert cli.main(["chat", "calculus", "--resume"]) == 0
+    assert seen["engine"] == "openai" and seen["reopen"]
+    assert cli.main(["chat", "calculus", "--resume", "--engine", "api"]) == 0
+    assert seen["engine"] == "api"
