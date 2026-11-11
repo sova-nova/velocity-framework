@@ -491,7 +491,30 @@ Tested on all of Section 2.4 (PDF pp. 136–145, plus neighbouring 2.3 exercises
 
 ## 6. Open Questions
 
-- None at the moment.
+Two ideas the user wants to build next (raised 2026-11-11). **Before building either, grill the user on it** (the `grilling` skill: numbered questions with recommendations, then confirm), record the answers here or in the decisions log, then build each on its own branch and PR from `main`. The user leans toward starting with the first.
+
+- **A free way to run velocity** (for friends without Claude Code, an API key, or the wish to pay). Today both engines need Claude: Claude Code needs a paid plan, and the API is pay-as-you-go. Options discussed:
+  - **Local models** through an OpenAI-compatible endpoint: Ollama, or `llama-server`, which velocity already uses for OCR. They are free and private, but a 12 GB GPU fits only ~8–14B models. Those follow the long tutor prompt less reliably, make tool calls (recording answers, citing sections, titles) less consistently, and make more math mistakes, and a tutor that grades a wrong answer as correct does harm. Larger open models (~30B and up) are much better but too slow on most machines.
+  - **Hosted free tiers** (e.g. OpenRouter's free models, Gemini's free tier) over the same protocol. Better quality, but the limits and terms change often, and free tiers may train on conversations.
+  - **Recommendation:** one "OpenAI-compatible" engine next to Claude Code and the own loop (a sibling of `api_engine.py` behind the same engine interface), with a URL, model and optional key in settings, presented honestly as "works, but weaker". Measure "weaker" by running the eval replay harness against a local model, which is free.
+  - **To decide when grilling:**
+    - the dependency (`httpx`, already present through `anthropic`, vs. the `openai` package; adding one needs the user's OK)
+    - how tools are passed and how tool-call failures are handled
+    - which features degrade (cost display, compaction)
+    - how the page and README warn about quality
+    - whether evals gain a local-model target
+- **A desktop app** instead of a browser tab. Steps discussed:
+  1. **A launcher, no new dependency:** a `.desktop` file (e.g. `velocity install-launcher`) so velocity starts from the app menu without a terminal, plus a web manifest so Chrome/Edge can install the page as its own window.
+  2. **A real window with `pywebview`:** `velocity app` starts the server and opens a native window on the system web engine (WebKitGTK on Linux, WebView2 on Windows, WebKit on macOS); closing it stops the server. The page itself is unchanged.
+     - Costs: a new dependency, and the GTK/WebKit system packages on Linux.
+     - KaTeX, the source reader and uploads must be checked in WebKitGTK; only Firefox has been tested.
+  3. **A double-click installer** for people without Python or `uv` (PyInstaller, or a Tauri/Electron shell). The OCR stack (`marker-pdf` + torch) is huge, so it would likely ship without OCR as an optional add-on. This is a project of its own; save it for when testers are invited.
+  - **Recommendation:** step 1 soon, and step 2 as the real feature.
+  - **To decide when grilling:**
+    - which steps to build, and in what order
+    - the command name
+    - whether closing the window ends or pauses open chats
+    - which platforms to support
 
 ## 7. Future Directions
 
