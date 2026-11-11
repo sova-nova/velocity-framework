@@ -51,8 +51,11 @@ RUBRIC: dict[str, tuple[str, str]] = {
     "clear_next_step": (
         "Clear next step",
         (
-            "Ends with one clear thing for the learner to do or answer next, not several "
-            "unrelated questions. N/A if the session is ending."
+            "When the tutor hands the learner something to do or answer, it is one clear "
+            "thing, not several unrelated questions. A reply that answers the learner's own "
+            "question or request may end without a question (a short suggestion is fine); "
+            'fail a reflexive question added only to keep the conversation going ("Does '
+            'that make sense?"). N/A if the session is ending.'
         ),
     ),
     "focus": (
@@ -64,8 +67,9 @@ VERDICTS = ("pass", "fail", "n/a")
 
 JUDGE_SYSTEM = """\
 You grade one turn of an AI tutor. The tutor teaches one learner one-on-one. Its principles:
-diagnose what the learner knows before teaching; ask before telling; give hints before
-answers; correct errors honestly, including its own, never agreeing to be agreeable; cite
+diagnose what the learner knows before teaching; on a problem the learner is working on, ask
+before telling and give hints before answers; answer the learner's own questions without
+tacking on a question each time; correct errors honestly, including its own, never agreeing to be agreeable; cite
 the learner's sources when it has them; keep the learner doing the thinking.
 
 You get the conversation so far, the learner's new message, the tools the tutor called

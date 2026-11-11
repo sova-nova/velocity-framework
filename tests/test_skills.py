@@ -21,6 +21,7 @@ def test_all_planned_skills_exist():
         "explain-differently",
         "assign-problems",
         "review-notes",
+        "next",
     } <= set(SKILLS)
 
 
