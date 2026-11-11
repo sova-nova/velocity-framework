@@ -195,3 +195,34 @@ def test_get_exercises(tools):
     assert "A limit is" not in text
     with pytest.raises(ToolError, match="No exercises heading"):
         tools.get_exercises("Book", "1.2")
+
+
+def test_a_recorded_answer_is_a_line_in_the_log(tools, subject):
+    """The web page draws it as a divider colored by the outcome (decided 2026-11-10)."""
+    from velocity.chat import conversation
+
+    s = start_session(subject)
+    s.append("learner", "It is 4.")
+    tools.record_question(
+        "Limits by factoring", "$\\lim_{x\\to2}\\frac{x^2-4}{x-2}$", "correct"
+    )
+    tools.record_question("limits by factoring", "Why cancel?", "hinted")
+    s.append("tutor", "> [!success]\n> Right.")
+    s.render()
+    log = s.log_path.read_text(encoding="utf-8")
+    assert "*✓ Recorded: correct · Limits by factoring*" in log
+    assert (
+        "*~ Recorded: hinted · Limits by factoring*" in log
+    )  # the topic's stored name
+    assert log.index("It is 4.") < log.index("✓ Recorded") < log.index("[!success]")
+    assert "**Tutor:**\n\n> [!success]\n> Right." in log  # a callout on its own line
+    assert s.check_log().missing == []
+    assert [m for m in conversation(s) if m["role"] == "recorded"] == [
+        {"role": "recorded", "text": "correct", "title": "Limits by factoring"},
+        {"role": "recorded", "text": "hinted", "title": "Limits by factoring"},
+    ]
+    assert not s.empty
+
+
+def test_recording_without_a_session_still_records_the_answer(tools, subject):
+    assert tools.record_question("Limits", "Q?", "incorrect").startswith("Recorded")

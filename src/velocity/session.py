@@ -23,6 +23,14 @@ ENDED_WITH_WRAP_UP = "end-session"
 ENDED_WITHOUT_WRAP_UP = "no-wrap-up"
 RECAP_TITLE = "Session recap"
 
+# A recorded answer, as a line in the log (decided 2026-11-10): the web page draws it as a
+# divider colored by the outcome.
+RECORDED_MARKS = {"correct": "✓", "hinted": "~", "incorrect": "✗"}
+
+
+def recorded_line(outcome: str, topic: str) -> str:
+    return f"*{RECORDED_MARKS.get(outcome, '·')} Recorded: {outcome} · {topic}*"
+
 
 @dataclass(frozen=True)
 class Event:
@@ -47,7 +55,10 @@ def render_event(event: Event, annotations: bool = False) -> str:
     if event.role == "learner":
         return f"**You:** {event.text.strip()}\n\n"
     if event.role == "tutor":
-        return f"**Tutor:** {event.text.strip()}\n\n"
+        text = event.text.strip()
+        # A reply that opens with a callout (decided 2026-11-10) needs it on its own line.
+        separator = "\n\n" if text.startswith(">") else " "
+        return f"**Tutor:**{separator}{text}\n\n"
     if event.role == "block":
         lines = [f"> [!{event.kind or 'note'}] {event.title or ''}".rstrip()]
         lines += [f"> {line}".rstrip() for line in event.text.strip().splitlines()]
@@ -56,6 +67,9 @@ def render_event(event: Event, annotations: bool = False) -> str:
         return f"_(learner annotation)_ {event.text.strip()}\n\n"
     if event.kind == "resume":
         return "\n*Session resumed.*\n\n"
+    if event.kind == "recorded":
+        meta = event.meta or {}
+        return recorded_line(event.text, meta.get("topic", "")) + "\n\n"
     if event.kind == "end":
         how = (
             "Session ended with /end-session."

@@ -20,8 +20,11 @@ Run a short quiz. Default: 5 questions. If the learner named a topic or a number
 
 ## Ask
 
-- Tell the learner how many questions there are, then ask **one question at a time**. Number
-  them ("Question 2 of 5"). Do not reveal the answer in the same message.
+- Tell the learner how many questions there are, then ask **one question at a time**, each in
+  a numbered question callout (`> [!question] Question 2 of 5`). Do not reveal the answer in
+  the same message.
+- Open your feedback on each answer with `> [!success]` or `> [!failure]`, and put hints in
+  `> [!tip]`.
 - Wait for the learner's answer. If it is wrong or incomplete, give a **hint** and let them try
   again (at most two hints). Only then explain the answer.
 - After each question is settled, call `record_question` with the topic, the question, and the

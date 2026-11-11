@@ -47,6 +47,8 @@
     --warn: #e0b04a;
     --ok: #7cc98a;
     --found: rgba(110, 170, 230, 0.32);
+    --progress: #6fa8dc;
+    --done: #6cc489;
     color-scheme: dark;
   }
 }
@@ -294,6 +296,38 @@ blockquote {
 }
 
 .callout-title { font-weight: 600; color: var(--accent); margin-bottom: 0.25rem; }
+
+/* The tutor's questions, feedback and hints (decided 2026-11-10), each in its own color.
+   Other callouts (examples, recaps, notes in the log) keep the look above. */
+.callout-question { --tone: var(--progress); }
+.callout-success { --tone: var(--done); }
+.callout-failure { --tone: var(--danger); }
+.callout-tip { --tone: var(--paused); }
+.callout-question, .callout-success, .callout-failure, .callout-tip {
+  border-left: 4px solid var(--tone);
+  background: color-mix(in srgb, var(--tone) 9%, var(--bg));
+}
+:is(.callout-question, .callout-success, .callout-failure, .callout-tip) .callout-title { color: var(--tone); }
+.callout-question .callout-title::before { content: "? "; }
+.callout-success .callout-title::before { content: "✓ "; }
+.callout-failure .callout-title::before { content: "✗ "; }
+.callout-tip .callout-title::before { content: "💡 "; }
+
+/* A recorded answer: a divider across the chat or log, in the outcome's color. */
+.recorded {
+  --tone: var(--muted);
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin: 1rem 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--tone);
+}
+.recorded::before, .recorded::after { content: ""; flex: 1; border-top: 2px solid var(--tone); opacity: 0.45; }
+.recorded.correct { --tone: var(--done); }
+.recorded.hinted { --tone: var(--paused); }
+.recorded.incorrect { --tone: var(--danger); }
 
 pre, code { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.9em; }
 pre { background: var(--panel); padding: 0.75rem; border-radius: 6px; overflow-x: auto; }

@@ -23,9 +23,10 @@ Default: 3 problems. Use the section, topic, and number the learner gave, if any
 1. Put each problem in the log with `append_log` (`kind: example`, title like "Problem 1
    (Stewart §2.4 #13)" with the source and exercise number when there is one), so the learner
    can see them rendered in Obsidian.
-2. In your reply, list the problems briefly and tell the learner to work them on paper and send
-   their answers (all at once or one by one). Offer hints on request; give a hint, not the
-   solution.
+2. In your reply, list the problems briefly, each in a numbered question callout
+   (`> [!question] Problem 1 of 3`), and tell the learner to work them on paper and send
+   their answers (all at once or one by one). Offer hints on request, in `> [!tip]`; give a
+   hint, not the solution.
 
 ## Check
 
@@ -33,8 +34,9 @@ For each answer the learner sends:
 
 - Compare it with your own solution. Check the **reasoning**, not just the final answer: for a
   proof, go step by step and point to the first step that doesn't follow.
-- If it is right, say so and name what they did well. If it is wrong, point to where it goes
-  wrong and let them fix it before showing the correct solution.
+- If it is right, say so in `> [!success]` and name what they did well. If it is wrong, say so
+  in `> [!failure]`, point to where it goes wrong, and let them fix it before showing the
+  correct solution.
 - Call `record_question` per problem: `correct`, `hinted` (needed hints or a fix after
   feedback), or `incorrect`. Use the source and exercise number in `source` when there is one.
 - After all problems, add a short "Problem set results" summary with `append_log`
