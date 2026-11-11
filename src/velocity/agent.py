@@ -646,6 +646,31 @@ def tool_result_content(content: list[Any]) -> str | list[dict]:
     return blocks
 
 
+RECAP_MESSAGES = 3
+RESUME_COST_NOTE = (
+    "Your first reply re-sends the session so far, so it costs more than the rest."
+)
+
+
+def resume_recap(session: Session) -> str:
+    """What `velocity chat --resume` prints before the first prompt (decided 2026-11-10):
+    the session's name, its last few messages in full, and the cost of the first reply."""
+    name = f'"{session.title}" ({session.id})' if session.title else session.id
+    lines = [f"Resuming {name}."]
+    messages = [e for e in session.events() if e.role in ("learner", "tutor")]
+    last = sorted(messages, key=lambda e: e.ts)[-RECAP_MESSAGES:]
+    if last:
+        n = len(last)
+        lines.append(
+            f"Where you left off (the last {n} message{'s' if n > 1 else ''}):"
+        )
+        for e in last:
+            who = "you" if e.role == "learner" else "tutor"
+            lines.append(f"\n{who}> {e.text.strip()}")
+    lines.append(f"\n{RESUME_COST_NOTE}")
+    return "\n".join(lines) + "\n"
+
+
 async def chat(
     config: Config,
     subject: Subject,
@@ -653,10 +678,12 @@ async def chat(
     read_line: Callable[[str], str],
     model: str | None = None,
     continues: str | None = None,
+    reopen: str | None = None,
 ) -> None:
     """Run an interactive tutoring session in the terminal. `model` (an alias or full ID)
     overrides `[api] model` in config.toml; `continues` names a finished session to pick
-    up from."""
+    up from; `reopen` names a paused one to resume, its conversation rebuilt from the
+    record."""
     import asyncio
     import sys
 
@@ -683,6 +710,7 @@ async def chat(
             model=resolve_model(model or config.api_model or DEFAULT_MODEL),
             effort=config.api_effort or DEFAULT_EFFORT,
             continues=continues,
+            reopen=reopen,
         )
         agent.start()
         out.write(
@@ -691,6 +719,18 @@ async def chat(
             f"Skills: {', '.join('/' + s for s in skills)}. "
             "Switch models with /model. Exit with /exit or Ctrl+D.\n"
         )
+        if reopen:
+            out.write(
+                "\n"
+                + resume_recap(
+                    Session(
+                        subject.slug,
+                        reopen,
+                        record_dir(subject.slug),
+                        subject.sessions_dir,
+                    )
+                )
+            )
         try:
             while not agent.ended:
                 try:

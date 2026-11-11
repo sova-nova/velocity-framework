@@ -105,9 +105,10 @@ This opens Claude Code in a tutor workspace that velocity regenerates on every l
 ```bash
 export ANTHROPIC_API_KEY=...
 uv run velocity chat calculus --model sonnet
+uv run velocity chat calculus --resume    # resume the last paused session (or --resume <session>)
 ```
 
-The same tutor in your terminal, streamed from the Anthropic API. Type `/model` to see or switch the model mid-chat (`/model haiku`), and `/exit` or Ctrl+D to leave. On exit it prints the session's token use and estimated cost per model.
+The same tutor in your terminal, streamed from the Anthropic API. `--resume` picks up a paused session from any front end on the model it last ran on, and shows the last three messages so you know where you were. Type `/model` to see or switch the model mid-chat (`/model haiku`), and `/exit` or Ctrl+D to leave. On exit it prints the session's token use and estimated cost per model.
 
 ### Choosing a model
 

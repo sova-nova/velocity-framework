@@ -244,8 +244,8 @@ def test_cli_chat_continue_passes_the_session(use_config, subject, monkeypatch):
     first = finished(subject)
     seen = {}
 
-    async def fake_chat(config, subject, out, read_line, model=None, continues=None):
-        seen["continues"] = continues
+    async def fake_chat(config, subject, out, read_line, model=None, **options):
+        seen["continues"] = options["continues"]
 
     monkeypatch.setattr("velocity.agent.chat", fake_chat)
     assert cli.main(["chat", "calculus", "--continue", first.id]) == 0
