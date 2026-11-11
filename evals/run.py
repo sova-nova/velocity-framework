@@ -3,8 +3,11 @@
     uv run python -m evals.run --models opus,sonnet
     uv run python -m evals.run --cases '2026-11-05-1-*' --models sonnet --budget 1
     uv run python -m evals.run --judge none        # code checks only (cheaper)
+    uv run python -m evals.run --models free:qwen3:4b,free:qwen3:8b --judge none
 
-Needs ANTHROPIC_API_KEY. Each case runs one tutor turn in a throwaway vault. Cases that use
+Claude models and the judge need ANTHROPIC_API_KEY. `free:<model>` runs a model on an
+OpenAI-compatible server (default: Ollama on this computer, --free-url to change) on the
+free engine's loop; that costs nothing, and its cases run one at a time. Each case runs one tutor turn in a throwaway vault. Cases that use
 a source need its PDF: by default the paths come from your velocity config (the subject
 with the same slug), or pass --source Stewart=/path/to/book.pdf. The OCR cache is reused
 read-only; eval runs never run OCR. Results are written to evals/runs/ (not committed).
@@ -31,6 +34,13 @@ from velocity.config import ConfigError, data_dir, load_config, load_subject
 from velocity.pdf_source import default_cache_dir
 
 RUNS_DIR = EVALS_DIR / "runs"
+# A model on an OpenAI-compatible server, run on the free engine's loop: "free:qwen3:4b".
+FREE_PREFIX = "free:"
+
+
+def model_id(name: str) -> str:
+    """A Claude alias or id -> its full id; a free model stays as given."""
+    return name if name.startswith(FREE_PREFIX) else resolve_model(name)
 
 
 @dataclass
@@ -111,14 +121,20 @@ async def run_all(
     create=None,  # like client.beta.messages.create, for the judge
     judge_model: str | None = None,
     report=print,
+    free_create=None,  # an OpenAI-compatible client's chat.completions.create
+    free_context: int = 32_768,
 ) -> list[Outcome]:
     outcomes: list[Outcome] = []
     spent = 0.0
     gate = asyncio.Semaphore(concurrency)
+    # A model on this computer answers one request at a time; queueing more only makes
+    # each one wait (and time out).
+    free_gate = asyncio.Semaphore(1)
 
     async def one(case: Case, model: str) -> None:
         nonlocal spent
-        async with gate:
+        free = model.startswith(FREE_PREFIX)
+        async with free_gate if free else gate:
             if spent >= budget:
                 outcomes.append(
                     Outcome(case.id, model, "skipped", detail="budget reached")
@@ -128,11 +144,13 @@ async def run_all(
             try:
                 result = await replay(
                     inp,
-                    sandbox=sandbox / f"{case.id}-{model}",
+                    sandbox=sandbox / f"{case.id}-{model.replace(':', '_')}",
                     stream=stream,
-                    model=model,
+                    model=model.removeprefix(FREE_PREFIX),
                     effort=effort,
                     source_paths=sources,
+                    free_create=free_create if free else None,
+                    free_context=free_context,
                 )
             except SkipCase as e:
                 outcome = Outcome(case.id, model, "skipped", detail=str(e))
@@ -279,6 +297,20 @@ def main(argv: list[str] | None = None) -> int:
         "--judge", default="opus", help="judge model, or 'none' for code checks only"
     )
     parser.add_argument("--source", action="append", default=[], help="NAME=PDF path")
+    parser.add_argument(
+        "--free-url",
+        default="http://localhost:11434/v1",
+        help="server for free: models (default: Ollama on this computer)",
+    )
+    parser.add_argument(
+        "--free-key-env", help="environment variable with the free server's key"
+    )
+    parser.add_argument(
+        "--free-context",
+        type=int,
+        default=32_768,
+        help="context size of free: models (match the server's setting)",
+    )
     parser.add_argument("--list", action="store_true", help="list the cases and exit")
     args = parser.parse_args(argv)
 
@@ -291,19 +323,28 @@ def main(argv: list[str] | None = None) -> int:
     if not cases:
         print("No cases selected.", file=sys.stderr)
         return 1
-    models = [resolve_model(m) for m in args.models.split(",")]
+    models = [model_id(m) for m in args.models.split(",")]
     sources = default_sources({replay_input(c).subject_slug for c in cases})
     for spec in args.source:
         name, _, path = spec.partition("=")
         sources[name] = Path(path).expanduser()
 
     import anthropic
+    import openai
 
     # The in-process MCP server turns on INFO logging; keep the output to the results.
-    for name in ("httpx", "mcp", "anthropic"):
+    for name in ("httpx", "mcp", "anthropic", "openai"):
         logging.getLogger(name).setLevel(logging.WARNING)
-    client = anthropic.AsyncAnthropic()
     judge_model = None if args.judge == "none" else resolve_model(args.judge)
+    # Only runs that use Claude need a key (free models with --judge none don't).
+    needs_claude = judge_model or any(not m.startswith(FREE_PREFIX) for m in models)
+    client = anthropic.AsyncAnthropic() if needs_claude else None
+    free = openai.AsyncOpenAI(
+        base_url=args.free_url,
+        api_key=(os.environ.get(args.free_key_env) if args.free_key_env else None)
+        or "not-needed",
+        timeout=900,  # a model on this computer can be slow
+    )
     real_data = data_dir()
     with tempfile.TemporaryDirectory(prefix="velocity-evals-") as tmp:
         sandbox = Path(tmp)
@@ -313,14 +354,16 @@ def main(argv: list[str] | None = None) -> int:
             run_all(
                 cases,
                 models,
-                stream=client.beta.messages.stream,
+                stream=client.beta.messages.stream if client else None,
                 sources=sources,
                 sandbox=sandbox,
                 budget=args.budget,
                 concurrency=args.concurrency,
                 effort=args.effort,
-                create=client.beta.messages.create,
+                create=client.beta.messages.create if client else None,
                 judge_model=judge_model,
+                free_create=free.chat.completions.create,
+                free_context=args.free_context,
             )
         )
 

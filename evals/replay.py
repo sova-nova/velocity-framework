@@ -1,6 +1,7 @@
 """Replay one case: rebuild the session up to the learner's message, run one tutor turn.
 
-The turn runs on the real `velocity chat` agent and the real tools (through an in-process
+The turn runs on the real `velocity chat` agent (or the free engine's loop, for a local or
+free model) and the real tools (through an in-process
 MCP server), in a throwaway vault. XDG_DATA_HOME must point to a sandbox data directory
 (the runner sets it), because session records live there.
 """
@@ -8,9 +9,11 @@ MCP server), in a throwaway vault. XDG_DATA_HOME must point to a sandbox data di
 import io
 import shutil
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import date
 from pathlib import Path
+from typing import Any
 
 from mcp import Client
 
@@ -27,6 +30,7 @@ from velocity.agent import (
 from velocity.config import Config, SourceRef, Subject
 from velocity.history import HistoryBuilder
 from velocity.mcp_server import build_server
+from velocity.openai_engine import FreeAgent, convert_history, openai_tools
 from velocity.session import Session, active_session_id, record_dir
 from velocity.skills import load_skills
 from velocity.state import save_state
@@ -69,7 +73,11 @@ async def replay(
     source_paths: dict[str, Path],
     today: date | None = None,
     data_dir: Path = DATA_DIR,
+    free_create: Callable[..., Any] | None = None,
+    free_context: int = 32_768,
 ) -> ReplayResult:
+    """Replay on Claude through `stream`, or, given `free_create` (an OpenAI-compatible
+    `client.chat.completions.create`), on the free engine's loop with `model`."""
     today = today or date.today()
     missing = [s for s in inp.sources if s not in source_paths]
     if missing:
@@ -119,19 +127,40 @@ async def replay(
     tools = TutorTools(config, subject, ocr_factory=lambda: _no_ocr)
     out = io.StringIO()
     async with Client(build_server(tools)) as mcp:
-        agent = TutorAgent(
-            config=config,
-            subject=subject,
-            stream=stream,
-            call_tool=mcp_tool_caller(mcp),
-            tools=mcp_tool_params((await mcp.list_tools()).tools),
-            skills=load_skills(),
-            out=out,
-            model=model,
-            effort=effort,
-        )
+        tool_params = mcp_tool_params((await mcp.list_tools()).tools)
+        if free_create is None:
+            agent = TutorAgent(
+                config=config,
+                subject=subject,
+                stream=stream,
+                call_tool=mcp_tool_caller(mcp),
+                tools=tool_params,
+                skills=load_skills(),
+                out=out,
+                model=model,
+                effort=effort,
+            )
+        else:
+            agent = FreeAgent(
+                config=config,
+                subject=subject,
+                create=free_create,
+                call_tool=mcp_tool_caller(mcp),
+                tools=openai_tools(
+                    [t for t in tool_params if t["name"] != "load_skill"], False
+                ),
+                skills=load_skills(),
+                model=model,
+                context_size=free_context,
+                web_ui=False,
+            )
         agent.start()
-        _seed_history(agent, slug, subject, inp.history, tools)
+        # The earlier turns, in the Anthropic shape the history builder makes; the free
+        # engine's loop gets them converted.
+        seeded = agent.messages if free_create is None else []
+        _seed_history(agent, slug, subject, inp.history, tools, seeded)
+        if free_create is not None:
+            agent.messages = convert_history(seeded)
         if inp.annotations:
             # The learner typed these into the log; the user-prompt hook finds them.
             session = _active_session(slug, subject)
@@ -140,7 +169,8 @@ async def replay(
         before = len(agent.messages)
         reply = await agent.turn(inp.message)
         agent.finish()
-    return ReplayResult(reply, agent.tool_log, agent.usage, out.getvalue(), before)
+    usage = getattr(agent, "usage", None) or UsageByModel()  # the free engine: none
+    return ReplayResult(reply, agent.tool_log, usage, out.getvalue(), before)
 
 
 def _active_session(slug: str, subject: Subject) -> Session:
@@ -154,17 +184,18 @@ STATE_TOOLS = {"record_question", "set_topic_status", "open_thread", "close_thre
 
 
 def _seed_history(
-    agent: TutorAgent,
+    agent: TutorAgent | FreeAgent,
     slug: str,
     subject: Subject,
     history: tuple[Turn, ...],
     tools: TutorTools,
+    messages: list[dict],
 ):
-    """Put the earlier part of the session into the agent's history, the session record and
-    the markdown log, the way it would be after those turns had run. Recorded calls that
-    change learner state are run again, so the state matches too."""
+    """Put the earlier part of the session into `messages` (in the Anthropic shape), the
+    session record and the markdown log, the way it would be after those turns had run.
+    Recorded calls that change learner state are run again, so the state matches too."""
     session = _active_session(slug, subject)
-    builder = HistoryBuilder(agent.messages)
+    builder = HistoryBuilder(messages)
     annotations: list[str] = []
     for turn in history:
         if turn.role == "annotation":

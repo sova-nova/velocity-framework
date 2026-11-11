@@ -227,6 +227,56 @@ def test_replay_rebuilds_the_session_and_runs_one_turn(tmp_path):
     ]  # nothing recorded before session 2
 
 
+def test_replay_on_a_free_model(tmp_path):
+    """free: models run on the free engine's loop, with the history in OpenAI's shape."""
+    from tests.test_free_engine import FakeServer, call, chunk, says
+
+    server = FakeServer()
+    server.replies += [
+        [
+            chunk(
+                calls=[
+                    call(
+                        0,
+                        "record_question",
+                        '{"topic": "limits", "question": "Q1", "outcome": "partial"}',
+                        "c1",
+                    )
+                ]
+            )
+        ],
+        says("Nearly: approaches is the key word."),
+    ]
+    inp = replay_input(
+        case(session="2026-11-04-2", turn=3, annotations=["My typed note"])
+    )
+    result = asyncio.run(
+        replay(
+            inp,
+            sandbox=tmp_path / "box",
+            stream=None,
+            model="qwen3:4b",
+            source_paths={},
+            today=TODAY,
+            free_create=server.create,
+        )
+    )
+    assert result.reply == "Nearly: approaches is the key word."
+    assert result.tool_log == [
+        ("record_question", {"topic": "limits", "question": "Q1", "outcome": "partial"})
+    ]
+    assert result.usage.requests == 0  # nothing to pay for
+    first = server.requests[0]
+    assert first["model"] == "qwen3:4b"
+    roles = [m["role"] for m in first["messages"]]
+    # system prompt, then learner (with the session-start note), tutor, learner, tutor,
+    # and the turn under test (with the annotation as a note)
+    assert roles == ["system", "user", "assistant", "user", "assistant", "user"]
+    assert "Previous sessions: 2026-11-04-1" in first["messages"][1]["content"]
+    assert first["messages"][-1]["content"].startswith("Yes it is")
+    assert "My typed note" in first["messages"][-1]["content"]
+
+
 def test_history_blocks_and_annotations_are_seeded(tmp_path):
     api = FakeAPI(response(text("ok")))
     inp = replay_input(case(session="2026-11-05-1", turn=5))

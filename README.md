@@ -7,7 +7,7 @@ It is built around one **MCP server** with two front ends:
 - **`velocity tutor`** runs the tutor inside [Claude Code](https://claude.com/claude-code), using your Claude plan or API key.
 - **`velocity chat`** is velocity's own agent loop on the Anthropic API, with the same tools, prompt and skills.
 
-A local web UI, **`velocity web`**, puts both in your browser: chat with the tutor through Claude Code (on your plan) or the API (with its cost shown as you go), with math rendered, and browse, resume or continue past sessions. A paused session can be resumed on either engine, whichever one started it. A reader beside the chat shows your sources (the tutor's citations are links into it); you can add a source there, and prepare a book ahead of time so reading it is instant. Subjects are managed on the page too: create them, change their settings (name, extra instructions for the tutor, note folders), and archive, recover or delete them.
+A local web UI, **`velocity web`**, puts both in your browser: chat with the tutor through Claude Code (on your plan) or the API (with its cost shown as you go), or, for free, on a model on your own computer or a hosted free tier ([weaker; see below](#free-models)), with math rendered, and browse, resume or continue past sessions. A paused session can be resumed on either engine, whichever one started it. A reader beside the chat shows your sources (the tutor's citations are links into it); you can add a source there, and prepare a book ahead of time so reading it is instant. Subjects are managed on the page too: create them, change their settings (name, extra instructions for the tutor, note folders), and archive, recover or delete them.
 
 ## What a session looks like
 
@@ -48,7 +48,7 @@ An excerpt from a real session log, as it appears in Obsidian (math renders ther
 
 ## Setup
 
-Requirements: Linux or macOS (Windows is best effort) and [uv](https://docs.astral.sh/uv/). To chat on your Claude plan you need [Claude Code](https://claude.com/claude-code) 2.1.314 or later; for the API engine (`velocity chat`, or API chats on the web page), an Anthropic API key.
+Requirements: Linux or macOS (Windows is best effort) and [uv](https://docs.astral.sh/uv/). To chat on your Claude plan you need [Claude Code](https://claude.com/claude-code) 2.1.314 or later; for the API engine (`velocity chat`, or API chats on the web page), an Anthropic API key. Without either, the web page can use a [free model](#free-models) (weaker).
 
 **[Obsidian](https://obsidian.md) (free) is strongly recommended.** velocity keeps its session logs and progress as markdown in a folder of your notes, and Obsidian is the best way to work with them. Without it velocity still works, with any folder: the web page shows your chats, logs (math included), books and progress. What you'd miss:
 
@@ -119,6 +119,32 @@ The same tutor in your terminal, streamed from the Anthropic API. `--resume` pic
 - **Sonnet 5.5:** about half the price of Opus and a good everyday choice.
 - **Haiku 5.5:** very cheap, but in testing it did not reliably call the tools that record progress, so learner state can fall behind.
 
+### Free models
+
+On the web page, the **Free model (weaker)** engine runs the same tutor on any server that speaks the OpenAI chat API: a model on your own computer, or a hosted free tier. It costs nothing, but it is **noticeably weaker** than Claude. Small models follow the tutor's instructions less reliably, often forget to record your progress, and can grade a wrong answer as right, so double-check anything important. Set it up under **Settings → Free / other model** (pick a preset, then press **Test**).
+
+**On your computer, with [Ollama](https://ollama.com/download).** Free and private: nothing leaves your computer.
+
+```bash
+ollama pull qwen3:4b
+OLLAMA_CONTEXT_LENGTH=32768 ollama serve
+# If Ollama runs as a system service instead:
+#   sudo systemctl edit ollama   ->  [Service] Environment="OLLAMA_CONTEXT_LENGTH=32768"
+```
+
+The context length matters. Ollama's default (4,096 tokens) is smaller than the tutor's instructions alone (about 5,000), and Ollama cuts what doesn't fit without saying so. The Test button checks this. `qwen3:4b` needs about 8 GB of GPU memory with a 32K context; on a smaller GPU, use a 16K context and set the same number in Settings.
+
+**A hosted free tier, e.g. [OpenRouter](https://openrouter.ai/models?max_price=0).** Make an account and a key, then start velocity with the key in its environment (`export OPENROUTER_API_KEY=...`, then `uv run velocity web`), pick the OpenRouter preset, and enter a model id ending in `:free`. Free tiers have rate limits, their models and terms change often, and they may use your conversations for training.
+
+**How weak?** Measured with the eval cases (one tutor turn each, replayed from real sessions; code checks only), on an AMD RX 7700 XT (12 GB):
+
+| Model | Cases passing every check | Records the learner's answer when it should | Calls any tool | Time per reply |
+|---|---|---|---|---|
+| `qwen3:4b` | 23 / 38 | 3 / 7 | 18 / 38 cases | about 50 seconds |
+| `qwen3:8b` | 18 / 38 | 0 / 7 | 7 / 38 cases | about 30 seconds |
+
+The bigger model did worse: it was faster, but mostly because it rarely used tools at all. `qwen3:4b` is the preset's suggestion. Both graded some imprecise answers as fully correct. For comparison, Claude (Opus and Sonnet) passed every check on the 3 cases it has been run on so far (the full Claude run is still to come).
+
 ### Other commands
 
 | Command | What it does |
@@ -147,7 +173,7 @@ The OCR cache stays outside the vault, so copyrighted text never syncs or gets i
 
 ## Privacy
 
-Everything runs locally, but what you say, the source sections the tutor reads, and any notes it reads are sent to Anthropic's API (directly in `velocity chat`, through Claude Code in `velocity tutor`). The tutor reminds you of this at the start of every session.
+Everything runs locally, but what you say, the source sections the tutor reads, and any notes it reads are sent to Anthropic's API (directly in `velocity chat`, through Claude Code in `velocity tutor`). The tutor reminds you of this at the start of every session. With a [free model](#free-models) on your own computer, nothing leaves it; with a hosted free tier, it all goes to that service instead, and free tiers may use conversations for training. The web page says which applies before you start.
 
 ## How it works
 
