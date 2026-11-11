@@ -36,6 +36,43 @@ def _continuable(subject, session_id: str) -> str:
     return session_id
 
 
+def _resumable(subject, session_id: str | None) -> str:
+    """The paused session `velocity chat --resume` picks up (decided 2026-11-10): the one
+    named, or the newest paused one. Finished sessions are continued, not resumed."""
+    from velocity.session import (
+        SESSION_ID,
+        Session,
+        active_session_id,
+        record_dir,
+        session_summaries,
+    )
+
+    if session_id is None:
+        summaries = session_summaries(subject.slug, subject.sessions_dir)
+        paused = [s for s in summaries if s.ended == "no-wrap-up"]
+        if not paused:
+            raise ConfigError(f"no paused sessions in {subject.name}")
+        return paused[0].id
+    session = Session(
+        subject.slug, session_id, record_dir(subject.slug), subject.sessions_dir
+    )
+    if not SESSION_ID.match(session_id) or not session.record_path.exists():
+        raise ConfigError(
+            f"no session {session_id!r} in {subject.slug} "
+            f"(see: velocity sessions {subject.slug})"
+        )
+    if session.wrapped_up:
+        raise ConfigError(
+            f"session {session_id} was wrapped up; continue it in a new session with: "
+            f"velocity chat {subject.slug} --continue {session_id}"
+        )
+    if session_id == active_session_id(subject.slug):
+        raise ConfigError(
+            f"session {session_id} is open somewhere else; end or pause it there first"
+        )
+    return session_id
+
+
 def _tutor(subject_slug: str, resume: bool, continues: str | None = None) -> int:
     from velocity.hooks import CONTINUE_ENV
     from velocity.workspace import build_workspace, claude_args
@@ -62,7 +99,13 @@ def _tutor(subject_slug: str, resume: bool, continues: str | None = None) -> int
     return 0  # not reached
 
 
-def _chat(subject_slug: str, model: str | None, continues: str | None = None) -> int:
+def _chat(
+    subject_slug: str,
+    model: str | None,
+    continues: str | None = None,
+    resume: str | bool | None = None,
+) -> int:
+    """`resume` is True for the newest paused session, or a session ID."""
     import asyncio
 
     from velocity.agent import DEFAULT_MODEL, chat, resolve_model
@@ -74,6 +117,12 @@ def _chat(subject_slug: str, model: str | None, continues: str | None = None) ->
         pass
     config = load_config()
     subject = load_subject(config, subject_slug)
+    reopen = None
+    if resume:
+        if continues:
+            raise ConfigError("use either --resume or --continue, not both")
+        reopen = _resumable(subject, None if resume is True else resume)
+        model = model or _last_api_model(subject, reopen)
     try:
         model = resolve_model(model or config.api_model or DEFAULT_MODEL)
     except ValueError as e:
@@ -81,9 +130,31 @@ def _chat(subject_slug: str, model: str | None, continues: str | None = None) ->
     if continues:
         continues = _continuable(subject, continues)
     asyncio.run(
-        chat(config, subject, sys.stdout, input, model=model, continues=continues)
+        chat(
+            config,
+            subject,
+            sys.stdout,
+            input,
+            model=model,
+            continues=continues,
+            reopen=reopen,
+        )
     )
     return 0
+
+
+def _last_api_model(subject, session_id: str) -> str | None:
+    """The model a resumed session ran on last, if the own loop ran it (as the web page's
+    Resume does); None after Claude Code, so config.toml's model applies."""
+    from velocity.chat import last_engine
+    from velocity.engine import OWN_LOOP
+    from velocity.session import Session, record_dir
+
+    session = Session(
+        subject.slug, session_id, record_dir(subject.slug), subject.sessions_dir
+    )
+    last = last_engine(subject, session)
+    return last["model"] if last["engine"] == OWN_LOOP else None
 
 
 def _sessions(subject_slug: str, search: str | None = None) -> int:
@@ -505,6 +576,14 @@ def main(argv: list[str] | None = None) -> int:
         metavar="SESSION",
         help="start a new session that picks up from a finished one, e.g. 2026-11-05-1",
     )
+    chat.add_argument(
+        "--resume",
+        nargs="?",
+        const=True,
+        metavar="SESSION",
+        help="resume a paused session: the newest one, or the one named, e.g. "
+        "2026-11-05-1 (by default on the model it ran on last)",
+    )
 
     sessions = commands.add_parser(
         "sessions", help="list a subject's sessions with their titles"
@@ -629,7 +708,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "tutor":
             return _tutor(args.subject, args.resume, args.continues)
         if args.command == "chat":
-            return _chat(args.subject, args.model, args.continues)
+            return _chat(args.subject, args.model, args.continues, args.resume)
         if args.command == "sessions":
             if args.remove_empty and args.search is not None:
                 parser.error("sessions: use --search or --remove-empty, not both")
