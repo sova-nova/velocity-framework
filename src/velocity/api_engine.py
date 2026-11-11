@@ -53,6 +53,10 @@ async def connect_mcp(subject: Subject):
     server = StdioServerParameters(
         command=sys.executable,
         args=["-m", "velocity.cli", "mcp", "--subject", subject.slug],
+        # The whole environment, as Claude Code passes it: the SDK's default keeps only
+        # a few variables, so the server would miss XDG_* (and read another config) and
+        # LLAMA_CPP_BINARY (found 2026-11-11).
+        env=dict(os.environ),
     )
     async with Client(server) as mcp:
         yield mcp_tool_caller(mcp), mcp_tool_params((await mcp.list_tools()).tools)
@@ -94,6 +98,19 @@ class ApiChat:
         )
 
     async def start(self) -> None:
+        self._prepare()
+        ready: asyncio.Future = asyncio.get_running_loop().create_future()
+        self._connection = asyncio.create_task(self._hold_connection(ready))
+        try:
+            call_tool, tools = await ready
+        except Exception as e:  # noqa: BLE001 - the MCP client raises many kinds
+            raise EngineError(f"Could not start velocity's tool server: {e}") from None
+        self.agent = self._make_agent(call_tool, tools)
+        self.agent.start()
+        self.session_id = active_session_id(self.subject.slug)
+
+    def _prepare(self) -> None:
+        """Check that the engine can run, and make its API client (unless given one)."""
         if self.stream is None:
             if not api_available():
                 raise EngineError(
@@ -103,13 +120,9 @@ class ApiChat:
             import anthropic
 
             self.stream = anthropic.AsyncAnthropic().beta.messages.stream
-        ready: asyncio.Future = asyncio.get_running_loop().create_future()
-        self._connection = asyncio.create_task(self._hold_connection(ready))
-        try:
-            call_tool, tools = await ready
-        except Exception as e:  # noqa: BLE001 - the MCP client raises many kinds
-            raise EngineError(f"Could not start velocity's tool server: {e}") from None
-        self.agent = TutorAgent(
+
+    def _make_agent(self, call_tool: ToolCaller, tools: list) -> TutorAgent:
+        return TutorAgent(
             config=self.config,
             subject=self.subject,
             stream=self.stream,
@@ -122,8 +135,6 @@ class ApiChat:
             reopen=self.reopen,
             web_ui=True,  # the page shows the reminder, and a source reader
         )
-        self.agent.start()
-        self.session_id = active_session_id(self.subject.slug)
 
     async def _hold_connection(self, ready: asyncio.Future) -> None:
         try:
@@ -167,7 +178,7 @@ class ApiChat:
             if turn.cancelled():
                 return
             if turn.exception() is not None:
-                yield ChatEvent("error", text=_api_error(turn.exception()))
+                yield ChatEvent("error", text=self._error(turn.exception()))
                 return
             stopped = self.agent.stop_requested
             yield ChatEvent("stopped" if stopped else "done", cost=self._cost())
@@ -190,7 +201,11 @@ class ApiChat:
             )
         return unknown_command(text, self.agent.skills)
 
-    def _cost(self) -> dict:
+    @staticmethod
+    def _error(error: BaseException) -> str:
+        return _api_error(error)
+
+    def _cost(self) -> dict | None:
         session = Session(
             self.subject.slug,
             self.session_id,

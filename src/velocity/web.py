@@ -738,7 +738,7 @@ def build_app(
     # -- chat --------------------------------------------------------------------------
 
     async def engine_list(request: Request) -> Response:
-        return JSONResponse(engines())
+        return JSONResponse(engines(config))
 
     async def chat_status(request: Request) -> Response:
         subject = subject_or_404(request.path_params["slug"])

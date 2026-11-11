@@ -1,5 +1,6 @@
-"""What a web chat engine is: Claude Code headless (claude_engine.py) or the own agent loop
-(api_engine.py). The chat manager (chat.py) drives either through this interface."""
+"""What a web chat engine is: Claude Code headless (claude_engine.py), the own agent loop
+(api_engine.py), or the free engine (openai_engine.py). The chat manager (chat.py) drives
+each through this interface."""
 
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
@@ -7,6 +8,7 @@ from typing import Protocol
 
 CLAUDE_CODE = "claude-code"
 OWN_LOOP = "api"
+FREE = "openai"  # any OpenAI-compatible server: local models or free tiers (2026-11-11)
 # Ends a reply the learner stopped, in the log (the partial text before it is kept).
 STOPPED_MARK = "*(stopped)*"
 

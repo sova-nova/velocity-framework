@@ -14,6 +14,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 TUTOR_DIR_NAME = "Tutor"
+# The free engine needs room for the tutor prompt and tools (~5K tokens) and a few turns.
+MIN_CONTEXT_SIZE = 8_192
 
 
 class ConfigError(Exception):
@@ -42,6 +44,12 @@ class Config:
     # [api] table: model and effort for `velocity chat`
     api_model: str | None = None
     api_effort: str | None = None
+    # [openai] table: the free engine, any OpenAI-compatible server (decided 2026-11-11)
+    openai_base_url: str | None = None
+    openai_model: str | None = None
+    openai_api_key_env: str | None = None  # the name of the variable, never the key
+    openai_context_size: int = 32_768
+    openai_images: bool = False
 
     @property
     def tutor_dir(self) -> Path:
@@ -116,11 +124,25 @@ def load_config(path: Path | None = None) -> Config:
     api = data.get("api", {})
     if not isinstance(api, dict):
         raise ConfigError(f"{path}: [api] must be a table")
+    free = data.get("openai", {})
+    if not isinstance(free, dict):
+        raise ConfigError(f"{path}: [openai] must be a table")
+    context_size = free.get("context_size", Config.openai_context_size)
+    if not isinstance(context_size, int) or context_size < MIN_CONTEXT_SIZE:
+        raise ConfigError(
+            f"{path}: [openai] context_size must be a number of tokens, at least "
+            f"{MIN_CONTEXT_SIZE}"
+        )
     return Config(
         vault.resolve(),
         Path(llama).expanduser() if llama else None,
         api.get("model"),
         api.get("effort"),
+        free.get("base_url") or None,
+        free.get("model") or None,
+        free.get("api_key_env") or None,
+        context_size,
+        bool(free.get("images", False)),
     )
 
 
@@ -252,7 +274,7 @@ def add_source(
 # a boolean, or an array (possibly over several lines).
 _VALUE = (
     r'(?:"""[\s\S]*?"""|\'\'\'[\s\S]*?\'\'\'|"(?:[^"\\\n]|\\.)*"|\'[^\'\n]*\''
-    r"|true|false|\[[^\]]*\])"
+    r"|true|false|-?\d[\d_]*|\[[^\]]*\])"
 )
 
 
@@ -323,6 +345,16 @@ vault_path = {vault}
 # [api]
 # model = "sonnet"   # opus, sonnet, haiku, or a full model id
 # effort = "medium"  # low, medium, high, xhigh, max
+
+# The free engine: any OpenAI-compatible server, e.g. Ollama on your computer, or a
+# hosted free tier. The key is read from the environment variable you name; it is never
+# stored here.
+# [openai]
+# base_url = "http://localhost:11434/v1"
+# model = "qwen3:4b"
+# api_key_env = ""        # e.g. "OPENROUTER_API_KEY"; empty for local servers
+# context_size = 32768    # tokens; match your server's setting
+# images = false          # true if the model can read images (pages of a PDF)
 """
 
 
@@ -361,6 +393,7 @@ def save_settings(changes: dict, create_vault: bool = False) -> Config:
         if effort and effort not in EFFORTS:
             raise ConfigError(f"Unknown effort {effort!r}: use {', '.join(EFFORTS)}.")
         lines["effort"] = ("api", _toml_string(effort) if effort else None)
+    lines.update(_free_engine_lines(changes))
 
     path = config_path()
     if not path.exists():
@@ -372,10 +405,49 @@ def save_settings(changes: dict, create_vault: bool = False) -> Config:
         )
     for key, (table, value) in lines.items():
         if table:
-            _set_in_table(path, table, key, value)
+            _set_in_table(path, table, key.removeprefix(f"{table}."), value)
         else:
             _set_top_level(path, key, value)
     return load_config()
+
+
+def _free_engine_lines(changes: dict) -> dict[str, tuple[str, str | None]]:
+    """The [openai] settings among `changes` (keys openai_base_url, openai_model,
+    openai_api_key_env, openai_context_size, openai_images), checked, as TOML values."""
+    lines: dict[str, tuple[str, str | None]] = {}
+    if "openai_base_url" in changes:
+        url = str(changes["openai_base_url"] or "").strip()
+        if url and not re.match(r"^https?://[^\s/]+", url):
+            raise ConfigError(
+                f"{url!r} is not a server address: it starts with http:// or https://."
+            )
+        lines["openai.base_url"] = ("openai", _toml_string(url) if url else None)
+    if "openai_model" in changes:
+        model = str(changes["openai_model"] or "").strip()
+        lines["openai.model"] = ("openai", _toml_string(model) if model else None)
+    if "openai_api_key_env" in changes:
+        name = str(changes["openai_api_key_env"] or "").strip()
+        if name and not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", name):
+            raise ConfigError(
+                "Give the name of the environment variable that holds the key (like "
+                "OPENROUTER_API_KEY), not the key itself."
+            )
+        lines["openai.api_key_env"] = ("openai", _toml_string(name) if name else None)
+    if "openai_context_size" in changes:
+        size = changes["openai_context_size"]
+        try:
+            size = int(size) if str(size).strip() else None
+        except ValueError:
+            raise ConfigError("The context size is a number of tokens.") from None
+        if size is not None and size < MIN_CONTEXT_SIZE:
+            raise ConfigError(f"The context size must be at least {MIN_CONTEXT_SIZE}.")
+        lines["openai.context_size"] = ("openai", str(size) if size else None)
+    if "openai_images" in changes:
+        lines["openai.images"] = (
+            "openai",
+            "true" if changes["openai_images"] else None,
+        )
+    return lines
 
 
 def _toml_string(text: str) -> str:

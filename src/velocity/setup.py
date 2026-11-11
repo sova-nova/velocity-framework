@@ -6,10 +6,12 @@ the settings (vault, OCR program, API defaults) can be changed later on the page
 writes config.toml (config.save_settings) and swaps the running app for one built on the
 new config, so no restart is needed (VelocityApp).
 
-API keys are never stored: the page says how to set ANTHROPIC_API_KEY in a terminal.
+API keys are never stored: the page says how to set ANTHROPIC_API_KEY in a terminal. The
+free engine's settings name the environment variable that holds its key, if it needs one.
 """
 
 import contextlib
+import dataclasses
 import importlib.util
 import os
 import shutil
@@ -22,6 +24,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 from starlette.routing import Route
 
+from velocity import openai_engine
 from velocity.config import (
     EFFORTS,
     MODEL_SHORT_NAMES,
@@ -33,6 +36,13 @@ from velocity.config import (
 )
 
 MAX_VAULT_SEARCH_DEPTH = 3
+FREE_ENGINE_SETTINGS = (
+    "openai_base_url",
+    "openai_model",
+    "openai_api_key_env",
+    "openai_context_size",
+    "openai_images",
+)
 
 
 def checks(config: Config | None) -> list[dict]:
@@ -129,6 +139,15 @@ def settings_json(config: Config | None, suggest: bool = False) -> dict:
         ),
         "api_model": (config.api_model or "") if config else "",
         "api_effort": (config.api_effort or "") if config else "",
+        # The free engine (2026-11-11): the server, its model, and the variable for a key.
+        "openai_base_url": (config.openai_base_url or "") if config else "",
+        "openai_model": (config.openai_model or "") if config else "",
+        "openai_api_key_env": (config.openai_api_key_env or "") if config else "",
+        "openai_context_size": (
+            config.openai_context_size if config else Config.openai_context_size
+        ),
+        "openai_images": bool(config and config.openai_images),
+        "openai_presets": openai_engine.PRESETS,
         "models": list(MODEL_SHORT_NAMES),
         "efforts": list(EFFORTS),
         "checks": checks(config),
@@ -161,6 +180,7 @@ def settings_routes(
         changes = {
             k: body[k]
             for k in ("vault_path", "llama_cpp_binary", "api_model", "api_effort")
+            + FREE_ENGINE_SETTINGS
             if k in body
         }
         new_vault = "vault_path" in changes and (
@@ -180,9 +200,33 @@ def settings_routes(
             await on_saved(saved)
         return JSONResponse({**settings_json(saved), "reload": new_vault})
 
+    async def test_model(request: Request) -> Response:
+        """The free engine's Test, on the settings as typed (saved or not)."""
+        try:
+            body = await request.json()
+        except ValueError:
+            body = {}
+        if not isinstance(body, dict):
+            body = {}
+        base = get_config() or Config(Path.home())
+        try:
+            size = int(body.get("openai_context_size") or base.openai_context_size)
+        except (TypeError, ValueError):
+            size = base.openai_context_size
+        trial = dataclasses.replace(
+            base,
+            openai_base_url=str(body.get("openai_base_url") or "").strip() or None,
+            openai_model=str(body.get("openai_model") or "").strip() or None,
+            openai_api_key_env=str(body.get("openai_api_key_env") or "").strip()
+            or None,
+            openai_context_size=size,
+        )
+        return JSONResponse(await openai_engine.check_model(trial))
+
     return [
         Route("/api/settings", get),
         Route("/api/settings", post, methods=["POST"]),
+        Route("/api/settings/test-model", test_model, methods=["POST"]),
     ]
 
 

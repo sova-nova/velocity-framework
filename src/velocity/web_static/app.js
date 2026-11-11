@@ -380,8 +380,7 @@ function fillModels(select, engine, chosen) {
 function engineNote(engine) {
   const unavailable = Object.values(engines).filter((e) => !e.available);
   const notes = unavailable.map((e) => `${e.label}: ${e.reason}`);
-  if (engine === "api") notes.unshift("Billed per token on your API key; the cost is shown as you go.");
-  else notes.unshift("Runs Claude Code with your Claude plan.");
+  if (engines[engine]?.note) notes.unshift(engines[engine].note);
   return notes.join(" ");
 }
 
@@ -389,6 +388,8 @@ function showStartChoice() {
   const engine = $("#engine").value;
   fillModels($("#model"), engine, savedModel(engine));
   $("#engine-hint").textContent = engineNote(engine);
+  // Where what the learner shares goes depends on the engine (the free one may be local).
+  if (engines[engine]?.reminder) $("#reminder").textContent = engines[engine].reminder;
   drawSwitch($("#engine-switch"), $("#engine"), (name) => name.replace(/ \(.*\)$/, ""));
   drawSwitch($("#model-switch"), $("#model"));
 }

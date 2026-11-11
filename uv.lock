@@ -1702,6 +1702,7 @@ default-groups = ["dev", "ocr"]
 dependencies = [
     { name = "anthropic" },
     { name = "mcp" },
+    { name = "openai" },
     { name = "pymupdf" },
     { name = "starlette" },
     { name = "uvicorn" },
@@ -1725,6 +1726,7 @@ ocr = [
 requires-dist = [
     { name = "anthropic", specifier = ">=0.125,<1" },
     { name = "mcp", specifier = ">=2.3" },
+    { name = "openai", specifier = ">=2.54,<3" },
     { name = "pymupdf", specifier = ">=2.1" },
     { name = "starlette", specifier = ">=1.10" },
     { name = "uvicorn", specifier = ">=0.54" },
