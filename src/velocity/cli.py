@@ -86,19 +86,35 @@ def _chat(subject_slug: str, model: str | None, continues: str | None = None) ->
     return 0
 
 
-def _sessions(subject_slug: str) -> int:
-    from velocity.session import session_summaries
+def _sessions(subject_slug: str, search: str | None = None) -> int:
+    from velocity.session import search_sessions, search_words, session_summaries
 
     subject = load_subject(load_config(), subject_slug)
-    summaries = session_summaries(subject.slug, subject.sessions_dir)
-    if not summaries:
-        print("No sessions yet.")
-        return 0
+    if search is not None:
+        if not search_words(search):
+            print("Give some words to search for.")
+            return 1
+        found = [
+            (m.session, m.snippet)
+            for m in search_sessions(subject.slug, subject.sessions_dir, search)
+        ]
+        if not found:
+            print(f'No sessions with "{search}".')
+            return 0
+    else:
+        found = [
+            (s, None) for s in session_summaries(subject.slug, subject.sessions_dir)
+        ]
+        if not found:
+            print("No sessions yet.")
+            return 0
     status = {"wrapped-up": "wrapped up", "no-wrap-up": "paused", None: "open"}
-    for s in summaries:
+    for s, snippet in found:
         label = s.title or f"(untitled) {s.first_message[:60]}"
         extra = f", continues {s.continues}" if s.continues else ""
         print(f"{s.id}  {label}  [{status[s.ended]}, {s.turns} messages{extra}]")
+        if snippet:
+            print(f"    {snippet}")
     return 0
 
 
@@ -504,6 +520,12 @@ def main(argv: list[str] | None = None) -> int:
         help="find empty and wrap-up-only sessions, list them, and remove them after "
         "you confirm",
     )
+    sessions.add_argument(
+        "--search",
+        metavar="WORDS",
+        help="only sessions with all these words (any case, any order) in their title "
+        "or log",
+    )
 
     web = commands.add_parser(
         "web", help="open the web UI in your browser (local only)"
@@ -609,13 +631,15 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "chat":
             return _chat(args.subject, args.model, args.continues)
         if args.command == "sessions":
+            if args.remove_empty and args.search is not None:
+                parser.error("sessions: use --search or --remove-empty, not both")
             if args.remove_empty:
                 return _remove_empty(args.subject)
             if not args.subject:
                 parser.error(
                     "sessions: give a subject, e.g. velocity sessions calculus"
                 )
-            return _sessions(args.subject)
+            return _sessions(args.subject, args.search)
         if args.command == "web":
             return _web(args.subject, args.port, not args.no_browser)
         if args.command == "new":

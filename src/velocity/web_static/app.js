@@ -76,17 +76,34 @@ function renderCallouts(container) {
 
 // -- history ---------------------------------------------------------------------------
 
+// History search (decided 2026-11-10): every word, any case and order, in a session's
+// name or its log. The search and the All / Paused / Done filter last until the subject
+// changes or the page reloads.
+let sessionQuery = "";
+let sessionFilter = "all";
+let sessionsLoad = 0; // only the newest request draws the list
+
+function searchWords(query = sessionQuery) {
+  return query.toLowerCase().split(/\s+/).filter(Boolean);
+}
+
 async function loadSessions(slug) {
+  const load = ++sessionsLoad;
   const list = $("#sessions");
-  list.innerHTML = "";
   $("#log").innerHTML = '<p class="hint">Pick a session to read its log.</p>';
   if (!slug) {
     list.innerHTML = '<li class="hint">No subject yet.</li>';
     return;
   }
-  const sessions = await getJSON(`/api/subjects/${slug}/sessions`);
+  const query = sessionQuery.trim();
+  const url = `/api/subjects/${slug}/sessions${query ? `?q=${encodeURIComponent(query)}` : ""}`;
+  const found = await getJSON(url);
+  if (load !== sessionsLoad) return; // typed on meanwhile
+  const sessions = sessionFilter === "all" ? found : found.filter((s) => s.ended === sessionFilter);
+  list.innerHTML = "";
   if (!sessions.length) {
-    list.innerHTML = '<li class="hint">No sessions yet.</li>';
+    const none = query || sessionFilter !== "all" ? "No sessions match." : "No sessions yet.";
+    list.innerHTML = `<li class="hint">${none}</li>`;
     return;
   }
   for (const s of sessions) {
@@ -100,11 +117,77 @@ async function loadSessions(slug) {
     button.querySelector(".chip").textContent = chip;
     button.querySelector(".chip").classList.add(state);
     button.querySelector(".meta").textContent = sessionFacts(s);
+    if (s.snippet) {
+      const snippet = Object.assign(document.createElement("span"), { className: "snippet" });
+      snippet.append(mathText(s.snippet));
+      button.append(snippet);
+    }
+    if (query) for (const part of button.querySelectorAll("strong, .snippet")) markWords(part);
     button.title = s.id;
     button.addEventListener("click", () => showSession(slug, s, button));
     item.append(button);
     list.append(item);
   }
+}
+
+// Wrap the search words in `root`'s text in <mark class="found">, outside rendered math.
+function markWords(root, words = searchWords()) {
+  if (!words.length) return [];
+  const escaped = words.map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+  const pattern = new RegExp(escaped.join("|"), "gi");
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+    acceptNode: (node) =>
+      node.parentElement.closest(".katex, mark, button.primary")
+        ? NodeFilter.FILTER_REJECT
+        : NodeFilter.FILTER_ACCEPT,
+  });
+  const nodes = [];
+  while (walker.nextNode()) nodes.push(walker.currentNode);
+  const marks = [];
+  for (const node of nodes) {
+    const text = node.textContent;
+    pattern.lastIndex = 0;
+    if (!pattern.test(text)) continue;
+    pattern.lastIndex = 0;
+    const pieces = document.createDocumentFragment();
+    let last = 0;
+    for (const m of text.matchAll(pattern)) {
+      pieces.append(text.slice(last, m.index));
+      const mark = Object.assign(document.createElement("mark"), { className: "found", textContent: m[0] });
+      marks.push(mark);
+      pieces.append(mark);
+      last = m.index + m[0].length;
+    }
+    pieces.append(text.slice(last));
+    node.replaceWith(pieces);
+  }
+  return marks;
+}
+
+let searchTimer = null;
+
+function setUpSessionSearch() {
+  $("#session-search").addEventListener("input", (event) => {
+    sessionQuery = event.target.value;
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => loadSessions(subject()), 250);
+  });
+  for (const button of $("#session-filter").children) {
+    button.addEventListener("click", () => {
+      sessionFilter = button.dataset.filter;
+      for (const b of $("#session-filter").children) b.setAttribute("aria-checked", String(b === button));
+      loadSessions(subject());
+    });
+  }
+}
+
+// A new subject starts with no search and every session shown.
+function clearSessionSearch() {
+  sessionQuery = "";
+  sessionFilter = "all";
+  clearTimeout(searchTimer);
+  $("#session-search").value = "";
+  for (const b of $("#session-filter").children) b.setAttribute("aria-checked", String(b.dataset.filter === "all"));
 }
 
 // [chip text, chip class] for a session's state.
@@ -188,6 +271,9 @@ async function showSession(slug, s, button) {
   if (body.firstElementChild?.tagName === "H1") body.firstElementChild.remove();
   article.append(body);
   linkifyCitations(article);
+  // Opened from a search: every match marked, and the first one in view.
+  const marks = markWords(body);
+  if (marks.length) marks[0].scrollIntoView({ block: "center" });
 }
 
 // -- views -----------------------------------------------------------------------------
@@ -772,6 +858,7 @@ async function start() {
   setUpSubjects();
   setUpLibrary();
   setUpProgress();
+  setUpSessionSearch();
   await Promise.all([loadSessions(slug), loadChat()]);
   if (!slug) openNewSubject();
 }

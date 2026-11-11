@@ -335,6 +335,14 @@
   <main id="history" class="view" hidden>
     <aside>
       <h2>Sessions</h2>
+      <div class="session-search">
+        <input id="session-search" type="search" placeholder="Search titles and logs" aria-label="Search sessions" autocomplete="off">
+        <div id="session-filter" class="segmented small" role="radiogroup" aria-label="Show">
+          <button type="button" role="radio" aria-checked="true" data-filter="all">All</button>
+          <button type="button" role="radio" aria-checked="false" data-filter="no-wrap-up">Paused</button>
+          <button type="button" role="radio" aria-checked="false" data-filter="wrapped-up">Done</button>
+        </div>
+      </div>
       <ul id="sessions"></ul>
     </aside>
     <article id="log">

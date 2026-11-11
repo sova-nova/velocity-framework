@@ -4,7 +4,7 @@
 // opens a list of the active subjects, then Edit <subject>…, New subject… and, when
 // there are any, Archived (n)…. Edit opens the subject's settings: name, color, extra
 // instructions, note folders, books, and Archive; they save as you go. Archived subjects can be recovered, or
-// deleted after typing their name. Uses $, getJSON, postJSON, loadSessions, loadChat and
+// deleted after typing their name. Uses $, getJSON, postJSON, loadSessions, clearSessionSearch, loadChat and
 // resetReader from app.js and reader.js.
 
 let allSubjects = []; // [{slug, name, color, sources, archived, sessions}]
@@ -81,6 +81,7 @@ async function switchSubject(slug) {
   drawSubjectMenu();
   showNoSubjects(false);
   await resetReader(slug);
+  clearSessionSearch();
   await Promise.all([loadSessions(slug), loadChat()]);
   if (activeView === "progress") loadProgress();
 }

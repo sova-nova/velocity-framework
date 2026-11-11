@@ -70,6 +70,7 @@ from velocity.session import (
     cleanup_candidates,
     record_dir,
     remove_sessions,
+    search_sessions,
     session_summaries,
 )
 from velocity.setup import VelocityApp, settings_routes
@@ -305,6 +306,9 @@ def build_app(
         subject = subject_or_404(request.path_params["slug"])
         if subject is None:
             return JSONResponse({"error": "unknown subject"}, 404)
+        query = request.query_params.get("q", "").strip()
+        if query:
+            return JSONResponse(await asyncio.to_thread(session_search, subject, query))
         return JSONResponse(session_list(subject))
 
     async def session_log(request: Request) -> Response:
@@ -939,13 +943,30 @@ async def _json(request: Request) -> dict:
 def session_list(subject) -> list[dict]:
     """The subject's sessions, newest first, with a short summary of each. Paused sessions
     also say which engine and model ran them last, the defaults for resuming them."""
-    out = []
-    for s in session_summaries(subject.slug, subject.sessions_dir):
-        item = asdict(s)
-        if s.ended == "no-wrap-up":
-            session = Session(
-                subject.slug, s.id, record_dir(subject.slug), subject.sessions_dir
-            )
-            item["last_engine"] = last_engine(subject, session)
-        out.append(item)
-    return out
+    return [
+        _session_item(subject, s)
+        for s in session_summaries(subject.slug, subject.sessions_dir)
+    ]
+
+
+def session_search(subject, query: str) -> list[dict]:
+    """The sessions a History search finds (decided 2026-11-10): name matches first,
+    then text matches with a snippet."""
+    return [
+        {
+            **_session_item(subject, m.session),
+            "match": "title" if m.in_title else "text",
+            "snippet": m.snippet,
+        }
+        for m in search_sessions(subject.slug, subject.sessions_dir, query)
+    ]
+
+
+def _session_item(subject, s) -> dict:
+    item = asdict(s)
+    if s.ended == "no-wrap-up":
+        session = Session(
+            subject.slug, s.id, record_dir(subject.slug), subject.sessions_dir
+        )
+        item["last_engine"] = last_engine(subject, session)
+    return item
