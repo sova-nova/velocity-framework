@@ -123,6 +123,7 @@ The same tutor in your terminal, streamed from the Anthropic API. Type `/model` 
 |---|---|
 | `velocity subjects` | List subjects |
 | `velocity sessions <subject>` | List a subject's sessions with their titles |
+| `velocity sessions [<subject>] --remove-empty` | Find sessions with nothing in them (or only a wrap-up of nothing), in one subject or all, and remove them after you confirm. Empty sessions are removed when they end; this cleans up older ones. Also in Settings (Find empty sessions…) |
 | `velocity tutor <subject> --continue <session>` | Start a new session that picks up from a finished one (also for `velocity chat`) |
 | `velocity web [subject]` | Open the local web UI at http://127.0.0.1:8765: chat (through Claude Code, or the API if `ANTHROPIC_API_KEY` is set) and session history |
 | `velocity source list <subject>` | List a subject's sources |

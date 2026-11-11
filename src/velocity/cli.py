@@ -102,6 +102,40 @@ def _sessions(subject_slug: str) -> int:
     return 0
 
 
+def _remove_empty(subject_slug: str | None) -> int:
+    """List empty and wrap-up-only sessions (one subject, or all), then remove them after
+    the learner confirms (decided 2026-11-10)."""
+    from velocity.session import cleanup_candidates, remove_sessions
+
+    config = load_config()
+    slugs = [subject_slug] if subject_slug else list_subjects(config)
+    found = []
+    for slug in slugs:
+        subject = load_subject(config, slug)
+        candidates = cleanup_candidates(subject.slug, subject.sessions_dir)
+        if not candidates:
+            continue
+        print(subject.name)
+        for c in candidates:
+            kept = f" (kept: {c.kept})" if c.kept else ""
+            print(f"  {c.session_id}  {c.reason}{kept}")
+        found.append((subject, [c.session_id for c in candidates if not c.kept]))
+    total = sum(len(ids) for _, ids in found)
+    if not total:
+        print("No empty sessions to remove.")
+        return 0
+    answer = input(f"Remove {total} session{'s' if total != 1 else ''}? [y/N] ")
+    if answer.strip().lower() not in ("y", "yes"):
+        print("Nothing removed.")
+        return 0
+    removed = sum(
+        remove_sessions(subject.slug, subject.sessions_dir, ids)
+        for subject, ids in found
+    )
+    print(f"Removed {removed} session{'s' if removed != 1 else ''}.")
+    return 0
+
+
 def _web(subject_slug: str | None, port: int, open_browser: bool) -> int:
     import threading
     import webbrowser
@@ -459,7 +493,17 @@ def main(argv: list[str] | None = None) -> int:
     sessions = commands.add_parser(
         "sessions", help="list a subject's sessions with their titles"
     )
-    sessions.add_argument("subject", help="subject id, e.g. calculus")
+    sessions.add_argument(
+        "subject",
+        nargs="?",
+        help="subject id, e.g. calculus (with --remove-empty: all subjects if left out)",
+    )
+    sessions.add_argument(
+        "--remove-empty",
+        action="store_true",
+        help="find empty and wrap-up-only sessions, list them, and remove them after "
+        "you confirm",
+    )
 
     web = commands.add_parser(
         "web", help="open the web UI in your browser (local only)"
@@ -565,6 +609,12 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "chat":
             return _chat(args.subject, args.model, args.continues)
         if args.command == "sessions":
+            if args.remove_empty:
+                return _remove_empty(args.subject)
+            if not args.subject:
+                parser.error(
+                    "sessions: give a subject, e.g. velocity sessions calculus"
+                )
             return _sessions(args.subject)
         if args.command == "web":
             return _web(args.subject, args.port, not args.no_browser)

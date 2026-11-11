@@ -178,12 +178,33 @@
     </div>
     <h3>On this computer</h3>
     <ul id="app-checks" class="checks"></ul>
+    <h3>Sessions</h3>
+    <div class="inline">
+      <button id="cleanup-open" title="Sessions with nothing in them, or only a wrap-up of nothing">Find empty sessions…</button>
+      <span class="hint">Empty sessions are removed when they end; this finds any left over.</span>
+    </div>
     <p id="app-settings-status" class="hint" hidden></p>
     <div class="dialog-actions">
       <button id="app-settings-close">Close</button>
       <button id="app-settings-save" class="primary">Save</button>
     </div>
     <p class="hint">Saved in <code id="app-config-path"></code>.</p>
+  </dialog>
+  <dialog id="cleanup">
+    <h2>Empty sessions</h2>
+    <p class="hint">Sessions with nothing in them, or only a wrap-up of nothing, in every
+      subject. Removing deletes their records and logs. Your progress stays as it is.</p>
+    <ul id="cleanup-list" class="cleanup-list"></ul>
+    <p id="cleanup-status" class="hint" hidden></p>
+    <div class="dialog-actions">
+      <button id="cleanup-close">Close</button>
+      <button id="cleanup-remove" class="primary" hidden>Remove these…</button>
+    </div>
+    <div id="cleanup-confirm" class="confirm" hidden>
+      <span id="cleanup-question"></span>
+      <button id="cleanup-no">Cancel</button>
+      <button id="cleanup-yes" class="danger">Remove</button>
+    </div>
   </dialog>
   <dialog id="new-subject">
     <h2>New subject</h2>

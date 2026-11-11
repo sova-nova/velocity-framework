@@ -110,7 +110,75 @@ async function saveAppSettings() {
   }
 }
 
+// -- Settings → Find empty sessions… (decided 2026-11-10) -------------------------------
+// Lists empty and wrap-up-only sessions in every subject; the open session is never listed,
+// and one the learner wrote in (or that a later session continues) is shown as kept.
+
+let cleanupFound = [];
+
+async function openCleanup() {
+  $("#cleanup-list").innerHTML = "";
+  $("#cleanup-confirm").hidden = true;
+  setupStatus("#cleanup-status", "Looking…");
+  $("#cleanup").showModal();
+  try {
+    cleanupFound = await getJSON("/api/cleanup/sessions");
+  } catch (error) {
+    setupStatus("#cleanup-status", error.message, true);
+    return;
+  }
+  drawCleanup();
+}
+
+function drawCleanup() {
+  const list = $("#cleanup-list");
+  list.innerHTML = "";
+  const removable = cleanupFound.filter((c) => !c.kept);
+  for (const c of cleanupFound) {
+    const item = document.createElement("li");
+    item.classList.toggle("kept", Boolean(c.kept));
+    const what = document.createElement("span");
+    what.className = "what";
+    what.textContent = `${c.subject_name} · ${whenText(c.started) || c.session_id}`;
+    const why = document.createElement("span");
+    why.className = "reason";
+    why.textContent = c.kept ? `${c.reason}, kept: ${c.kept}` : c.reason;
+    item.append(what, why);
+    list.append(item);
+  }
+  setupStatus("#cleanup-status", cleanupFound.length ? "" : "No empty sessions. Nothing to clean up.");
+  const button = $("#cleanup-remove");
+  button.hidden = !removable.length;
+  button.textContent = `Remove ${removable.length} session${removable.length === 1 ? "" : "s"}…`;
+}
+
+function askCleanup() {
+  const n = cleanupFound.filter((c) => !c.kept).length;
+  $("#cleanup-question").textContent = `Remove ${n} session${n === 1 ? "" : "s"}? This can't be undone.`;
+  $("#cleanup-confirm").hidden = false;
+}
+
+async function removeCleanup() {
+  $("#cleanup-confirm").hidden = true;
+  const sessions = cleanupFound.filter((c) => !c.kept).map((c) => ({ subject: c.subject, id: c.session_id }));
+  try {
+    const { removed } = await postJSON("/api/cleanup/sessions", { sessions });
+    cleanupFound = await getJSON("/api/cleanup/sessions");
+    drawCleanup();
+    setupStatus("#cleanup-status", `Removed ${removed} session${removed === 1 ? "" : "s"}.`);
+    if (currentSlug) loadSessions(currentSlug); // History and "Pick up" show what's left
+    if (currentSlug && typeof loadPickUp === "function") loadPickUp();
+  } catch (error) {
+    setupStatus("#cleanup-status", error.message, true);
+  }
+}
+
 function setUpSettings() {
+  $("#cleanup-open").addEventListener("click", openCleanup);
+  $("#cleanup-close").addEventListener("click", () => $("#cleanup").close());
+  $("#cleanup-remove").addEventListener("click", askCleanup);
+  $("#cleanup-no").addEventListener("click", () => ($("#cleanup-confirm").hidden = true));
+  $("#cleanup-yes").addEventListener("click", removeCleanup);
   $("#settings-button").addEventListener("click", openAppSettings);
   $("#app-settings-save").addEventListener("click", saveAppSettings);
   $("#app-settings-close").addEventListener("click", () => $("#app-settings").close());

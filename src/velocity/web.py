@@ -67,7 +67,9 @@ from velocity.session import (
     SESSION_ID,
     Session,
     active_session_id,
+    cleanup_candidates,
     record_dir,
+    remove_sessions,
     session_summaries,
 )
 from velocity.setup import VelocityApp, settings_routes
@@ -251,6 +253,33 @@ def build_app(
                 409,
             )
         return JSONResponse(settings_of(set_archived(config, subject.slug, archived)))
+
+    async def cleanup_list(request: Request) -> Response:
+        """Empty and wrap-up-only sessions in every subject, for Settings."""
+        out = []
+        for slug in list_subjects(config):
+            subject = subject_or_404(slug)
+            if subject is None:
+                continue
+            for c in cleanup_candidates(subject.slug, subject.sessions_dir):
+                out.append({"subject": slug, "subject_name": subject.name, **asdict(c)})
+        return JSONResponse(out)
+
+    async def cleanup_remove(request: Request) -> Response:
+        """Remove the listed sessions: each only if the cleanup would still remove it."""
+        wanted = (await _json(request)).get("sessions")
+        if not isinstance(wanted, list):
+            return JSONResponse({"error": "Give the sessions to remove."}, 400)
+        by_subject: dict[str, list[str]] = {}
+        for item in wanted:
+            if isinstance(item, dict) and SESSION_ID.match(str(item.get("id", ""))):
+                by_subject.setdefault(str(item.get("subject")), []).append(item["id"])
+        removed = 0
+        for slug, ids in by_subject.items():
+            subject = subject_or_404(slug)
+            if subject is not None:
+                removed += remove_sessions(subject.slug, subject.sessions_dir, ids)
+        return JSONResponse({"removed": removed})
 
     async def subject_delete(request: Request) -> Response:
         """Delete an archived subject, once the learner has typed its name."""
@@ -828,6 +857,8 @@ def build_app(
             prepare_cancel,
             methods=["POST"],
         ),
+        Route("/api/cleanup/sessions", cleanup_list),
+        Route("/api/cleanup/sessions", cleanup_remove, methods=["POST"]),
         Route("/api/subjects/{slug}/progress", progress),
         Route("/api/subjects/{slug}/sessions", sessions),
         Route("/api/subjects/{slug}/sessions/{session_id}", session_log),
