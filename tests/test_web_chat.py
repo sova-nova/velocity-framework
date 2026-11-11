@@ -267,6 +267,27 @@ def test_idle_chats_are_paused(client, config, clock):
     assert session(config, session_id).ended
 
 
+def test_the_status_says_a_chat_was_paused_for_being_idle(client, config, clock):
+    """A page still showing the chat says so, and resumes it on the next message
+    (decided 2026-11-10)."""
+    assert IDLE_TIMEOUT == 2 * 60 * 60
+    post(client, "start")
+    say(client, "hi")
+    session_id = active_session_id("calculus")
+    assert client.get("/api/subjects/calculus/chat").json()["idle_paused"] is None
+    clock.now += IDLE_TIMEOUT + 1
+    client.portal.call(client.app.state.chats.pause_idle)
+    status = client.get("/api/subjects/calculus/chat").json()
+    assert status["open"] is False and status["idle_paused"] == session_id
+
+    # Resuming it (what the page does when the learner sends) clears it.
+    post(client, "start", {"resume": session_id})
+    assert client.get("/api/subjects/calculus/chat").json()["idle_paused"] is None
+    assert [e["type"] for e in say(client, "back again")][-1] == "done"
+    post(client, "pause")  # paused by the learner: nothing to say
+    assert client.get("/api/subjects/calculus/chat").json()["idle_paused"] is None
+
+
 def test_stopping_the_server_pauses_open_chats(config, clock):
     manager = ChatManager(config, fake_engine, clock=clock)
     with TestClient(build_app(config, manager), base_url="http://127.0.0.1:8765") as c:
