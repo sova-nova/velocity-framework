@@ -77,13 +77,14 @@ function renderCallouts(container) {
 
 // A recorded answer (decided 2026-11-10): a divider across the chat, colored by the
 // outcome. In the log it is a line like "*✓ Recorded: correct · one-sided limits*".
-const RECORDED_MARKS = { correct: "✓", hinted: "~", incorrect: "✗" };
+const RECORDED_MARKS = { correct: "✓", hinted: "~", partial: "◐", incorrect: "✗" };
 
 function recordedDivider(outcome, topic) {
   const divider = document.createElement("div");
   divider.className = `recorded ${RECORDED_MARKS[outcome] ? outcome : ""}`;
   const label = document.createElement("span");
-  const word = outcome ? outcome[0].toUpperCase() + outcome.slice(1) : "Recorded";
+  const word = outcome === "partial" ? "Partly right"
+    : outcome ? outcome[0].toUpperCase() + outcome.slice(1) : "Recorded";
   label.append(`${RECORDED_MARKS[outcome] || "·"} ${word}`);
   if (topic) label.append(" · ", mathText(topic));
   divider.append(label);
@@ -94,7 +95,7 @@ function renderRecorded(container) {
   for (const p of container.querySelectorAll("p")) {
     const em = p.firstElementChild;
     if (!em || em.tagName !== "EM" || p.childElementCount !== 1 || p.textContent.trim() !== em.textContent.trim()) continue;
-    const match = em.textContent.trim().match(/^[✓~✗·] Recorded: (\w+)(?: · (.*))?$/);
+    const match = em.textContent.trim().match(/^[✓~◐✗·] Recorded: (\w+)(?: · (.*))?$/);
     if (match) p.replaceWith(recordedDivider(match[1], match[2] || ""));
   }
 }

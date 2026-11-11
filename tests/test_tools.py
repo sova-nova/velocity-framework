@@ -175,7 +175,7 @@ def test_state_tools_over_mcp(tools, subject):
         async with Client(build_server(tools)) as client:
             ok = await client.call_tool(
                 "record_question",
-                {"topic": "Limits", "question": "q", "outcome": "hinted"},
+                {"topic": "Limits", "question": "q", "outcome": "partial"},
             )
             bad = await client.call_tool(
                 "record_question",
@@ -184,7 +184,7 @@ def test_state_tools_over_mcp(tools, subject):
             return ok, bad
 
     ok, bad = asyncio.run(run())
-    assert not ok.is_error and "Recorded (hinted)" in ok.content[0].text
+    assert not ok.is_error and "Recorded (partial)" in ok.content[0].text
     assert bad.is_error
 
 
@@ -207,6 +207,7 @@ def test_a_recorded_answer_is_a_line_in_the_log(tools, subject):
         "Limits by factoring", "$\\lim_{x\\to2}\\frac{x^2-4}{x-2}$", "correct"
     )
     tools.record_question("limits by factoring", "Why cancel?", "hinted")
+    tools.record_question("Limits by factoring", "And at $x=3$?", "partial")
     s.append("tutor", "> [!success]\n> Right.")
     s.render()
     log = s.log_path.read_text(encoding="utf-8")
@@ -214,12 +215,14 @@ def test_a_recorded_answer_is_a_line_in_the_log(tools, subject):
     assert (
         "*~ Recorded: hinted · Limits by factoring*" in log
     )  # the topic's stored name
+    assert "*◐ Recorded: partial · Limits by factoring*" in log
     assert log.index("It is 4.") < log.index("✓ Recorded") < log.index("[!success]")
     assert "**Tutor:**\n\n> [!success]\n> Right." in log  # a callout on its own line
     assert s.check_log().missing == []
     assert [m for m in conversation(s) if m["role"] == "recorded"] == [
         {"role": "recorded", "text": "correct", "title": "Limits by factoring"},
         {"role": "recorded", "text": "hinted", "title": "Limits by factoring"},
+        {"role": "recorded", "text": "partial", "title": "Limits by factoring"},
     ]
     assert not s.empty
 

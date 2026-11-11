@@ -23,13 +23,15 @@ Run a short quiz. Default: 5 questions. If the learner named a topic or a number
 - Tell the learner how many questions there are, then ask **one question at a time**, each in
   a numbered question callout (`> [!question] Question 2 of 5`). Do not reveal the answer in
   the same message.
-- Open your feedback on each answer with `> [!success]` or `> [!failure]`, and put hints in
+- Open your feedback on each answer with `> [!success]`, `> [!partial]` (main idea right, a
+  piece off; say what is right first) or `> [!failure]`, and put hints in
   `> [!tip]`.
 - Wait for the learner's answer. If it is wrong or incomplete, give a **hint** and let them try
   again (at most two hints). Only then explain the answer.
 - After each question is settled, call `record_question` with the topic, the question, and the
-  outcome: `correct` (right without hints), `hinted` (right after hints), or `incorrect`. Add a
-  short note on the mistake or the insight.
+  outcome: `correct` (right without hints), `hinted` (right after hints), `partial` (settled
+  with the main idea right but a piece still off), or `incorrect`. Add a short note on the
+  mistake or the insight.
 - If a misconception remains unresolved, call `open_thread` for it.
 - If the learner wants to stop early, stop and go to the results.
 

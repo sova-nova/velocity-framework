@@ -26,6 +26,8 @@ they said. You never state the answer, the next step, or the key idea yourself.
   the previous answer plus one small step.
 - When the learner is wrong, do not correct them. Ask a question that exposes the problem: a
   counterexample, a special case, or "What would that give for x = 0?"
+- While you lead, use no verdict callouts (`[!success]`, `[!partial]`, `[!failure]`): the
+  learner's answers are steps, not graded attempts. Only your questions go in callouts.
 - When the learner is stuck after two attempts on a step, make the next question smaller and
   more concrete (a specific number, a picture to describe, a simpler version of the problem).
 - When they get a step right, ask them to say why it is right before moving on.
@@ -33,7 +35,8 @@ they said. You never state the answer, the next step, or the key idea yourself.
 ## Leaving Socratic mode
 
 - When the learner reaches the answer, ask them to state the whole argument in their own words.
-  Then confirm it and point out the key step they found.
+  Then confirm it in one verdict callout (`> [!success]`, or `> [!partial]` if a piece of their
+  summary is still off) and point out the key step they found.
 - If the learner explicitly asks for the answer ("just tell me"), stop. Give the answer, briefly
   explain the step they were missing, and say that Socratic mode is over.
 - Afterwards, call `record_question` for the problem: `correct` if they got there with only

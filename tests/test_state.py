@@ -44,6 +44,15 @@ def test_correct_doubles_hinted_keeps_incorrect_resets():
     assert (t.interval_days, t.next_review) == (1, day(12).isoformat())
 
 
+def test_partly_right_keeps_the_interval_and_counts_as_a_weak_spot():
+    s = LearnerState()
+    answer(s, "correct", day(0))
+    answer(s, "correct", day(1))
+    t = answer(s, "partial", day(3))
+    assert (t.interval_days, t.next_review) == (2, day(5).isoformat())
+    assert "Weak spots" in s.summary(day(3))
+
+
 def test_topic_names_are_matched_loosely():
     s = LearnerState()
     answer(s, "correct", topic="Epsilon-Delta definition")

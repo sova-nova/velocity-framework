@@ -4,7 +4,8 @@ Stored as <vault>/Tutor/<subject>/state.json, written only by velocity. A readab
 progress.md is regenerated next to it after every change.
 
 Scheduling: each topic has a review interval in days. A correct answer doubles it,
-an answer that needed hints keeps it, and a wrong answer resets it to one day.
+an answer that needed hints or was partly right keeps it, and a wrong answer resets it
+to one day.
 """
 
 import json
@@ -16,7 +17,8 @@ from pathlib import Path
 from typing import Literal
 
 Status = Literal["introduced", "practicing", "solid"]
-Outcome = Literal["correct", "hinted", "incorrect"]
+Outcome = Literal["correct", "hinted", "partial", "incorrect"]
+OUTCOMES = ("correct", "hinted", "partial", "incorrect")
 
 STATE_VERSION = 1
 
@@ -86,9 +88,9 @@ class LearnerState:
         note: str = "",
         source: str | None = None,
     ) -> Topic:
-        if outcome not in ("correct", "hinted", "incorrect"):
+        if outcome not in OUTCOMES:
             raise StateError(
-                f"outcome must be correct, hinted, or incorrect, not {outcome!r}"
+                f"outcome must be correct, hinted, partial, or incorrect, not {outcome!r}"
             )
         topic_id = self.touch_topic(topic, today, source)
         t = self.topics[topic_id]

@@ -356,7 +356,8 @@ class TutorTools:
         """Record the outcome of a question the learner answered.
 
         Call this after every question you asked and the learner answered. outcome is
-        "correct", "hinted" (needed hints), or "incorrect". topic is a short name, e.g.
+        "correct", "hinted" (right after hints), "partial" (the main idea or method right,
+        but a detail, step or number off), or "incorrect". topic is a short name, e.g.
         "epsilon-delta definition"; reuse names consistently. note: what went wrong or
         right, in a few words. source: section it came from, e.g. "Stewart §2.4".
         Write math in question and note as LaTeX ($...$), as in the session log.

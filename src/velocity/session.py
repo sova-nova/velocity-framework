@@ -25,7 +25,7 @@ RECAP_TITLE = "Session recap"
 
 # A recorded answer, as a line in the log (decided 2026-11-10): the web page draws it as a
 # divider colored by the outcome.
-RECORDED_MARKS = {"correct": "✓", "hinted": "~", "incorrect": "✗"}
+RECORDED_MARKS = {"correct": "✓", "hinted": "~", "partial": "◐", "incorrect": "✗"}
 
 
 def recorded_line(outcome: str, topic: str) -> str:
