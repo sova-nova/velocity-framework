@@ -43,6 +43,7 @@ An excerpt from a real session log, as it appears in Obsidian (math renders ther
 | `/explain-differently` | Re-explains the last concept from a different angle |
 | `/assign-problems [section] [n]` | Assigns exercises (from your source when there is one), then checks your work |
 | `/review-notes [note]` | Critiques your notes without rewriting them |
+| `/next` | Suggests two or three things to do next (open threads, weak spots, the next section) without starting any |
 | `/end-session` | Recap, progress update, review schedule, a prompt to take notes |
 
 ## Setup
