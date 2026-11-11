@@ -682,6 +682,20 @@ button:disabled { opacity: 0.5; cursor: default; }
   padding-left: 0.75rem;
 }
 .reply-cost { margin: -0.5rem 0 0.75rem; font-size: 0.75rem; color: var(--muted); }
+/* A chat paused behind the learner's back (idle, or the server stopped). */
+.paused-note {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 0.75rem 0;
+  padding: 0.6rem 0.8rem;
+  border: 1px solid var(--paused);
+  border-left-width: 4px;
+  border-radius: 8px;
+  background: var(--panel);
+}
+.paused-note span { flex: 1; }
+.paused-note button { flex: none; }
 .cost { font-size: 0.85rem; color: var(--muted); white-space: nowrap; }
 .pickers { display: flex; gap: 1rem; flex-wrap: wrap; }
 .pickers label { display: inline-block; margin: 1rem 0 0.5rem; }

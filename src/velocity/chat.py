@@ -6,7 +6,9 @@ Decisions (M8 design review, 2026-11-06; engines 2026-11-09):
   session of the subject is open (velocity tutor, velocity chat, another chat), unless the
   learner closes that one (e.g. left over after a crash).
 - Pause stops the engine without a wrap-up, so the session can be resumed. A chat idle
-  for 30 minutes, and every chat when the server stops, is paused the same way.
+  for 2 hours (30 minutes until 2026-11-10), and every chat when the server stops, is
+  paused the same way. The status says when a chat was paused for being idle, so a page
+  still showing it can say so and resume it when the learner sends a message.
 - Resume reopens a paused session. On Claude Code: through its own `--resume` when the
   session has a Claude Code conversation, else by reopening the log and having the tutor
   read it. On the own loop: by rebuilding the conversation from the session record, for
@@ -46,7 +48,7 @@ from velocity.session import (
 )
 from velocity.workspace import build_workspace
 
-IDLE_TIMEOUT = 30 * 60  # seconds
+IDLE_TIMEOUT = 2 * 60 * 60  # seconds
 MODELS = {CLAUDE_CODE: claude_engine.MODELS, OWN_LOOP: api_engine.MODELS}
 
 
@@ -114,6 +116,8 @@ class ChatManager:
         self.api_engine_factory = api_engine_factory
         self.clock = clock
         self.chats: dict[str, OpenChat] = {}
+        # subject -> the session last paused for being idle, until a chat starts again
+        self.idle_paused: dict[str, str] = {}
 
     # -- status ----------------------------------------------------------------------
 
@@ -137,6 +141,8 @@ class ChatManager:
             # Open in another front end (or left over from a crash), not in this server.
             "elsewhere": session_id is not None and chat is None,
             "messages": conversation(session) if session and chat else [],
+            # Paused here for being idle (decided 2026-11-10): the page says so.
+            "idle_paused": None if chat else self.idle_paused.get(subject.slug),
         }
 
     # -- lifecycle -------------------------------------------------------------------
@@ -199,6 +205,7 @@ class ChatManager:
             session_id=resume or active_session_id(subject.slug),
         )
         self.chats[subject.slug] = chat
+        self.idle_paused.pop(subject.slug, None)
         self._record_engine(chat)
 
     def _claude_engine(
@@ -317,7 +324,11 @@ class ChatManager:
             if not chat.busy and now - chat.last_activity > IDLE_TIMEOUT
         ]
         for slug in idle:
-            await self.pause(self.chats[slug].subject)
+            chat = self.chats[slug]
+            session_id = chat.session_id or active_session_id(slug)
+            if session_id:
+                self.idle_paused[slug] = session_id
+            await self.pause(chat.subject)
         return idle
 
     async def shutdown(self) -> None:

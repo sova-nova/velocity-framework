@@ -475,6 +475,7 @@ let chatStatus = { open: false };
 
 function showChat(status, notice = "") {
   chatStatus = status;
+  pausedChat = null; // whatever is shown now replaces a paused chat's notice
   $("#chat-start").hidden = status.open;
   $("#chat-live").hidden = !status.open;
   $("#chat-notice").textContent =
@@ -618,6 +619,10 @@ function describeTool(name, input = {}) {
 // (it is already on the page, and the server doesn't log it twice).
 async function send(text, retry = false) {
   if (!text.trim()) return;
+  if (!(await readyToSend())) {
+    if (!$("#input").value) $("#input").value = text; // kept for after resuming
+    return;
+  }
   for (const old of document.querySelectorAll(".retry")) old.remove();
   if (!retry) addMessage("learner", text);
   const reply = addMessage("tutor", "");
@@ -637,6 +642,7 @@ async function send(text, retry = false) {
     scrollToEnd();
   };
   setBusy(true);
+  replying = true;
   scrollToEnd();
   try {
     const response = await fetch(`/api/subjects/${subject()}/chat/message`, {
@@ -670,9 +676,11 @@ async function send(text, retry = false) {
     if (pending) redraw();
     thinking.remove();
     if (!replyText) reply.remove();
+    replying = false;
     setBusy(false);
     if (failed && chatStatus.open) offerRetry(text);
     $("#input").focus();
+    refreshChat();
   }
 
   function handleEvent(event) {
@@ -716,6 +724,91 @@ async function send(text, retry = false) {
       chatEnded(event.text);
     }
   }
+}
+
+// -- a chat paused behind the learner's back (decided 2026-11-10) ----------------------
+// The server pauses a chat idle for 2 hours, and every chat when it stops. A page still
+// showing the chat notices (every minute, and when its tab is back in view), says so
+// with a Resume button, and resumes the same session when the learner sends a message.
+
+let pausedChat = null; // {session, engine, model, title, idle} while the notice shows
+let replying = false;
+
+async function checkChat() {
+  const slug = subject();
+  if (!slug || !chatStatus.open || pausedChat || replying) return;
+  const status = await getJSON(`/api/subjects/${slug}/chat`).catch(() => null);
+  if (!status || status.open || slug !== subject() || !chatStatus.open || pausedChat) return;
+  if (status.elsewhere) showChat(status); // another front end has the subject now
+  else if (status.idle_paused) markPaused(status.idle_paused, true);
+  else if (chatStatus.session) markPaused(chatStatus.session, false);
+  else showChat(status, "This chat was paused before it began. Start a new session below.");
+}
+
+function markPaused(session, idle) {
+  pausedChat = {
+    session,
+    engine: chatStatus.engine,
+    model: chatStatus.model,
+    title: chatStatus.title,
+    idle,
+  };
+  const note = Object.assign(document.createElement("div"), { id: "paused-note", className: "paused-note" });
+  const text = document.createElement("span");
+  text.textContent = idle
+    ? "Paused after 2 hours without activity. Send a message to carry on."
+    : "This session was paused (the server was stopped, or it was paused in another window). " +
+      "Send a message to carry on.";
+  const resume = Object.assign(document.createElement("button"), { className: "primary", textContent: "Resume" });
+  resume.addEventListener("click", () => resumePaused());
+  note.append(text, resume);
+  $("#messages").append(note);
+  scrollToEnd();
+}
+
+// Resume the paused session on its engine and model, keeping the conversation on screen.
+// If that fails, say why and offer the Resume dialog (another engine, say).
+async function resumePaused() {
+  const p = pausedChat;
+  if (!p) return true;
+  const button = $("#paused-note button");
+  if (button) button.disabled = true;
+  try {
+    const status = await postJSON(`/api/subjects/${subject()}/chat/start`, {
+      resume: p.session,
+      engine: p.engine,
+      model: p.model,
+    });
+    $("#paused-note")?.remove();
+    showChat(status);
+    const why = p.idle ? "it was paused after 2 hours without activity" : "it was paused";
+    const cost = p.engine === "api" ? " The next reply re-sends the session, so it costs more." : "";
+    addNote(`Resumed: ${why}.${cost}`, "tool");
+    return true;
+  } catch (error) {
+    if (button) button.disabled = false;
+    addNote(`Could not resume: ${error.message}`, "error");
+    askResume(p.title || p.session, { engine: p.engine, model: p.model }, (choice) => {
+      pausedChat = { ...p, ...choice };
+      resumePaused();
+    });
+    return false;
+  }
+}
+
+// After each reply: the session's id (a new Claude Code chat learns it from its first
+// turn) and its title, which the tutor may just have set.
+async function refreshChat() {
+  const slug = subject();
+  if (!slug || !chatStatus.open || replying) return;
+  const status = await getJSON(`/api/subjects/${slug}/chat`).catch(() => null);
+  if (status?.open && slug === subject() && chatStatus.open && !replying) showChat(status);
+}
+
+// Before sending: a chat paused since the last check is noticed now, and resumed.
+async function readyToSend() {
+  if (!pausedChat) await checkChat();
+  return pausedChat ? resumePaused() : true;
 }
 
 // After a failed reply: send the same message again with one click.
@@ -826,6 +919,10 @@ function setUpChat() {
     const text = $("#input").value;
     $("#input").value = "";
     send(text);
+  });
+  setInterval(checkChat, 60 * 1000);
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) checkChat();
   });
   $("#input").addEventListener("keydown", (event) => {
     if (event.key === "Enter" && !event.shiftKey) {
