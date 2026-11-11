@@ -22,6 +22,7 @@
   --paused: #c98a14;
   --done: #3f9a5c;
   --progress: #3b82c4;
+  --found: rgba(59, 130, 196, 0.22); /* search matches; not the citations' yellow */
   --subject: #2a9d8f; /* the open subject's color; set by subjects.js */
   color-scheme: light;
 }
@@ -45,6 +46,7 @@
     --danger: #e5766d;
     --warn: #e0b04a;
     --ok: #7cc98a;
+    --found: rgba(110, 170, 230, 0.32);
     color-scheme: dark;
   }
 }
@@ -195,6 +197,31 @@ aside {
 aside h2 { font-size: 0.85rem; text-transform: uppercase; color: var(--muted); margin: 0.25rem; }
 
 #sessions { list-style: none; margin: 0; padding: 0; }
+
+/* History search (decided 2026-11-10): words, then All / Paused / Done. */
+.session-search { display: flex; flex-direction: column; gap: 0.4rem; margin: 0.25rem 0.25rem 0.6rem; }
+.session-search input {
+  width: 100%;
+  font: inherit;
+  font-size: 0.9rem;
+  color: var(--text);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.35rem 0.5rem;
+}
+.segmented.small { align-self: flex-start; }
+.segmented.small button { padding: 0.15rem 0.7rem; font-size: 0.85rem; }
+.session .snippet {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-size: 0.82rem;
+  color: var(--muted);
+  margin-top: 0.2rem;
+}
+mark.found { background: var(--found); color: inherit; border-radius: 3px; padding: 0 0.1em; }
 
 .session {
   display: block;

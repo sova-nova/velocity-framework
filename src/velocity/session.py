@@ -479,6 +479,92 @@ def session_summaries(subject_slug: str, log_dir: Path) -> list[SessionSummary]:
     return out
 
 
+# -- searching sessions (decided 2026-11-10) ---------------------------------------------
+
+
+@dataclass(frozen=True)
+class SessionMatch:
+    """A session a search found: by its name (title, or first message), or by its text,
+    with a snippet around the first match."""
+
+    session: SessionSummary
+    in_title: bool
+    snippet: str | None
+
+
+SNIPPET_BEFORE = 60
+SNIPPET_AFTER = 100
+_MATH = re.compile(r"\$\$[\s\S]+?\$\$|\$[^\s$](?:[^$\n]*?[^\s$])?\$")
+_LOG_PROPERTIES = re.compile(r"\A---\n.*?\n---\n", re.DOTALL)
+
+
+def search_words(query: str) -> list[str]:
+    return query.lower().split()
+
+
+def search_sessions(subject_slug: str, log_dir: Path, query: str) -> list[SessionMatch]:
+    """Sessions with every word of `query` (any case, any order) in their name or their
+    log (the record when the log is missing). Name matches come first, then text
+    matches; newest first within each."""
+    words = search_words(query)
+    if not words:
+        return []
+    by_name, by_text = [], []
+    for summary in session_summaries(subject_slug, log_dir):
+        name = (summary.title or summary.first_message).lower()
+        if all(w in name for w in words):
+            by_name.append(SessionMatch(summary, True, None))
+            continue
+        text = _searchable_text(
+            Session(subject_slug, summary.id, record_dir(subject_slug), log_dir)
+        )
+        haystack = f"{name}\n{text.lower()}"
+        if all(w in haystack for w in words):
+            by_text.append(SessionMatch(summary, False, _snippet(text, words)))
+    return by_name + by_text
+
+
+def _searchable_text(session: Session) -> str:
+    """The log as plain-ish text: no properties or heading, no markdown marks, one line."""
+    try:
+        text = session.log_path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        text = session.rendered_text()
+    text = _LOG_PROPERTIES.sub("", text, count=1)
+    text = re.sub(r"\A\s*# .*\n", "", text)  # "# Subject — date (n)"
+    text = re.sub(r"^---$", "", text, flags=re.MULTILINE)
+    text = re.sub(r"^\*Session (?:ended|resumed)\b.*\*$", "", text, flags=re.MULTILINE)
+    text = re.sub(r"^> ?", "", text, flags=re.MULTILINE)
+    text = re.sub(r"\[!\w+\][ \t]*", "", text)
+    text = text.replace("**", "")
+    return " ".join(text.split())
+
+
+def _snippet(text: str, words: list[str]) -> str:
+    """About a line of `text` around the first match, cut at spaces and never inside math."""
+    lower = text.lower()
+    found = [(lower.find(w), w) for w in words if lower.find(w) >= 0]
+    if not found:
+        return text[: SNIPPET_BEFORE + SNIPPET_AFTER]
+    pos, word = min(found)
+    start = max(0, pos - SNIPPET_BEFORE)
+    end = min(len(text), pos + len(word) + SNIPPET_AFTER)
+    if start > 0:
+        space = text.rfind(" ", 0, start)
+        start = space + 1 if space >= 0 else 0
+    if end < len(text):
+        space = text.find(" ", end)
+        end = space if space >= 0 else len(text)
+    for m in _MATH.finditer(text):
+        if m.start() < start < m.end():
+            start = m.start()
+        if m.start() < end < m.end():
+            end = m.end()
+    prefix = "… " if start > 0 else ""
+    suffix = " …" if end < len(text) else ""
+    return prefix + text[start:end].strip() + suffix
+
+
 # -- cleaning up empty sessions (decided 2026-11-10) -------------------------------------
 
 
