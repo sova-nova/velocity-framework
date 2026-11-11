@@ -38,6 +38,26 @@ function renderMarkdown(source) {
   return container;
 }
 
+// Plain text with its $math$ rendered, for short lines (titles, names, tool lines) and
+// the learner's own messages, which are shown as typed rather than as markdown.
+// `$$...$$` is shown as display math only when `display` is set.
+function mathText(text, display = false) {
+  const span = document.createElement("span");
+  const parts = (text || "").split(/(\$\$[\s\S]+?\$\$|\$[^\s$](?:[^$\n]*?[^\s$])?\$)/);
+  parts.forEach((part, i) => {
+    if (i % 2 === 0) {
+      if (part) span.append(part);
+      return;
+    }
+    const block = part.startsWith("$$");
+    const tex = block ? part.slice(2, -2) : part.slice(1, -1);
+    const math = document.createElement("span");
+    math.innerHTML = katex.renderToString(tex, { displayMode: block && display, throwOnError: false });
+    span.append(math);
+  });
+  return span;
+}
+
 // "> [!example] Title" blockquotes become styled callouts, as in Obsidian.
 function renderCallouts(container) {
   for (const quote of container.querySelectorAll("blockquote")) {
@@ -75,7 +95,7 @@ async function loadSessions(slug) {
     button.className = "session";
     // Readable rows (H1): the title (or the first message), when, and a status chip.
     button.innerHTML = `<span class="top"><strong></strong><span class="chip"></span></span><span class="meta"></span>`;
-    button.querySelector("strong").textContent = sessionName(s);
+    button.querySelector("strong").append(mathText(sessionName(s)));
     const [chip, state] = s.ended ? STATUS[s.ended] : ["Open now", "open"];
     button.querySelector(".chip").textContent = chip;
     button.querySelector(".chip").classList.add(state);
@@ -141,7 +161,7 @@ async function showSession(slug, s, button) {
   const head = document.createElement("div");
   head.className = "log-head";
   const name = document.createElement("h1");
-  name.textContent = sessionName(s);
+  name.append(mathText(sessionName(s)));
   head.append(name);
   const action = sessionAction(s);
   if (action) head.append(action);
@@ -306,7 +326,7 @@ async function loadPickUp() {
     const what = document.createElement("span");
     what.className = "what";
     const title = document.createElement("strong");
-    title.textContent = sessionName(s);
+    title.append(mathText(sessionName(s)));
     const when = document.createElement("small");
     when.textContent = sessionFacts(s);
     what.append(title, when);
@@ -378,7 +398,7 @@ function showChat(status, notice = "") {
         "chat or another window). End it there, or close it here if nothing is using it."
       : "");
   $("#close-other").hidden = !status.elsewhere;
-  $("#chat-title").textContent = status.title || "New session";
+  $("#chat-title").replaceChildren(mathText(status.title || "New session"));
   const engine = engines[status.engine];
   const model = engine?.models[status.model] || status.model;
   $("#chat-meta").textContent = status.open
@@ -450,7 +470,7 @@ function addMessage(role, text, title) {
     div.append(renderMarkdown(`> [!example] ${title || ""}\n> ${text.split("\n").join("\n> ")}`));
     linkifyCitations(div);
   } else if (role === "learner") {
-    div.textContent = text;
+    div.append(mathText(text, true));
   } else {
     div.append(renderMarkdown(text));
     linkifyCitations(div);
@@ -579,10 +599,9 @@ async function send(text, retry = false) {
       }
     } else if (event.type === "tool") {
       thinking.hidden = false;
-      reply.before(Object.assign(document.createElement("p"), {
-        className: "tool",
-        textContent: describeTool(event.name, event.input || {}),
-      }));
+      const line = Object.assign(document.createElement("p"), { className: "tool" });
+      line.append(mathText(describeTool(event.name, event.input || {})));
+      reply.before(line);
     } else if (event.type === "note") {
       // A grey line like a tool call, e.g. when the own loop summarized earlier turns.
       reply.before(Object.assign(document.createElement("p"), {
@@ -649,7 +668,7 @@ function askResume(target, last, onChoice) {
   const dialog = $("#resume");
   const lastEngine = last.engine || DEFAULT_ENGINE;
   const engine = usableEngine(lastEngine);
-  $("#resume-title").textContent = `Resume "${target}"`;
+  $("#resume-title").replaceChildren('Resume "', mathText(target), '"');
   fillEngines($("#resume-engine"), engine);
   const showChoice = () => {
     const chosen = $("#resume-engine").value;
@@ -682,9 +701,12 @@ function askResume(target, last, onChoice) {
 function askToSwitch(verb, target, options) {
   const dialog = $("#switch");
   const current = chatStatus.title || chatStatus.session || "Your current session";
-  $("#switch-title").textContent = `${verb} "${target}"?`;
-  $("#switch-text").textContent =
-    `"${current}" is still open, and only one session per subject can be open at a time.`;
+  $("#switch-title").replaceChildren(`${verb} "`, mathText(target), '"?');
+  $("#switch-text").replaceChildren(
+    '"',
+    mathText(current),
+    '" is still open, and only one session per subject can be open at a time.',
+  );
   $("#switch-pause").textContent = `Pause it and ${verb.toLowerCase()}`;
   $("#switch-pause").onclick = async () => {
     dialog.close();
