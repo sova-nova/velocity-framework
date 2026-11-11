@@ -177,6 +177,40 @@
       <span class="hint">Used by <code>velocity chat</code>, and for effort on the page's API
         chats (you pick the model when you start one).</span>
     </div>
+    <!-- The free engine (decided 2026-11-11): any OpenAI-compatible server. -->
+    <h3>Free / other model</h3>
+    <p class="hint">A model on your computer (like Ollama) or a hosted free tier. It costs
+      nothing, but it is weaker than Claude: it makes more mistakes, including grading wrong
+      answers as right. These are suggestions, not endorsements; free tiers change often.</p>
+    <div class="field">
+      <span>Start from</span>
+      <div class="inline">
+        <select id="free-preset" aria-label="Start from"></select>
+        <a id="free-link" target="_blank" rel="noopener" hidden>Get it</a>
+      </div>
+    </div>
+    <label class="field">Server address
+      <input type="text" id="free-url" placeholder="e.g. http://localhost:11434/v1">
+    </label>
+    <label class="field">Model
+      <input type="text" id="free-model" placeholder="e.g. qwen3:4b">
+    </label>
+    <label class="field">Environment variable holding the key (empty for a model on your computer)
+      <input type="text" id="free-key-env" placeholder="e.g. OPENROUTER_API_KEY">
+    </label>
+    <span class="hint">velocity never stores keys. Set the variable in the terminal that runs
+      <code>velocity web</code>, then restart it.</span>
+    <label class="field">Context size (tokens)
+      <input type="number" id="free-context" min="8192" step="1024">
+    </label>
+    <span class="hint">How much the model can keep in mind. Match your server's setting; for
+      Ollama, start it with <code>OLLAMA_CONTEXT_LENGTH</code> set to this number.</span>
+    <label class="check"><input type="checkbox" id="free-images"> This model can see images
+      (lets the tutor look at pages of a PDF)</label>
+    <div class="inline">
+      <button id="free-test" type="button">Test</button>
+      <span id="free-test-result" class="hint" role="status"></span>
+    </div>
     <h3>On this computer</h3>
     <ul id="app-checks" class="checks"></ul>
     <h3>Sessions</h3>

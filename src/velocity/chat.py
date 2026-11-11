@@ -1,5 +1,6 @@
 """Web chats: at most one open chat per subject, each driving one tutor engine: Claude Code
-headless (claude_engine.py) or the own agent loop (api_engine.py).
+headless (claude_engine.py), the own agent loop (api_engine.py), or the free engine on
+any OpenAI-compatible server (openai_engine.py).
 
 Decisions (M8 design review, 2026-11-06; engines 2026-11-09):
 - One open session per subject across all front ends: a chat doesn't start while another
@@ -25,13 +26,14 @@ import time
 from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass
 
-from velocity import api_engine, claude_engine
+from velocity import api_engine, claude_engine, openai_engine
 from velocity.agent import MODEL_ALIASES, recorded_cost
 from velocity.api_engine import ApiChat, api_available
 from velocity.claude_engine import ClaudeCodeChat
 from velocity.config import Config, Subject
 from velocity.engine import (
     CLAUDE_CODE,
+    FREE,
     OWN_LOOP,
     STOPPED_MARK,
     ChatEvent,
@@ -52,6 +54,14 @@ IDLE_TIMEOUT = 2 * 60 * 60  # seconds
 MODELS = {CLAUDE_CODE: claude_engine.MODELS, OWN_LOOP: api_engine.MODELS}
 
 
+def engine_models(config: Config | None, engine: str) -> dict[str, str]:
+    """The models an engine offers. The free engine has one: the model in Settings."""
+    if engine == FREE:
+        model = config.openai_model if config else None
+        return {model: model} if model else {}
+    return MODELS.get(engine, {})
+
+
 class ChatError(Exception):
     def __init__(self, message: str, status: int = 400) -> None:
         super().__init__(message)
@@ -62,7 +72,7 @@ class ChatError(Exception):
 class OpenChat:
     subject: Subject
     engine: Engine
-    engine_name: str  # CLAUDE_CODE or OWN_LOOP
+    engine_name: str  # CLAUDE_CODE, OWN_LOOP or FREE
     model: str
     last_activity: float
     busy: bool = False
@@ -74,6 +84,8 @@ class OpenChat:
 EngineFactory = Callable[..., Engine]
 # Own loop: (config, subject, model, session to reopen, session it continues) -> engine
 ApiEngineFactory = Callable[..., Engine]
+# Free engine: (config, subject, session to reopen, session it continues) -> engine
+FreeEngineFactory = Callable[..., Engine]
 
 
 def default_engine(workspace, model, resume_id, env) -> ClaudeCodeChat:
@@ -84,14 +96,28 @@ def default_api_engine(config, subject, model, reopen, continues) -> ApiChat:
     return ApiChat(config, subject, model, reopen=reopen, continues=continues)
 
 
-def engines() -> dict:
-    """The engines, their models, and whether each can run here (and if not, why)."""
+def default_free_engine(config, subject, reopen, continues) -> openai_engine.FreeChat:
+    return openai_engine.FreeChat(config, subject, reopen=reopen, continues=continues)
+
+
+ANTHROPIC_REMINDER = (
+    "What you share in a session, including any notes the tutor reads, is sent to "
+    "Anthropic's API (a third party)."
+)
+
+
+def engines(config: Config | None = None) -> dict:
+    """The engines, their models, whether each can run here (and if not, why), what
+    picking it means (note), and where what the learner shares goes (reminder)."""
+    free_reason = openai_engine.unavailable_reason(config)
     return {
         CLAUDE_CODE: {
             "label": "Claude Code (your plan)",
             "models": claude_engine.MODELS,
             "available": shutil.which("claude") is not None,
             "reason": "Claude Code (`claude`) is not on PATH.",
+            "note": "Runs Claude Code with your Claude plan.",
+            "reminder": ANTHROPIC_REMINDER,
         },
         OWN_LOOP: {
             "label": "API (billed per token)",
@@ -99,6 +125,16 @@ def engines() -> dict:
             "available": api_available(),
             "reason": f"{api_engine.API_KEY_ENV} is not set in the terminal that runs "
             "velocity web.",
+            "note": "Billed per token on your API key; the cost is shown as you go.",
+            "reminder": ANTHROPIC_REMINDER,
+        },
+        FREE: {
+            "label": openai_engine.LABEL,
+            "models": engine_models(config, FREE),
+            "available": free_reason is None,
+            "reason": free_reason or "",
+            "note": openai_engine.NOTE,
+            "reminder": openai_engine.privacy_note(config),
         },
     }
 
@@ -110,10 +146,12 @@ class ChatManager:
         engine_factory: EngineFactory = default_engine,
         clock: Callable[[], float] = time.monotonic,
         api_engine_factory: ApiEngineFactory = default_api_engine,
+        free_engine_factory: FreeEngineFactory = default_free_engine,
     ) -> None:
         self.config = config
         self.engine_factory = engine_factory
         self.api_engine_factory = api_engine_factory
+        self.free_engine_factory = free_engine_factory
         self.clock = clock
         self.chats: dict[str, OpenChat] = {}
         # subject -> the session last paused for being idle, until a chat starts again
@@ -156,10 +194,13 @@ class ChatManager:
         close_other: bool = False,
         engine: str = CLAUDE_CODE,
     ) -> None:
-        if engine not in MODELS:
+        if engine not in (*MODELS, FREE):
             raise ChatError(f"unknown engine {engine!r}")
-        if model not in MODELS[engine]:
-            raise ChatError(f"unknown model {model!r}")
+        if model not in engine_models(self.config, engine):
+            if engine != FREE:
+                raise ChatError(f"unknown model {model!r}")
+            # A session resumed after the free model changed runs on the new one.
+            model = self.config.openai_model or model
         if subject.slug in self.chats:
             raise ChatError("A chat is already open for this subject.", 409)
         other = active_session_id(subject.slug)
@@ -188,6 +229,10 @@ class ChatManager:
             if engine == OWN_LOOP:
                 chat_engine = self.api_engine_factory(
                     self.config, subject, model, resume, continues
+                )
+            elif engine == FREE:
+                chat_engine = self.free_engine_factory(
+                    self.config, subject, resume, continues
                 )
             else:
                 chat_engine = self._claude_engine(subject, model, resume, continues)

@@ -685,6 +685,7 @@ async def chat(
     up from; `reopen` names a paused one to resume, its conversation rebuilt from the
     record."""
     import asyncio
+    import os
     import sys
 
     import anthropic
@@ -695,6 +696,7 @@ async def chat(
     server = StdioServerParameters(
         command=sys.executable,
         args=["-m", "velocity.cli", "mcp", "--subject", subject.slug],
+        env=dict(os.environ),  # all of it, as in api_engine.connect_mcp
     )
     client = anthropic.AsyncAnthropic()
     async with Client(server) as mcp:

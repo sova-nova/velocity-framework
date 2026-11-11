@@ -85,6 +85,7 @@ async function openAppSettings() {
   effort.append(new Option("Effort: velocity's default (medium)", ""));
   for (const e of s.efforts) effort.append(new Option(`Effort: ${e}`, e));
   effort.value = s.api_effort;
+  showFreeSettings(s);
   drawChecks($("#app-checks"), s.checks);
   $("#app-config-path").textContent = s.config_path;
   setupStatus("#app-settings-status", "");
@@ -98,7 +99,11 @@ async function saveAppSettings() {
       llama_cpp_binary: $("#app-llama").value,
       api_model: $("#app-model").value,
       api_effort: $("#app-effort").value,
+      ...freeSettings(),
     });
+    engines = await getJSON("/api/engines"); // app.js: the free engine may be usable now
+    fillEngines($("#engine"), usableEngine($("#engine").value));
+    showStartChoice();
     if (saved.reload) {
       location.reload(); // another notes folder: other subjects
       return;
@@ -107,6 +112,74 @@ async function saveAppSettings() {
     setupStatus("#app-settings-status", "Saved.");
   } catch (error) {
     setupStatus("#app-settings-status", error.message, true);
+  }
+}
+
+// -- Settings → Free / other model (decided 2026-11-11) ---------------------------------
+// Presets fill in the server (and the key's variable); Test tries the settings as typed,
+// before they are saved: does the server answer, and can the model use a tool?
+
+let freePresets = [];
+
+function showFreeSettings(s) {
+  freePresets = s.openai_presets || [];
+  const preset = $("#free-preset");
+  preset.innerHTML = "";
+  preset.append(new Option("Your own settings", ""));
+  for (const p of freePresets) preset.append(new Option(p.label, p.id));
+  $("#free-url").value = s.openai_base_url;
+  $("#free-model").value = s.openai_model;
+  $("#free-key-env").value = s.openai_api_key_env;
+  $("#free-context").value = s.openai_context_size;
+  $("#free-images").checked = s.openai_images;
+  preset.value = freePresets.find((p) => p.base_url === s.openai_base_url)?.id || "";
+  showFreeLink();
+  $("#free-test-result").textContent = "";
+}
+
+function showFreeLink() {
+  const p = freePresets.find((p) => p.id === $("#free-preset").value);
+  $("#free-link").hidden = !p?.link;
+  if (p?.link) $("#free-link").href = p.link;
+}
+
+function pickFreePreset() {
+  const p = freePresets.find((p) => p.id === $("#free-preset").value);
+  showFreeLink();
+  if (!p) return;
+  $("#free-url").value = p.base_url;
+  $("#free-key-env").value = p.api_key_env;
+  // Model names differ between servers, so a preset always replaces the model.
+  $("#free-model").value = p.model;
+  $("#free-model").placeholder = p.model_hint || "e.g. qwen3:4b";
+  $("#free-test-result").textContent = "";
+}
+
+function freeSettings() {
+  return {
+    openai_base_url: $("#free-url").value,
+    openai_model: $("#free-model").value,
+    openai_api_key_env: $("#free-key-env").value,
+    openai_context_size: $("#free-context").value,
+    openai_images: $("#free-images").checked,
+  };
+}
+
+async function testFreeModel() {
+  const result = $("#free-test-result");
+  const button = $("#free-test");
+  button.disabled = true;
+  result.classList.remove("status-error");
+  result.textContent = "Testing… a model on your computer can take a minute to load.";
+  try {
+    const r = await postJSON("/api/settings/test-model", freeSettings());
+    result.textContent = (r.ok && r.tools ? "✓ " : "! ") + r.message;
+    result.classList.toggle("status-error", !r.ok);
+  } catch (error) {
+    result.textContent = error.message;
+    result.classList.add("status-error");
+  } finally {
+    button.disabled = false;
   }
 }
 
@@ -182,4 +255,6 @@ function setUpSettings() {
   $("#settings-button").addEventListener("click", openAppSettings);
   $("#app-settings-save").addEventListener("click", saveAppSettings);
   $("#app-settings-close").addEventListener("click", () => $("#app-settings").close());
+  $("#free-preset").addEventListener("change", pickFreePreset);
+  $("#free-test").addEventListener("click", testFreeModel);
 }
