@@ -231,11 +231,12 @@ The OCR cache stays outside the vault, so copyrighted text never syncs or gets i
 ## Development
 
 ```bash
-uv run pytest                     # ~140 tests; real-OCR test: VELOCITY_OCR_TESTS=1
+uv run pytest                     # ~440 tests; real-OCR test: VELOCITY_OCR_TESTS=1
 uv run ruff check . && uv run ruff format .
+uv run --with websockets python tests/browser_check.py   # the page in headless Firefox
 ```
 
-CI runs lint, format and tests on every pull request.
+CI runs lint, format and tests on every pull request (Linux and Windows; macOS after a merge to `main`). `tests/test_security.py` checks the server's security rules over every route it has: changes need the page's own Origin, other hosts are refused, reading changes nothing, every response carries the Content-Security-Policy, and keys never reach the page. `tests/browser_check.py` checks what needs a real browser (math, callouts, the PDF reader, and that an image planted in a reply is blocked and never fetched), on throwaway folders; it needs Firefox and isn't part of CI.
 
 ## Status
 
