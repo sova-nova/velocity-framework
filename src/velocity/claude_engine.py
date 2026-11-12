@@ -9,6 +9,7 @@ Claude Code runs velocity's hooks, so the session log is written exactly as in
 """
 
 import asyncio
+import contextlib
 import itertools
 import json
 import shutil
@@ -141,6 +142,10 @@ class ClaudeCodeChat:
                 raw = await self._process.stdout.readline()
                 if not raw:
                     stderr = (await self._process.stderr.read()).decode()[-500:]
+                    # Collect the exit, so `running` is false now: on Windows the
+                    # return code isn't known until the process is waited for.
+                    with contextlib.suppress(TimeoutError):
+                        await asyncio.wait_for(self._process.wait(), 5)
                     yield ChatEvent(
                         "error",
                         text="Claude Code stopped unexpectedly."

@@ -20,6 +20,9 @@ from velocity.config import data_dir
 Role = Literal["learner", "tutor", "block", "event"]
 
 ENDED_WITH_WRAP_UP = "end-session"
+# Logs and records are written with plain \n on every system: on Windows, text mode would
+# write \r\n, which threw off the check for a blank line at the end (found 2026-11-11).
+LOG_NEWLINE = "\n"
 ENDED_WITHOUT_WRAP_UP = "no-wrap-up"
 RECAP_TITLE = "Session recap"
 
@@ -188,6 +191,7 @@ class Session:
                 continues,
             ),
             encoding="utf-8",
+            newline=LOG_NEWLINE,
         )
         session._set_rendered(1)
         return session
@@ -222,7 +226,7 @@ class Session:
         done = self._rendered()
         pending = sorted(events[done:], key=lambda e: e.ts)
         if pending:
-            with self.log_path.open("a", encoding="utf-8") as f:
+            with self.log_path.open("a", encoding="utf-8", newline=LOG_NEWLINE) as f:
                 # Text the learner typed at the end (saved without a trailing blank line)
                 # must not run into the next turn.
                 f.write(_separator(self.log_path) + "".join(map(render_event, pending)))
@@ -331,7 +335,7 @@ class Session:
             text = self.log_path.read_text(encoding="utf-8")
             updated = with_title_property(text, title)
             if updated != text:
-                self.log_path.write_text(updated, encoding="utf-8")
+                self.log_path.write_text(updated, encoding="utf-8", newline=LOG_NEWLINE)
         return title
 
     @property
@@ -406,12 +410,14 @@ class Session:
 
     def restore_log(self) -> None:
         """Rewrite the markdown from the record. Learner annotations are lost; callers ask first."""
-        self.log_path.write_text(self.rendered_text(), encoding="utf-8")
+        self.log_path.write_text(
+            self.rendered_text(), encoding="utf-8", newline=LOG_NEWLINE
+        )
 
     # -- internals -----------------------------------------------------------------
 
     def _write_record(self, event: Event) -> None:
-        with self.record_path.open("a", encoding="utf-8") as f:
+        with self.record_path.open("a", encoding="utf-8", newline=LOG_NEWLINE) as f:
             f.write(json.dumps(asdict(event), ensure_ascii=False) + "\n")
 
     def _rendered(self) -> int:
@@ -428,8 +434,9 @@ def _separator(path: Path) -> str:
     """The newlines needed so text appended to `path` starts a new paragraph."""
     with path.open("rb") as f:
         size = f.seek(0, 2)
-        f.seek(max(0, size - 2))
-        tail = f.read()
+        f.seek(max(0, size - 4))
+        # A Windows editor may have saved the learner's lines with \r\n.
+        tail = f.read().replace(b"\r\n", b"\n")
     if not tail or tail.endswith(b"\n\n"):
         return ""
     return "\n" if tail.endswith(b"\n") else "\n\n"

@@ -24,6 +24,7 @@ def home(tmp_path, monkeypatch):
     (home / "Documents/Brain/.obsidian").mkdir(parents=True)
     (home / ".hidden/Vault/.obsidian").mkdir(parents=True)
     monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))  # Path.home() on Windows
     return home
 
 

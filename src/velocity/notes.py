@@ -83,7 +83,8 @@ def read_note(config: Config, subject: Subject, rel_path: str) -> str:
     """The text of one note, given its path relative to the vault (as list_notes returns it)."""
     if not subject.note_folders:
         raise NotesError("This subject has no note folders configured.")
-    if Path(rel_path).is_absolute():
+    # Any root counts: on Windows "/etc/passwd" has no drive, so it isn't is_absolute().
+    if Path(rel_path).is_absolute() or Path(rel_path).anchor:
         raise NotesError(
             "Give the note's path relative to the vault, as list_notes shows it."
         )

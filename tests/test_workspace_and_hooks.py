@@ -8,7 +8,7 @@ import pytest
 from velocity.config import Config, SourceRef, Subject
 from velocity.hooks import run
 from velocity.session import Session, active_session_id, record_dir
-from velocity.workspace import build_workspace
+from velocity.workspace import build_workspace, permission_path
 
 
 @pytest.fixture(autouse=True)
@@ -80,7 +80,7 @@ def test_notes_protection_is_in_generated_settings(config, subject):
     settings = json.loads(
         (build_workspace(config, subject) / ".claude/settings.json").read_text()
     )
-    vault = config.vault_path.as_posix()
+    vault = permission_path(config.vault_path)
     deny = settings["permissions"]["deny"]
     assert f"Edit(/{vault}/**)" in deny and deny[0].startswith("Edit(//")
     assert f"Read(/{vault}/**)" in deny
@@ -361,3 +361,9 @@ def test_tool_calls_are_recorded_but_not_logged(config, subject):
     assert (
         "record_question" not in log and "**You:** Quiz me\n\n**Tutor:** Next!" in log
     )
+
+
+def test_permission_paths_on_windows():
+    from pathlib import PureWindowsPath
+
+    assert permission_path(PureWindowsPath(r"C:\Users\me\Notes")) == "/c/Users/me/Notes"
