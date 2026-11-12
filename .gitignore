@@ -16,3 +16,6 @@ __pycache__/
 
 # Secrets
 .env
+
+# Packaging (the AppImage build)
+build/

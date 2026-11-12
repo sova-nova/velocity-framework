@@ -13,7 +13,6 @@ import json
 import os
 import re
 import subprocess
-import sys
 from dataclasses import asdict
 from datetime import date
 from importlib.resources import files
@@ -63,6 +62,7 @@ from velocity.prepare import (
     request_cancel,
     running,
 )
+from velocity.runtime import self_command
 from velocity.session import (
     SESSION_ID,
     Session,
@@ -678,8 +678,7 @@ def build_app(
         pdf.cache_dir.mkdir(parents=True, exist_ok=True)
         with open(pdf.cache_dir / "prepare.log", "w") as log:
             prepare_processes[path.as_posix()] = subprocess.Popen(
-                [sys.executable, "-m", "velocity.cli", "source", verb]
-                + [*target, *options],
+                self_command("source", verb, *target, *options),
                 stdin=subprocess.DEVNULL,
                 stdout=log,
                 stderr=subprocess.STDOUT,

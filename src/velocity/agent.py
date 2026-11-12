@@ -688,17 +688,18 @@ async def chat(
     record."""
     import asyncio
     import os
-    import sys
 
     import anthropic
     from mcp import Client, StdioServerParameters
 
     from velocity import keys
+    from velocity.runtime import self_command
     from velocity.skills import load_skills
 
+    command, *args = self_command("mcp", "--subject", subject.slug)
     server = StdioServerParameters(
-        command=sys.executable,
-        args=["-m", "velocity.cli", "mcp", "--subject", subject.slug],
+        command=command,
+        args=args,
         env=dict(os.environ),  # all of it, as in api_engine.connect_mcp
     )
     # The environment variable, else the key saved in Settings (the system keyring).

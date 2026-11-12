@@ -1,0 +1,52 @@
+# Builds the Linux app (an AppImage) when a version tag is pushed, and attaches it to a
+# GitHub Release (decided 2026-11-11). To release: set `version` in pyproject.toml, merge,
+# then `git tag v<version> && git push origin v<version>`. Started by hand (Actions → Release
+# → Run workflow), it only builds, and keeps the AppImage as a run artifact: a trial build.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write  # to create the release
+
+jobs:
+  appimage:
+    # The oldest supported Ubuntu, so the app runs on older Linux systems too (glibc).
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.3.3
+      - name: The tag matches the version
+        if: github.ref_type == 'tag'
+        run: |
+          version="$(grep -m1 '^version = ' pyproject.toml | cut -d'"' -f2)"
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "Tag $GITHUB_REF_NAME doesn't match version $version in pyproject.toml"
+            exit 1
+          fi
+      - name: Libraries the bundled Qt needs at build time
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libegl1 libxkbcommon0 libxkbcommon-x11-0 \
+            libxcb-cursor0 libnss3 libxcomposite1 libxdamage1 libxrandr2 libxtst6 \
+            libgbm1 libasound2 file
+      - name: Build the AppImage
+        run: packaging/build_appimage.sh
+      - name: Keep the trial build
+        if: github.ref_type != 'tag'
+        uses: actions/upload-artifact@v7
+        with:
+          name: velocity-appimage
+          path: build/velocity-*-x86_64.AppImage
+          retention-days: 7
+      - name: Publish the release
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" build/velocity-*-x86_64.AppImage \
+            --title "velocity $GITHUB_REF_NAME" \
+            --notes "Download velocity-*-x86_64.AppImage, make it executable, and open it. See the README's install section. This download doesn't include OCR."
