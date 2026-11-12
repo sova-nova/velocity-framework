@@ -32,11 +32,14 @@ from velocity import __version__, desktop, keys, ollama, openai_engine, runtime
 from velocity.config import (
     EFFORTS,
     MODEL_SHORT_NAMES,
+    THEMES,
     Config,
     ConfigError,
     config_path,
     load_config,
+    load_theme,
     save_settings,
+    save_theme,
 )
 
 MAX_VAULT_SEARCH_DEPTH = 3
@@ -175,6 +178,8 @@ def settings_json(config: Config | None, suggest: bool = False) -> dict:
             "supported": sys.platform == "linux",
             "installed": desktop.launcher_installed(),
         },
+        "theme": load_theme(),
+        "themes": list(THEMES),
         "models": list(MODEL_SHORT_NAMES),
         "efforts": list(EFFORTS),
         "checks": checks(config),
@@ -378,6 +383,20 @@ def settings_routes(
         never on its own. Asks GitHub for the latest release."""
         return JSONResponse(await latest_release())
 
+    async def theme(request: Request) -> Response:
+        """The page's colors: {"theme": "system" | "light" | "dark"}. Applied at once and
+        saved on its own, since it rebuilds nothing (so also while a chat is open)."""
+        try:
+            body = await request.json()
+        except ValueError:
+            body = {}
+        if not isinstance(body, dict):
+            body = {}
+        try:
+            return JSONResponse({"theme": save_theme(str(body.get("theme") or ""))})
+        except ConfigError as e:
+            return JSONResponse({"error": str(e)}, 400)
+
     async def add_launcher(request: Request) -> Response:
         """Add velocity to the app menu (or update the entry)."""
         try:
@@ -391,6 +410,7 @@ def settings_routes(
         Route("/api/settings", post, methods=["POST"]),
         Route("/api/settings/test-model", test_model, methods=["POST"]),
         Route("/api/settings/launcher", add_launcher, methods=["POST"]),
+        Route("/api/settings/theme", theme, methods=["POST"]),
         Route("/api/settings/key", key, methods=["POST"]),
         Route("/api/settings/update", check_update, methods=["POST"]),
         Route("/api/ollama", ollama_status),

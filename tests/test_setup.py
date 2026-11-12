@@ -128,3 +128,44 @@ def test_settings_wait_until_no_chat_is_open(home):
         )
         assert refused.status_code == 409 and "open chat" in refused.json()["error"]
         app.inner.state.chats.chats.clear()
+
+
+# -- colors (decided 2026-11-11) ---------------------------------------------------------
+
+
+def test_the_theme_is_saved_at_once_and_drawn_from_the_start(home):
+    save_settings({"vault_path": str(home / "Documents/Brain")})
+    app = serve_app(load_config())
+    with TestClient(app, base_url="http://127.0.0.1:8765") as client:
+        assert client.get("/api/settings").json()["theme"] == "system"
+        assert 'data-theme="' not in client.get("/").text.split(">", 2)[1]
+
+        # Allowed while a chat is open: it rebuilds nothing.
+        app.inner.state.chats.chats["calculus"] = object()
+        saved = client.post(
+            "/api/settings/theme", json={"theme": "dark"}, headers=ORIGIN
+        )
+        app.inner.state.chats.chats.clear()
+        assert saved.status_code == 200 and saved.json() == {"theme": "dark"}
+        assert 'theme = "dark"' in config_path().read_text()
+        assert '<html lang="en" data-theme="dark">' in client.get("/").text
+        assert client.get("/api/settings").json()["theme"] == "dark"
+
+        bad = client.post("/api/settings/theme", json={"theme": "pink"}, headers=ORIGIN)
+        assert bad.status_code == 400
+        client.post("/api/settings/theme", json={"theme": "system"}, headers=ORIGIN)
+        assert "theme" not in config_path().read_text().split("#", 1)[0]
+        assert "data-theme" not in client.get("/").text.split("<head>", 1)[0]
+        assert load_config().vault_path == (home / "Documents/Brain").resolve()
+
+
+def test_no_theme_before_setup(home):
+    with TestClient(serve_app(None), base_url="http://127.0.0.1:8765") as client:
+        refused = client.post(
+            "/api/settings/theme", json={"theme": "light"}, headers=ORIGIN
+        )
+        assert (
+            refused.status_code == 400
+            and "notes folder first" in refused.json()["error"]
+        )
+        assert client.get("/").status_code == 200
