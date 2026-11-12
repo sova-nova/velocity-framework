@@ -269,6 +269,9 @@ def test_claude_launch_args_isolate_the_tutor(tmp_path):
         "WebSearch",
         "WebFetch(domain:*.wikipedia.org)",
     ]
+    # Only the built-in tools the tutor uses (2026-11-12): no files, commands, agents,
+    # scheduling, notifications or messages. velocity's own tools come from its server.
+    assert args[args.index("--tools") + 1] == "Skill,ToolSearch,WebSearch,WebFetch"
     assert "--continue" not in args
     assert claude_args(tmp_path, resume=True)[-1] == "--continue"
 
