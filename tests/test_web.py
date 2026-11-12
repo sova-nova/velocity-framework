@@ -238,6 +238,21 @@ def test_the_page_has_no_inline_scripts_or_handlers():
     )
 
 
+def test_math_goes_in_after_sanitizing_as_elements_only():
+    """Security review L2 (2026-11-12): KaTeX's HTML was spliced into the sanitized HTML
+    string, so math in a link's address or an image's alt broke out of the attribute.
+    Now renderMarkdown sanitizes, then insertMath puts KaTeX's output in as elements
+    (and math in an attribute back as typed). Checked in a browser; this guards it."""
+    app = (STATIC / "app.js").read_text(encoding="utf-8")
+    body = app[app.index("function renderMarkdown") : app.index("function insertMath")]
+    assert "DOMPurify.sanitize(" in body
+    assert body.index("DOMPurify.sanitize(") < body.index("insertMath(container")
+    assert "katex" not in body  # no KaTeX HTML in the string that is parsed
+    assert not re.search(r"html\s*=\s*html\.replace", app)
+    insert = app[app.index("function insertMath") : app.index("function mathText")]
+    assert "setAttribute(" in insert and "replaceWith(" in insert
+
+
 def test_cli_web_starts_uvicorn_on_localhost(config, monkeypatch, capsys):
     from velocity import cli
 
