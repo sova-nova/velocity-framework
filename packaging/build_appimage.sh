@@ -27,6 +27,12 @@ rm -rf "$BUILD/dist" "$BUILD/work" "$BUILD/AppDir"
 "$BUILD/venv/bin/pyinstaller" --noconfirm --clean \
   --distpath "$BUILD/dist" --workpath "$BUILD/work" packaging/velocity.spec
 
+echo "==> No system libraries in the bundle (they must match the user's drivers)"
+if ls "$BUILD/dist/velocity/_internal" | grep -E '^lib(stdc\+\+|gcc_s|gbm|drm|EGL|GL)[.-]'; then
+  echo "These must come from the user's system; see LINUX_SYSTEM_LIBRARIES in the spec."
+  exit 1
+fi
+
 echo "==> Smoke test"
 "$PY" packaging/smoke_test.py "$BUILD/dist/velocity/velocity"
 
