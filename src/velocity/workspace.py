@@ -27,12 +27,22 @@ def workspace_dir(subject: Subject) -> Path:
     return data_dir() / "workspaces" / subject.slug
 
 
+def permission_path(path: Path) -> str:
+    """An absolute path as Claude Code's permission rules write it: POSIX form, and on
+    Windows the drive as a folder (C:\\Users\\me -> /c/Users/me). With the rule's leading
+    "/", that gives "//c/Users/me/**", an absolute path."""
+    posix = path.as_posix()
+    if path.drive and posix[1:2] == ":":
+        return "/" + posix[0].lower() + posix[2:]
+    return posix
+
+
 def _hook_command(event: str, subject: Subject) -> str:
     return shlex.join(self_command("hook", event, "--subject", subject.slug))
 
 
 def build_settings(config: Config, subject: Subject) -> dict:
-    vault = config.vault_path.as_posix()
+    vault = permission_path(config.vault_path)
 
     def hook(event: str, timeout: int, matcher: str | None = None) -> dict:
         entry: dict = {

@@ -88,7 +88,8 @@ def read_record(
     subject_slug: str, session_id: str, data_dir: Path = DATA_DIR
 ) -> list[Event]:
     path = data_dir / "records" / subject_slug / f"{session_id}.jsonl"
-    return [Event(**json.loads(line)) for line in path.read_text().splitlines() if line]
+    lines = path.read_text(encoding="utf-8").splitlines()
+    return [Event(**json.loads(line)) for line in lines if line]
 
 
 def recorded_sessions(subject_slug: str, data_dir: Path = DATA_DIR) -> list[str]:

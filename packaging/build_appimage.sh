@@ -27,6 +27,9 @@ rm -rf "$BUILD/dist" "$BUILD/work" "$BUILD/AppDir"
 "$BUILD/venv/bin/pyinstaller" --noconfirm --clean \
   --distpath "$BUILD/dist" --workpath "$BUILD/work" packaging/velocity.spec
 
+echo "==> Smoke test"
+"$PY" packaging/smoke_test.py "$BUILD/dist/velocity/velocity"
+
 echo "==> AppDir"
 APPDIR="$BUILD/AppDir"
 mkdir -p "$APPDIR/usr/bin"

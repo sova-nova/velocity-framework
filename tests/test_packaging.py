@@ -14,6 +14,7 @@ from velocity.workspace import build_mcp_config
 def test_self_command_from_python_and_packaged(monkeypatch):
     assert runtime.self_command("mcp", "--subject", "x")[1:3] == ["-m", "velocity.cli"]
     monkeypatch.setattr(sys, "frozen", True, raising=False)
+    monkeypatch.setattr(sys, "platform", "linux")
     assert runtime.packaged()
     assert runtime.self_command("mcp", "--subject", "x") == [
         sys.executable,
@@ -23,10 +24,20 @@ def test_self_command_from_python_and_packaged(monkeypatch):
     ]
 
 
+def test_on_windows_subprocesses_run_the_console_twin(monkeypatch):
+    from pathlib import Path
+
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    monkeypatch.setattr(sys, "platform", "win32")
+    monkeypatch.setattr(sys, "executable", str(Path("app") / "velocity.exe"))
+    assert runtime.self_command("mcp") == [str(Path("app") / "velocity-cli.exe"), "mcp"]
+
+
 def test_claude_codes_tool_server_runs_the_packaged_binary(monkeypatch):
     from types import SimpleNamespace as NS
 
     monkeypatch.setattr(sys, "frozen", True, raising=False)
+    monkeypatch.setattr(sys, "platform", "linux")
     server = build_mcp_config(NS(slug="calculus"))["mcpServers"]["velocity"]
     assert server == {
         "command": sys.executable,

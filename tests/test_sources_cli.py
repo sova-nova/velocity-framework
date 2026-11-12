@@ -1,4 +1,5 @@
 import os
+import sys
 from pathlib import Path
 
 import pymupdf
@@ -29,7 +30,7 @@ def config(tmp_path, monkeypatch):
     vault.mkdir()
     (tmp_path / "cfg/velocity").mkdir(parents=True)
     (tmp_path / "cfg/velocity/config.toml").write_text(
-        f'vault_path = "{vault}"\nllama_cpp_binary = "~/llama/llama-server"\n'
+        f"vault_path = '{vault}'\nllama_cpp_binary = \"~/llama/llama-server\"\n"
     )
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "cfg"))
     cfg = load_config()
@@ -42,7 +43,9 @@ def test_llama_path_from_config(config):
 
 
 def test_add_source_appends_and_keeps_comments(config, tmp_path):
-    pdf = make_pdf(tmp_path / 'Stewart "8th".pdf', toc=True)
+    # A name the TOML must quote: with a '"' where the system allows one in file names.
+    name = "Stewart 'Ed. 8'.pdf" if sys.platform == "win32" else 'Stewart "8th".pdf'
+    pdf = make_pdf(tmp_path / name, toc=True)
     added = add_source(config, "calculus", pdf, "Stewart")
     assert (added.name, added.path) == ("Stewart", pdf.resolve())
     text = (config.tutor_dir / "calculus/subject.toml").read_text()

@@ -12,7 +12,6 @@ dependency group). The page itself is the same as `velocity web`'s.
   icon), from Settings or `velocity install-launcher`.
 """
 
-import fcntl
 import json
 import os
 import secrets
@@ -26,6 +25,7 @@ import urllib.request
 from importlib.resources import files
 from pathlib import Path
 
+from velocity import filelock
 from velocity.config import data_dir
 from velocity.runtime import self_command
 
@@ -55,17 +55,22 @@ class InstanceLock:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         f = self.path.open("a+", encoding="utf-8")
         try:
-            fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError:
+            filelock.lock(f, wait=False)
+        except filelock.Locked:
             f.close()
             raise AlreadyOpen from None
         self._file = f
 
     def publish(self, port: int) -> None:
-        self._file.seek(0)
-        self._file.truncate()
-        self._file.write(json.dumps({"port": port, "token": self.token}))
-        self._file.flush()
+        # The port and token go in a file next to the lock: on Windows a locked byte
+        # can't be read by the second app.
+        self.info_path.write_text(
+            json.dumps({"port": port, "token": self.token}), encoding="utf-8"
+        )
+
+    @property
+    def info_path(self) -> Path:
+        return self.path.with_suffix(".json")
 
     def release(self) -> None:
         if self._file:
@@ -75,7 +80,7 @@ class InstanceLock:
     def ask_to_raise(self) -> bool:
         """From a second app: ask the running one to show its window."""
         try:
-            info = json.loads(self.path.read_text(encoding="utf-8"))
+            info = json.loads(self.info_path.read_text(encoding="utf-8"))
             request = urllib.request.Request(
                 f"http://127.0.0.1:{info['port']}{RAISE_PATH}",
                 method="POST",

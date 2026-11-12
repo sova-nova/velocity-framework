@@ -1,13 +1,13 @@
 """A PDF textbook as a source: outline plus lazily OCR'd, cached section text."""
 
 import contextlib
-import fcntl
 import json
 import re
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from velocity import filelock
 from velocity.config import data_dir
 from velocity.dropcheck import Region, find_drops, repair, text_lines
 from velocity.ocr import OcrPage, PageOcr
@@ -259,12 +259,12 @@ class PdfSource:
     def ocr_lock(self):
         """Only one OCR at a time per source, across processes (the GPU can't run two)."""
         self.cache_dir.mkdir(parents=True, exist_ok=True)
-        with open(self.cache_dir / "ocr.lock", "w") as handle:
-            fcntl.flock(handle, fcntl.LOCK_EX)
+        with open(self.cache_dir / "ocr.lock", "w", encoding="utf-8") as handle:
+            filelock.lock(handle)
             try:
                 yield
             finally:
-                fcntl.flock(handle, fcntl.LOCK_UN)
+                filelock.unlock(handle)
 
     def _ocr_run(self, first: int, last: int) -> None:
         pages = self._ocr(self.pdf_path, first, last, self.cache_dir / "images")

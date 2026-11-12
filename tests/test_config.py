@@ -32,7 +32,7 @@ def write_subject(config: Config, slug: str, body: str) -> None:
 
 def test_load_config_expands_and_validates_vault(tmp_path, vault):
     cfg = tmp_path / "config.toml"
-    cfg.write_text(f'vault_path = "{vault}"\n')
+    cfg.write_text(f"vault_path = '{vault}'\n")
     assert load_config(cfg).vault_path == vault.resolve()
     assert load_config(cfg).tutor_dir == vault.resolve() / "Tutor"
 

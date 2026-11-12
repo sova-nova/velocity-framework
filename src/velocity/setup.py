@@ -61,6 +61,8 @@ def checks(config: Config | None) -> list[dict]:
                 check=False,
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 timeout=5,
             ).stdout.strip()
     out.append(

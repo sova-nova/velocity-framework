@@ -400,7 +400,11 @@ def claude_conversation(subject: Subject, session_id: str) -> str | None:
     mapping = record_dir(subject.slug) / "claude-sessions"
     if not mapping.is_dir():
         return None
-    matches = [p for p in mapping.iterdir() if p.read_text().strip() == session_id]
+    matches = [
+        p
+        for p in mapping.iterdir()
+        if p.read_text(encoding="utf-8").strip() == session_id
+    ]
     return max(matches, key=lambda p: p.stat().st_mtime).name if matches else None
 
 

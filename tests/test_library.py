@@ -38,7 +38,7 @@ def config(tmp_path) -> Config:
 @pytest.fixture
 def books(tmp_path, config):
     stewart = tmp_path / "stewart.md"
-    stewart.write_text("# Limits\n")
+    stewart.write_bytes(b"# Limits\n")  # bytes: Windows would write \r\n in text mode
     notes = tmp_path / "notes.md"
     notes.write_text("# Agents\n")
     add_source(config, "calculus", stewart, "Stewart")
@@ -176,7 +176,7 @@ def test_rename_a_source_without_a_name_line(config, tmp_path):
     book = tmp_path / "book.md"
     book.write_text("# A\n")
     toml = config.tutor_dir / "calculus/subject.toml"
-    toml.write_text(toml.read_text() + f'\n[[sources]]\npath = "{book}"\n')
+    toml.write_text(toml.read_text() + f"\n[[sources]]\npath = '{book}'\n")
     rename_source(config, "calculus", "book", "Book")  # the file name was its name
     assert load_subject(config, "calculus").sources[0].name == "Book"
 

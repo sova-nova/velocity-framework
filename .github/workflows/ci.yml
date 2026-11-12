@@ -7,15 +7,26 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    # Linux, and Windows and macOS since the desktop app runs there too (2026-11-11).
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v10.3.3
       - name: Install
         run: uv sync --locked --no-group ocr --no-group app
       - name: Lint
+        if: matrix.os == 'ubuntu-latest'
         run: uv run --no-sync ruff check .
       - name: Format
+        if: matrix.os == 'ubuntu-latest'
         run: uv run --no-sync ruff format --check .
       - name: Test
+        # UTF-8 mode, so the tests' own file reads and writes match Linux and macOS on
+        # Windows; velocity's code names its encodings itself.
+        env:
+          PYTHONUTF8: "1"
         run: uv run --no-sync pytest

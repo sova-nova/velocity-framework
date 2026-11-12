@@ -62,7 +62,7 @@ from velocity.prepare import (
     request_cancel,
     running,
 )
-from velocity.runtime import self_command
+from velocity.runtime import no_window, self_command
 from velocity.session import (
     SESSION_ID,
     Session,
@@ -676,13 +676,14 @@ def build_app(
         `target` names the PDF: a subject and source, or `--file <path>`."""
         verb, *options = command
         pdf.cache_dir.mkdir(parents=True, exist_ok=True)
-        with open(pdf.cache_dir / "prepare.log", "w") as log:
+        with open(pdf.cache_dir / "prepare.log", "w", encoding="utf-8") as log:
             prepare_processes[path.as_posix()] = subprocess.Popen(
                 self_command("source", verb, *target, *options),
                 stdin=subprocess.DEVNULL,
                 stdout=log,
                 stderr=subprocess.STDOUT,
                 start_new_session=True,  # not stopped with the server
+                creationflags=no_window(),  # no console window on Windows
             )
 
     async def prepare_cancel(request: Request) -> Response:

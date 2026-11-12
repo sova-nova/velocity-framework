@@ -29,7 +29,7 @@ def test_only_one_app_at_a_time(tmp_path):
     second = InstanceLock(tmp_path / "app.lock")
     with pytest.raises(AlreadyOpen):
         second.acquire()
-    assert '"port": 41234' in (tmp_path / "app.lock").read_text()
+    assert '"port": 41234' in (tmp_path / "app.json").read_text()
     first.release()
     second.acquire()  # free again once the first app is closed
     second.release()
@@ -55,7 +55,7 @@ def test_the_raise_route_needs_the_token():
 
 def test_a_second_launch_with_a_stale_lock_file_says_so(tmp_path):
     lock = InstanceLock(tmp_path / "app.lock")
-    (tmp_path / "app.lock").write_text('{"port": 9, "token": "x"}')
+    (tmp_path / "app.json").write_text('{"port": 9, "token": "x"}')
     assert lock.ask_to_raise() is False  # nothing listens there
 
 
