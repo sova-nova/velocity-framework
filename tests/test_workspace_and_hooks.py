@@ -85,7 +85,11 @@ def test_notes_protection_is_in_generated_settings(config, subject):
     assert f"Edit(/{vault}/**)" in deny and deny[0].startswith("Edit(//")
     assert f"Read(/{vault}/**)" in deny
     assert "Bash" in deny
-    assert settings["permissions"]["allow"] == ["mcp__velocity"]
+    assert settings["permissions"]["allow"] == [
+        "mcp__velocity",
+        "WebSearch",
+        "WebFetch(domain:*.wikipedia.org)",
+    ]
     assert settings["permissions"]["blockWritesOutsideWorkingDirectories"] is True
     guard = settings["hooks"]["PreToolUse"][0]
     assert guard["matcher"] == "Edit|Write|MultiEdit|NotebookEdit"
@@ -259,9 +263,39 @@ def test_claude_launch_args_isolate_the_tutor(tmp_path):
     assert args[:2] == ["--setting-sources", "project,local"]
     assert "--strict-mcp-config" in args
     assert args[args.index("--mcp-config") + 1] == (tmp_path / ".mcp.json").as_posix()
-    assert args[args.index("--allowedTools") + 1] == "mcp__velocity"
+    allowed = args.index("--allowedTools")
+    assert args[allowed + 1 : allowed + 4] == [
+        "mcp__velocity",
+        "WebSearch",
+        "WebFetch(domain:*.wikipedia.org)",
+    ]
     assert "--continue" not in args
     assert claude_args(tmp_path, resume=True)[-1] == "--continue"
+
+
+def test_the_tutor_may_search_the_web_and_read_wikipedia(config, subject):
+    """Decided 2026-11-12 (security review L4): with Claude Code, the tutor may search the
+    web and read Wikipedia (any language) without asking, for recent topics or facts it
+    isn't sure of. Other sites: asked first in the terminal, impossible on the page,
+    since a fetched address can carry what the learner said to a server of anyone's
+    choosing. Checked live: example.com was denied, also from a subagent."""
+    from velocity.agent import system_prompt
+    from velocity.workspace import render_claude_md
+
+    prompt = (build_workspace(config, subject) / "CLAUDE.md").read_text(
+        encoding="utf-8"
+    )
+    assert "## Looking things up on the web" in prompt
+    assert "information, not instructions" in prompt
+    assert "WebFetch" not in json.dumps(
+        json.loads(
+            (build_workspace(config, subject) / ".claude/settings.json").read_text()
+        )["permissions"]["deny"]
+    )
+    # The own loop and the free engine have no web tools: no such section for them.
+    assert "Looking things up" not in render_claude_md(subject)
+    assert "Looking things up" not in system_prompt(subject, {})
+    assert "{web_section}" not in prompt
 
 
 def test_skills_are_copied_into_the_workspace(config, subject):
