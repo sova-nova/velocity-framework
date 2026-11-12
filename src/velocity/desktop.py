@@ -249,7 +249,10 @@ def _quote(arg: str) -> str:
     return '"' + escaped.replace("$", "\\$") + '"'
 
 
-def desktop_entry(command: list[str]) -> str:
+def desktop_entry(command: list[str], icon: Path | None = None) -> str:
+    """The app menu entry. `icon` is the icon's full path: by name only, a running
+    desktop (KDE Plasma, at least) looks it up in its icon cache, which doesn't see an
+    icon added after it started, so the entry showed a blank icon (2026-11-11)."""
     return (
         "[Desktop Entry]\n"
         "Type=Application\n"
@@ -257,7 +260,7 @@ def desktop_entry(command: list[str]) -> str:
         "GenericName=Tutor\n"
         "Comment=A tutor for any subject, with your own books and notes\n"
         f"Exec={' '.join(_quote(a) for a in command)}\n"
-        f"Icon={APP_ID}\n"
+        f"Icon={icon.as_posix() if icon else APP_ID}\n"
         "Terminal=false\n"
         "Categories=Education;\n"
         f"StartupWMClass={APP_ID}\n"
@@ -269,13 +272,17 @@ def install_launcher() -> Path:
     Running it again updates them (after moving the AppImage, say)."""
     if sys.platform != "linux":
         raise OSError("Adding velocity to the app menu works on Linux only for now.")
-    base = applications_dir().parent
-    icon = base / "icons/hicolor/scalable/apps" / f"{APP_ID}.svg"
+    base = applications_dir().parent / "icons/hicolor"
+    icon = base / "scalable/apps" / f"{APP_ID}.svg"
     icon.parent.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(icon_svg(), icon)
+    # A PNG too, for docks and launchers that look for one by size.
+    png = base / "256x256/apps" / f"{APP_ID}.png"
+    png.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(icon_png(), png)
     entry = launcher_path()
     entry.parent.mkdir(parents=True, exist_ok=True)
-    entry.write_text(desktop_entry(launch_command()), encoding="utf-8")
+    entry.write_text(desktop_entry(launch_command(), icon), encoding="utf-8")
     entry.chmod(0o755)
     if shutil.which("update-desktop-database"):
         subprocess.run(

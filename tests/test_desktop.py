@@ -84,6 +84,9 @@ def test_install_launcher_writes_the_entry_and_icon(tmp_path, monkeypatch):
     assert "Exec=" in entry.read_text() and launcher_installed()
     icon = tmp_path / "share/icons/hicolor/scalable/apps/velocity.svg"
     assert icon.read_text().startswith("<svg")
+    assert (tmp_path / "share/icons/hicolor/256x256/apps/velocity.png").exists()
+    # By its full path: a running desktop's icon cache doesn't see a new icon by name.
+    assert f"Icon={icon.as_posix()}\n" in entry.read_text()
 
 
 def test_settings_add_the_launcher(tmp_path, monkeypatch):
