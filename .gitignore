@@ -17,5 +17,6 @@ __pycache__/
 # Secrets
 .env
 
-# Packaging (the AppImage build)
-build/
+# Packaging (the AppImage and Windows builds), at the root only: PDF.js has its own
+# legacy/build/ folder in web_static/vendor/
+/build/
