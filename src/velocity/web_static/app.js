@@ -27,16 +27,52 @@ function renderMarkdown(source) {
     .replace(/\$([^\s$](?:[^$\n]*?[^\s$])?)\$/g, (m, tex) => keep(tex, false))
     .replace(/@@CODE(\d+)@@/g, (m, i) => code[Number(i)]);
 
-  let html = DOMPurify.sanitize(marked.parse(source));
-  html = html.replace(/@@MATH(\d+)@@/g, (m, i) => {
-    const { tex, display } = math[Number(i)];
-    return katex.renderToString(tex, { displayMode: display, throwOnError: false });
-  });
   const container = document.createElement("div");
-  container.innerHTML = html;
+  container.innerHTML = DOMPurify.sanitize(marked.parse(source));
+  insertMath(container, math);
   renderCallouts(container);
   renderRecorded(container);
   return container;
+}
+
+// Put the math set aside by renderMarkdown back, into the sanitized page (security review
+// L2, 2026-11-12). KaTeX's HTML goes in only as elements, in place of a placeholder in
+// text; never spliced into the HTML, where math in a link's address or an image's alt
+// would have broken out of the attribute. In an attribute, the math goes back as typed.
+const MATH_PLACEHOLDER = /@@MATH(\d+)@@/g;
+
+function insertMath(container, math) {
+  const typed = (i) => {
+    const { tex, display } = math[Number(i)];
+    return display ? `$$${tex}$$` : `$${tex}$`;
+  };
+  for (const el of container.querySelectorAll("*")) {
+    for (const attr of [...el.attributes]) {
+      if (attr.value.includes("@@MATH")) {
+        el.setAttribute(attr.name, attr.value.replace(MATH_PLACEHOLDER, (m, i) => typed(i)));
+      }
+    }
+  }
+  const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
+  const found = [];
+  while (walker.nextNode()) {
+    if (walker.currentNode.nodeValue.includes("@@MATH")) found.push(walker.currentNode);
+  }
+  for (const node of found) {
+    const parts = node.nodeValue.split(/@@MATH(\d+)@@/);
+    const rendered = document.createDocumentFragment();
+    parts.forEach((part, k) => {
+      if (k % 2 === 0) {
+        if (part) rendered.append(part);
+        return;
+      }
+      const { tex, display } = math[Number(part)];
+      const holder = document.createElement("span");
+      holder.innerHTML = katex.renderToString(tex, { displayMode: display, throwOnError: false });
+      rendered.append(...holder.childNodes);
+    });
+    node.replaceWith(rendered);
+  }
 }
 
 // Plain text with its $math$ rendered, for short lines (titles, names, tool lines) and
