@@ -466,6 +466,13 @@ def _free_engine_lines(changes: dict) -> dict[str, tuple[str, str | None]]:
                 "Give the name of the environment variable that holds the key (like "
                 "OPENROUTER_API_KEY), not the key itself."
             )
+        from velocity.keys import free_key_env_ok
+
+        if name and not free_key_env_ok(name):
+            raise ConfigError(
+                f"{name} can't hold the free model's key: use a variable whose name ends "
+                "in _API_KEY (like OPENROUTER_API_KEY), and not ANTHROPIC_API_KEY."
+            )
         lines["openai.api_key_env"] = ("openai", _toml_string(name) if name else None)
     if "openai_context_size" in changes:
         size = changes["openai_context_size"]

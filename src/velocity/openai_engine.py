@@ -98,6 +98,11 @@ def unavailable_reason(config: Config | None) -> str | None:
     if config is None or not config.openai_base_url or not config.openai_model:
         return "Set up a free model in Settings first (a server and a model)."
     name = config.openai_api_key_env
+    if name and not keys.free_key_env_ok(name):
+        return (
+            f"{name} can't hold the free model's key: in Settings, name a variable "
+            "that ends in _API_KEY (not ANTHROPIC_API_KEY)."
+        )
     if name and saved_key(config) is None:
         host = urlparse(config.openai_base_url).hostname
         return (
@@ -109,9 +114,12 @@ def unavailable_reason(config: Config | None) -> str | None:
 
 def saved_key(config: Config) -> str | None:
     """The server's key: the named environment variable, else the one saved in Settings
-    for this server (the system keyring)."""
+    for this server (the system keyring). A variable not meant for an API key is never
+    read (keys.free_key_env_ok)."""
+    env = config.openai_api_key_env
     return keys.get_key(
-        keys.free_key_name(config.openai_base_url), config.openai_api_key_env
+        keys.free_key_name(config.openai_base_url),
+        env if keys.free_key_env_ok(env) else None,
     )
 
 
