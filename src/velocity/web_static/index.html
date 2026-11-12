@@ -284,8 +284,9 @@
         </section>
       </div>
     </div>
-    <p id="app-settings-status" class="hint" hidden></p>
-    <div class="dialog-actions">
+    <!-- "Saved." and errors share the buttons' row, so the dialog never changes size. -->
+    <div class="dialog-actions settings-actions">
+      <p id="app-settings-status" class="hint" role="status" hidden></p>
       <button id="app-settings-close">Close</button>
       <button id="app-settings-save" class="primary">Save</button>
     </div>
