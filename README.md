@@ -57,6 +57,11 @@ The first time, velocity asks for your notes folder. Then pick how the tutor run
 
 The downloads don't include OCR: PDFs with selectable text, EPUB, Markdown and HTML work, and the tutor can look at pages, but scanned or math-heavy PDFs need the full install below. A macOS download is planned; on a Mac, use the install below for now.
 
+**Checking a download.** Because velocity isn't signed, each release also lists every file's SHA-256 in `SHA256SUMS`. To check that your download is the file GitHub built, compare its hash with the one listed there:
+
+- **Windows** (PowerShell, in your Downloads folder): `Get-FileHash .\velocity-<version>-windows-setup.exe`
+- **Linux** (in the folder with both files): `sha256sum --check --ignore-missing SHA256SUMS`
+
 To build them yourself: `packaging/build_appimage.sh` on Linux, `packaging\build_windows.ps1` on Windows (needs [Inno Setup](https://jrsoftware.org/isinfo.php) too). Both need `uv`, build in `build/`, and leave your environment alone.
 
 ## Setup
