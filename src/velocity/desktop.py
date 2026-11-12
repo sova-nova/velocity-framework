@@ -1,13 +1,14 @@
 """The desktop app (decided 2026-11-11): velocity in its own window, for people who don't
-use a terminal. `velocity app [subject]` starts velocity's web server on a free port and
+use a terminal. `velocity app [subject]` starts velocity's web server on its own port and
 shows the page in a native window (pywebview on Qt's Chromium engine; the optional `app`
 dependency group). The page itself is the same as `velocity web`'s.
 
 - One app at a time: a second launch brings the open window to the front and exits.
 - Closing the window stops the server, which pauses any open chat (as stopping
   `velocity web` does); nothing is lost, so there is no prompt.
-- The page's storage (remembered engine, model, tabs) lives in velocity's data folder, so
-  it survives restarts.
+- The page's storage (remembered engine, model, the reader's place) lives in velocity's
+  data folder, and the app uses the same port each time (APP_PORTS), so it survives
+  restarts.
 - `install_launcher` adds velocity to the desktop's app menu (a .desktop entry and the
   icon), from Settings or `velocity install-launcher`.
 """
@@ -115,10 +116,34 @@ class RaiseRoute:
 # -- the window ----------------------------------------------------------------------
 
 
+# The app's own ports (decided 2026-11-11): the page's storage (the last engine and
+# model, the reader's place) belongs to its address, so a new port each launch forgot it.
+# The first free one of these, so the address stays the same; `velocity web` uses 8765.
+APP_PORTS = range(8766, 8776)
+
+
+def port_is_free(port: int) -> bool:
+    with socket.socket() as s:
+        if sys.platform != "win32":
+            # As the server will: a port the last app left in TIME_WAIT is free.
+            s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        try:
+            s.bind(("127.0.0.1", port))
+        except OSError:
+            return False
+        return True
+
+
 def free_port() -> int:
     with socket.socket() as s:
         s.bind(("127.0.0.1", 0))
         return s.getsockname()[1]
+
+
+def app_port() -> int:
+    """The app's port: the first free one of APP_PORTS, else any free port (the page
+    then starts without its remembered choices)."""
+    return next((p for p in APP_PORTS if port_is_free(p)), None) or free_port()
 
 
 def icon_svg() -> Path:
@@ -170,7 +195,7 @@ def run_app(subject_slug: str | None = None) -> int:
         config = load_config_or_none()
         if config and subject_slug:
             load_subject(config, subject_slug)  # fail early on an unknown subject
-        port = free_port()
+        port = app_port()
         window = None
 
         def show_window() -> None:
