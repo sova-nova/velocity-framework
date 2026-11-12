@@ -8,9 +8,9 @@
 
 // The legacy build: PDF.js 6 itself uses JavaScript newer than the desktop app's window
 // (Qt WebEngine, Chromium 140) has, e.g. Map.getOrInsertComputed; the legacy build brings
-// its own versions of those, in the worker too (decided 2026-11-11).
-const PDFJS = "https://cdn.jsdelivr.net/npm/pdfjs-dist@6.4.299";
-const PDFJS_BUILD = `${PDFJS}/legacy`;
+// its own versions of those, in the worker too (decided 2026-11-11). Bundled with velocity,
+// not from a CDN (security review, 2026-11-12; packaging/vendor.py).
+const PDFJS_BUILD = "/static/vendor/pdfjs-dist/legacy";
 const READER_KEY = (slug) => `velocity.reader.${slug}`; // {source, page, section}
 const READER_WIDTH_KEY = "velocity.reader.width";
 
@@ -172,7 +172,6 @@ async function loadPdfJs() {
   css.href = `${PDFJS_BUILD}/web/pdf_viewer.css`;
   document.head.append(css);
   const lib = await import(`${PDFJS_BUILD}/build/pdf.min.mjs`);
-  // A worker from another origin is wrapped by PDF.js itself (a blob that imports it).
   lib.GlobalWorkerOptions.workerSrc = `${PDFJS_BUILD}/build/pdf.worker.min.mjs`;
   globalThis.pdfjsLib = lib; // the viewer module reads the library from here
   const viewer = await import(`${PDFJS_BUILD}/web/pdf_viewer.mjs`);

@@ -10,6 +10,7 @@ read here, through the session code.
 import asyncio
 import contextlib
 import json
+import mimetypes
 import os
 import re
 import subprocess
@@ -85,6 +86,16 @@ DEFAULT_PORT = 8765
 ALLOWED_HOSTS = ["127.0.0.1", "localhost"]
 _FRONT_MATTER = re.compile(r"\A---\n.*?\n---\n", re.DOTALL)
 STATIC = Path(str(files("velocity").joinpath("web_static")))
+
+# The page's libraries are served from here (web_static/vendor/). Windows can map these
+# to other types in its registry; a module script with a wrong type doesn't run.
+for _type, _suffixes in {
+    "text/javascript": (".js", ".mjs"),
+    "text/css": (".css",),
+    "font/woff2": (".woff2",),
+}.items():
+    for _suffix in _suffixes:
+        mimetypes.add_type(_type, _suffix)
 
 
 class SameOriginMiddleware:
