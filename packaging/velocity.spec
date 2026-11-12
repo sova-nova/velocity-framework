@@ -31,6 +31,10 @@ a = Analysis(
 )
 pyz = PYZ(a.pure)
 
+# Python's UTF-8 mode, so text files are UTF-8 on Windows too (Windows' default is its
+# old code page); velocity's own code names its encodings, this is the safety net.
+utf8_mode = [("X utf8_mode=1", None, "OPTION")]
+
 if sys.platform == "win32":
     # Windows (2026-11-11): velocity.exe is the app, windowed (no console window);
     # velocity-cli.exe is the same program with a console, which velocity starts for its
@@ -38,7 +42,7 @@ if sys.platform == "win32":
     app = EXE(
         pyz,
         a.scripts,
-        [],
+        utf8_mode,
         exclude_binaries=True,
         name="velocity",
         console=False,
@@ -47,7 +51,7 @@ if sys.platform == "win32":
     cli = EXE(
         pyz,
         a.scripts,
-        [],
+        utf8_mode,
         exclude_binaries=True,
         name="velocity-cli",
         console=True,

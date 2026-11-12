@@ -1,7 +1,8 @@
-# Builds the Linux app (an AppImage) when a version tag is pushed, and attaches it to a
-# GitHub Release (decided 2026-11-11). To release: set `version` in pyproject.toml, merge,
-# then `git tag v<version> && git push origin v<version>`. Started by hand (Actions → Release
-# → Run workflow), it only builds, and keeps the AppImage as a run artifact: a trial build.
+# Builds velocity's apps when a version tag is pushed, and attaches them to a GitHub
+# Release (decided 2026-11-11): the Linux AppImage, and the Windows installer and portable
+# zip. To release: set `version` in pyproject.toml, merge, then
+# `git tag v<version> && git push origin v<version>`. Started by hand (Actions → Release →
+# Run workflow), it only builds, and keeps the files as run artifacts: a trial build.
 name: Release
 
 on:
@@ -13,12 +14,10 @@ permissions:
   contents: write  # to create the release
 
 jobs:
-  appimage:
-    # The oldest supported Ubuntu, so the app runs on older Linux systems too (glibc).
-    runs-on: ubuntu-22.04
+  check:
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10.3.3
       - name: The tag matches the version
         if: github.ref_type == 'tag'
         run: |
@@ -27,6 +26,14 @@ jobs:
             echo "Tag $GITHUB_REF_NAME doesn't match version $version in pyproject.toml"
             exit 1
           fi
+
+  linux:
+    needs: check
+    # The oldest supported Ubuntu, so the app runs on older Linux systems too (glibc).
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.3.3
       - name: Libraries the bundled Qt needs at build time
         run: |
           sudo apt-get update
@@ -35,18 +42,48 @@ jobs:
             libgbm1 libasound2 file
       - name: Build the AppImage
         run: packaging/build_appimage.sh
-      - name: Keep the trial build
-        if: github.ref_type != 'tag'
-        uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@v7
         with:
-          name: velocity-appimage
+          name: velocity-linux
           path: build/velocity-*-x86_64.AppImage
           retention-days: 7
+
+  windows:
+    needs: check
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.3.3
+      - name: Inno Setup
+        run: choco install innosetup -y --no-progress
+      - name: Build the installer and the portable zip
+        run: powershell -ExecutionPolicy Bypass -File packaging\build_windows.ps1
+      - uses: actions/upload-artifact@v7
+        with:
+          name: velocity-windows
+          path: |
+            build/velocity-*-windows-setup.exe
+            build/velocity-*-windows-portable.zip
+          retention-days: 7
+
+  release:
+    if: github.ref_type == 'tag'
+    needs: [linux, windows]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          path: files
+          merge-multiple: true
       - name: Publish the release
-        if: github.ref_type == 'tag'
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
         run: |
-          gh release create "$GITHUB_REF_NAME" build/velocity-*-x86_64.AppImage \
+          gh release create "$GITHUB_REF_NAME" files/* \
             --title "velocity $GITHUB_REF_NAME" \
-            --notes "Download velocity-*-x86_64.AppImage, make it executable, and open it. See the README's install section. This download doesn't include OCR."
+            --notes "**Windows:** download \`velocity-*-windows-setup.exe\` and run it (Windows warns about an unknown publisher once: click **More info**, then **Run anyway**). Or the portable zip: unzip it anywhere and open \`velocity.exe\`.
+
+          **Linux:** download \`velocity-*-x86_64.AppImage\`, make it executable, and open it.
+
+          These downloads don't include OCR (scanned or math-heavy PDFs need the install from source). See the README."
