@@ -23,6 +23,9 @@ requires = ["uv_build>=0.13.5,<0.14.0"]
 build-backend = "uv_build"
 
 [dependency-groups]
+app = [
+    "pywebview[qt]>=6.2.1",
+]
 dev = [
     "httpx>=0.28",
     "pytest>=9.2.0",
@@ -37,7 +40,9 @@ ocr = [
 [tool.uv]
 # OCR is part of the default dev environment, so `uv run` keeps it installed.
 # CI skips it (`--no-group ocr`); it needs a GPU-less torch download only for real OCR.
-default-groups = ["dev", "ocr"]
+# The desktop window (`velocity app`, decided 2026-11-11) is too: CI skips it as well,
+# since its tests don't open a window.
+default-groups = ["dev", "ocr", "app"]
 
 [tool.uv.sources]
 torch = { index = "pytorch-cpu" }

@@ -16,6 +16,7 @@ import importlib.util
 import os
 import shutil
 import subprocess
+import sys
 from collections.abc import Callable
 from pathlib import Path
 
@@ -24,7 +25,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 from starlette.routing import Route
 
-from velocity import openai_engine
+from velocity import desktop, openai_engine
 from velocity.config import (
     EFFORTS,
     MODEL_SHORT_NAMES,
@@ -148,6 +149,11 @@ def settings_json(config: Config | None, suggest: bool = False) -> dict:
         ),
         "openai_images": bool(config and config.openai_images),
         "openai_presets": openai_engine.PRESETS,
+        # The app menu entry (desktop app, 2026-11-11): Linux only for now.
+        "launcher": {
+            "supported": sys.platform == "linux",
+            "installed": desktop.launcher_installed(),
+        },
         "models": list(MODEL_SHORT_NAMES),
         "efforts": list(EFFORTS),
         "checks": checks(config),
@@ -223,10 +229,19 @@ def settings_routes(
         )
         return JSONResponse(await openai_engine.check_model(trial))
 
+    async def add_launcher(request: Request) -> Response:
+        """Add velocity to the app menu (or update the entry)."""
+        try:
+            path = desktop.install_launcher()
+        except OSError as e:
+            return JSONResponse({"error": str(e)}, 400)
+        return JSONResponse({"installed": True, "path": path.as_posix()})
+
     return [
         Route("/api/settings", get),
         Route("/api/settings", post, methods=["POST"]),
         Route("/api/settings/test-model", test_model, methods=["POST"]),
+        Route("/api/settings/launcher", add_launcher, methods=["POST"]),
     ]
 
 
