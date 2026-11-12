@@ -99,6 +99,8 @@ async function openAppSettings() {
   showLauncher(s.launcher);
   $("#app-config-path").textContent = s.config_path;
   setupStatus("#app-settings-status", "");
+  $("#update-status").textContent = `This is velocity ${s.version}.`;
+  $("#update-link").hidden = true;
   $("#app-settings").showModal();
 }
 
@@ -292,6 +294,30 @@ async function refreshFreeKey() {
   showKeys(await getJSON(`/api/settings/keys?base_url=${url}`));
 }
 
+// -- Settings → Check for updates (desktop app, 2026-11-11) ----------------------------
+// Asks GitHub for the latest release only when pressed; the download is the learner's.
+
+async function checkUpdate() {
+  const status = $("#update-status");
+  const link = $("#update-link");
+  link.hidden = true;
+  status.textContent = "Checking…";
+  try {
+    const r = await postJSON("/api/settings/update");
+    if (r.error) {
+      status.textContent = `${r.error} (this is version ${r.current})`;
+    } else if (r.newer) {
+      status.textContent = `Version ${r.latest} is out (this is ${r.current}).`;
+      link.href = r.url;
+      link.hidden = false;
+    } else {
+      status.textContent = `You have the latest version (${r.current}).`;
+    }
+  } catch (error) {
+    status.textContent = error.message;
+  }
+}
+
 // -- Settings → the app menu (desktop app, 2026-11-11) ---------------------------------
 
 function showLauncher(launcher) {
@@ -458,6 +484,7 @@ function setUpSettings() {
   $("#free-preset").addEventListener("change", pickFreePreset);
   $("#free-test").addEventListener("click", testFreeModel);
   $("#launcher-add").addEventListener("click", addLauncher);
+  $("#update-check").addEventListener("click", checkUpdate);
   for (const field of document.querySelectorAll(".key-field")) {
     field.querySelector(".key-save").addEventListener("click", () => saveKey(field));
     field.querySelector(".key-remove").addEventListener("click", () => saveKey(field, true));

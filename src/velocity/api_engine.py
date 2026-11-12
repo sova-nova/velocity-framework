@@ -14,7 +14,6 @@ cost and the session's total so far, both estimates from the token counts.
 import asyncio
 import contextlib
 import os
-import sys
 from collections.abc import AsyncIterator, Callable
 from contextlib import AbstractAsyncContextManager
 
@@ -32,6 +31,7 @@ from velocity.agent import (
 )
 from velocity.config import Config, Subject
 from velocity.engine import ChatEvent, EngineError
+from velocity.runtime import self_command
 from velocity.session import Session, active_session_id, record_dir
 from velocity.skills import load_skills
 
@@ -58,9 +58,10 @@ async def connect_mcp(subject: Subject):
     """velocity's MCP server over stdio, the same server `velocity chat` uses."""
     from mcp import Client, StdioServerParameters
 
+    command, *args = self_command("mcp", "--subject", subject.slug)
     server = StdioServerParameters(
-        command=sys.executable,
-        args=["-m", "velocity.cli", "mcp", "--subject", subject.slug],
+        command=command,
+        args=args,
         # The whole environment, as Claude Code passes it: the SDK's default keeps only
         # a few variables, so the server would miss XDG_* (and read another config) and
         # LLAMA_CPP_BINARY (found 2026-11-11).

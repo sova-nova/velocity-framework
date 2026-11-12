@@ -28,7 +28,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 from starlette.routing import Route
 
-from velocity import desktop, keys, ollama, openai_engine
+from velocity import __version__, desktop, keys, ollama, openai_engine, runtime
 from velocity.config import (
     EFFORTS,
     MODEL_SHORT_NAMES,
@@ -107,10 +107,18 @@ def checks(config: Config | None) -> list[dict]:
             "name": "Reading PDFs (OCR)",
             "ok": bool(ocr_ok),
             "detail": detail,
-            "fix": "Needed to read PDF sections (math included). Install the OCR "
-            "packages with `uv sync --group ocr`; without an NVIDIA GPU, also set "
-            "the llama.cpp program in Settings. Looking at pages and searching work "
-            "without it.",
+            "fix": (
+                # The downloaded app comes without OCR (decided 2026-11-11).
+                "The downloaded app doesn't include OCR. PDFs with selectable text, "
+                "EPUB, Markdown and HTML work, and the tutor can look at pages; "
+                "scanned or math-heavy PDFs need the full install from source "
+                "(see the README)."
+                if runtime.packaged()
+                else "Needed to read PDF sections (math included). Install the OCR "
+                "packages with `uv sync --group ocr`; without an NVIDIA GPU, also set "
+                "the llama.cpp program in Settings. Looking at pages and searching "
+                "work without it."
+            ),
         }
     )
     return out
@@ -156,6 +164,8 @@ def settings_json(config: Config | None, suggest: bool = False) -> dict:
         ),
         "openai_images": bool(config and config.openai_images),
         "openai_presets": openai_engine.PRESETS,
+        "version": __version__,
+        "packaged": runtime.packaged(),
         # Where each key comes from (keys.py); never the keys themselves.
         "keys": key_statuses(config),
         # The app menu entry (desktop app, 2026-11-11): Linux only for now.
@@ -168,6 +178,52 @@ def settings_json(config: Config | None, suggest: bool = False) -> dict:
         "checks": checks(config),
         "suggestions": vault_suggestions() if suggest else [],
         "home": Path.home().as_posix(),
+    }
+
+
+RELEASES_API = (
+    "https://api.github.com/repos/sova-nova/velocity-framework/releases/latest"
+)
+RELEASES_PAGE = "https://github.com/sova-nova/velocity-framework/releases/latest"
+
+
+def version_tuple(text: str) -> tuple[int, ...]:
+    """ "v0.10.2" -> (0, 10, 2); anything that isn't a number counts as 0."""
+    return tuple(
+        int(part) if part.isdigit() else 0 for part in text.lstrip("vV").split(".")
+    )
+
+
+async def latest_release(client=None) -> dict:
+    """This version, the latest release on GitHub, and whether that is newer. The
+    download is left to the learner (their browser), so velocity never replaces itself."""
+    import httpx
+
+    from velocity import __version__
+
+    answer = {
+        "current": __version__,
+        "latest": None,
+        "newer": False,
+        "url": RELEASES_PAGE,
+    }
+    try:
+        async with client or httpx.AsyncClient(timeout=10) as http:
+            response = await http.get(
+                RELEASES_API, headers={"Accept": "application/vnd.github+json"}
+            )
+    except httpx.HTTPError:
+        return answer | {"error": "Couldn't reach GitHub. Check your connection."}
+    if response.status_code == 404:
+        return answer | {"error": "No release has been published yet."}
+    if response.status_code != 200:
+        return answer | {"error": f"GitHub answered {response.status_code}."}
+    release = response.json()
+    latest = str(release.get("tag_name") or "").lstrip("vV")
+    return answer | {
+        "latest": latest,
+        "newer": version_tuple(latest) > version_tuple(__version__),
+        "url": release.get("html_url") or RELEASES_PAGE,
     }
 
 
@@ -315,6 +371,11 @@ def settings_routes(
         await ollama.downloads.cancel()
         return JSONResponse(ollama.downloads.status())
 
+    async def check_update(request: Request) -> Response:
+        """Check for updates (decided 2026-11-11): only when the learner presses the button,
+        never on its own. Asks GitHub for the latest release."""
+        return JSONResponse(await latest_release())
+
     async def add_launcher(request: Request) -> Response:
         """Add velocity to the app menu (or update the entry)."""
         try:
@@ -329,6 +390,7 @@ def settings_routes(
         Route("/api/settings/test-model", test_model, methods=["POST"]),
         Route("/api/settings/launcher", add_launcher, methods=["POST"]),
         Route("/api/settings/key", key, methods=["POST"]),
+        Route("/api/settings/update", check_update, methods=["POST"]),
         Route("/api/ollama", ollama_status),
         Route("/api/ollama/download", ollama_download, methods=["POST"]),
         Route("/api/ollama/cancel", ollama_cancel, methods=["POST"]),

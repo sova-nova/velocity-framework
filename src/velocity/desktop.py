@@ -27,6 +27,7 @@ from importlib.resources import files
 from pathlib import Path
 
 from velocity.config import data_dir
+from velocity.runtime import self_command
 
 APP_ID = "velocity"
 TITLE = "velocity"
@@ -223,7 +224,7 @@ def launch_command() -> list[str]:
     found = shutil.which("velocity")
     if found:
         return [found, "app"]
-    return [sys.executable, "-m", "velocity.cli", "app"]
+    return self_command("app")
 
 
 def applications_dir() -> Path:

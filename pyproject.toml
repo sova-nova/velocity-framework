@@ -27,6 +27,9 @@ build-backend = "uv_build"
 app = [
     "pywebview[qt]>=6.2.1",
 ]
+build = [
+    "pyinstaller>=6",
+]
 dev = [
     "httpx>=0.28",
     "pytest>=9.2.0",

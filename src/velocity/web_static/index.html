@@ -247,6 +247,12 @@
       <button id="launcher-add" type="button"></button>
       <span id="launcher-status" class="hint" role="status"></span>
     </div>
+    <!-- Only when pressed: velocity never checks on its own (decided 2026-11-11). -->
+    <div class="inline update-row">
+      <button id="update-check" type="button">Check for updates</button>
+      <span id="update-status" class="hint" role="status"></span>
+      <a id="update-link" target="_blank" rel="noopener" hidden>Download it</a>
+    </div>
     <h3>Sessions</h3>
     <div class="inline">
       <button id="cleanup-open" title="Sessions with nothing in them, or only a wrap-up of nothing">Find empty sessions…</button>
