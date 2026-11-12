@@ -9,6 +9,7 @@ import json
 import os
 import re
 import shutil
+import sys
 import tomllib
 from dataclasses import dataclass
 from pathlib import Path
@@ -23,17 +24,23 @@ class ConfigError(Exception):
 
 
 def config_dir() -> Path:
-    return (
-        Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config") / "velocity"
-    )
+    """Settings (config.toml). On Windows %APPDATA%\\velocity (decided 2026-11-11), unless
+    XDG_CONFIG_HOME is set (the tests set it everywhere)."""
+    if os.environ.get("XDG_CONFIG_HOME"):
+        return Path(os.environ["XDG_CONFIG_HOME"]) / "velocity"
+    if sys.platform == "win32" and os.environ.get("APPDATA"):
+        return Path(os.environ["APPDATA"]) / "velocity"
+    return Path.home() / ".config" / "velocity"
 
 
 def data_dir() -> Path:
-    """Tool-owned data outside the vault: workspaces, OCR cache, session records."""
-    return (
-        Path(os.environ.get("XDG_DATA_HOME") or Path.home() / ".local/share")
-        / "velocity"
-    )
+    """Tool-owned data outside the vault: workspaces, OCR cache, session records. On
+    Windows %LOCALAPPDATA%\\velocity, unless XDG_DATA_HOME is set."""
+    if os.environ.get("XDG_DATA_HOME"):
+        return Path(os.environ["XDG_DATA_HOME"]) / "velocity"
+    if sys.platform == "win32" and os.environ.get("LOCALAPPDATA"):
+        return Path(os.environ["LOCALAPPDATA"]) / "velocity"
+    return Path.home() / ".local" / "share" / "velocity"
 
 
 @dataclass(frozen=True)
