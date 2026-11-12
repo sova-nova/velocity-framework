@@ -200,6 +200,8 @@ The OCR cache stays outside the vault, so copyrighted text never syncs or gets i
 
 **What you share.** Everything runs locally, but what you say, the source sections the tutor reads, and any notes it reads are sent to Anthropic's API (directly in `velocity chat`, through Claude Code in `velocity tutor`). The tutor reminds you of this at the start of every session. With a [free model](#free-models) on your own computer, nothing leaves it; with a hosted free tier, it all goes to that service instead, and free tiers may use conversations for training. The web page says which applies before you start.
 
+**Looking things up.** On Claude Code (`velocity tutor`, or Claude Code on the web page), the tutor may search the web and read Wikipedia on its own, for recent topics or facts it isn't sure of, and it says when an answer comes from there. A search sends its query to Anthropic's search; reading any other site asks you first in the terminal and isn't possible on the web page. The API engine and free models don't look things up.
+
 ## How it works
 
 ```

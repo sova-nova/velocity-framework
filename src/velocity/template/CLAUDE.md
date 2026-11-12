@@ -85,7 +85,7 @@ callouts in color. Use them so the learner can see at a glance what each part of
 The learner adds sources outside the session, in a terminal:
 `velocity source add {subject_slug} <file.pdf> --name <short name>`, then starts a new session.
 If they ask how to add a source, give them that command. You can't add sources yourself.
-
+{web_section}
 ## Skills
 
 The learner can use:
