@@ -213,8 +213,14 @@ async function showPdf(source, page) {
       await loadPdfJs();
       await closePdf();
       const url = `/api/subjects/${subject()}/sources/${encodeURIComponent(source.name)}/file`;
-      // Fetched in ranges as pages are shown, not all at once.
-      pdf.task = pdf.lib.getDocument({ url, disableAutoFetch: true, disableStream: true });
+      // Fetched in ranges as pages are shown, not all at once. No eval for fonts: the
+      // page's security policy forbids it (and it was PDF.js's way in for CVE-2024-4367).
+      pdf.task = pdf.lib.getDocument({
+        url,
+        disableAutoFetch: true,
+        disableStream: true,
+        isEvalSupported: false,
+      });
       pdf.doc = await pdf.task.promise;
       pdf.name = source.name;
       pdf.viewer.setDocument(pdf.doc);
