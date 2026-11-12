@@ -6,7 +6,11 @@
 // logs become links that open the reader there. Uses $, getJSON, renderMarkdown,
 // subject and showView from app.js.
 
+// The legacy build: PDF.js 6 itself uses JavaScript newer than the desktop app's window
+// (Qt WebEngine, Chromium 140) has, e.g. Map.getOrInsertComputed; the legacy build brings
+// its own versions of those, in the worker too (decided 2026-11-11).
 const PDFJS = "https://cdn.jsdelivr.net/npm/pdfjs-dist@6.4.299";
+const PDFJS_BUILD = `${PDFJS}/legacy`;
 const READER_KEY = (slug) => `velocity.reader.${slug}`; // {source, page, section}
 const READER_WIDTH_KEY = "velocity.reader.width";
 
@@ -165,13 +169,13 @@ async function loadPdfJs() {
   if (pdf.lib) return;
   const css = document.createElement("link");
   css.rel = "stylesheet";
-  css.href = `${PDFJS}/web/pdf_viewer.css`;
+  css.href = `${PDFJS_BUILD}/web/pdf_viewer.css`;
   document.head.append(css);
-  const lib = await import(`${PDFJS}/build/pdf.min.mjs`);
+  const lib = await import(`${PDFJS_BUILD}/build/pdf.min.mjs`);
   // A worker from another origin is wrapped by PDF.js itself (a blob that imports it).
-  lib.GlobalWorkerOptions.workerSrc = `${PDFJS}/build/pdf.worker.min.mjs`;
+  lib.GlobalWorkerOptions.workerSrc = `${PDFJS_BUILD}/build/pdf.worker.min.mjs`;
   globalThis.pdfjsLib = lib; // the viewer module reads the library from here
-  const viewer = await import(`${PDFJS}/web/pdf_viewer.mjs`);
+  const viewer = await import(`${PDFJS_BUILD}/web/pdf_viewer.mjs`);
   pdf.eventBus = new viewer.EventBus();
   pdf.links = new viewer.PDFLinkService({ eventBus: pdf.eventBus });
   pdf.viewer = new viewer.PDFViewer({
