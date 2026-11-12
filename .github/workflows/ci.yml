@@ -8,10 +8,12 @@ on:
 jobs:
   test:
     # Linux, and Windows and macOS since the desktop app runs there too (2026-11-11).
+    # macOS only after a merge to main (2026-11-12): GitHub's macOS runners often keep a
+    # pull request waiting for minutes, and macOS isn't a focus yet.
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        os: ${{ github.event_name == 'pull_request' && fromJSON('["ubuntu-latest", "windows-latest"]') || fromJSON('["ubuntu-latest", "windows-latest", "macos-latest"]') }}
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
