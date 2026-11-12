@@ -28,7 +28,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 from starlette.routing import Route
 
-from velocity import desktop, keys, openai_engine
+from velocity import desktop, keys, ollama, openai_engine
 from velocity.config import (
     EFFORTS,
     MODEL_SHORT_NAMES,
@@ -286,6 +286,35 @@ def settings_routes(
             return JSONResponse({"error": str(e)}, 400)
         return JSONResponse(key_statuses(config, url))
 
+    async def ollama_status(request: Request) -> Response:
+        """Ollama on this computer, and the download in progress (desktop app PR 3)."""
+        found = await ollama.find()
+        return JSONResponse(
+            {
+                **found,
+                "download": ollama.downloads.status(),
+                "suggested": ollama.SUGGESTED,
+                "velocity_model": ollama.velocity_name(ollama.SUGGESTED),
+                "ready": ollama.velocity_name(ollama.SUGGESTED) in found["models"]
+                or f"{ollama.velocity_name(ollama.SUGGESTED)}:latest"
+                in found["models"],
+                "base_url": ollama.openai_url(),
+                "context": ollama.CONTEXT,
+                "download_page": ollama.DOWNLOAD_PAGE,
+            }
+        )
+
+    async def ollama_download(request: Request) -> Response:
+        try:
+            job = ollama.downloads.start()
+        except RuntimeError as e:
+            return JSONResponse({"error": str(e)}, 409)
+        return JSONResponse(dataclasses.asdict(job))
+
+    async def ollama_cancel(request: Request) -> Response:
+        await ollama.downloads.cancel()
+        return JSONResponse(ollama.downloads.status())
+
     async def add_launcher(request: Request) -> Response:
         """Add velocity to the app menu (or update the entry)."""
         try:
@@ -300,6 +329,9 @@ def settings_routes(
         Route("/api/settings/test-model", test_model, methods=["POST"]),
         Route("/api/settings/launcher", add_launcher, methods=["POST"]),
         Route("/api/settings/key", key, methods=["POST"]),
+        Route("/api/ollama", ollama_status),
+        Route("/api/ollama/download", ollama_download, methods=["POST"]),
+        Route("/api/ollama/cancel", ollama_cancel, methods=["POST"]),
         Route(
             "/api/settings/keys",
             lambda request: JSONResponse(

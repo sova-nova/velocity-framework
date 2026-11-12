@@ -207,7 +207,9 @@ async def ollama_context(config: Config) -> int | None:
     except (httpx.HTTPError, ValueError):
         return None
     for model in running.get("models", []) if isinstance(running, dict) else []:
-        if config.openai_model in (model.get("name"), model.get("model")):
+        wanted = config.openai_model
+        names = (model.get("name"), model.get("model"))
+        if wanted in names or (":" not in wanted and f"{wanted}:latest" in names):
             size = model.get("context_length")
             return size if isinstance(size, int) else None
     return None
