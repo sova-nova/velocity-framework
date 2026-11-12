@@ -202,6 +202,8 @@ The OCR cache stays outside the vault, so copyrighted text never syncs or gets i
 
 **Looking things up.** On Claude Code (`velocity tutor`, or Claude Code on the web page), the tutor may search the web and read Wikipedia on its own, for recent topics or facts it isn't sure of, and it says when an answer comes from there. A search sends its query to Anthropic's search; reading any other site asks you first in the terminal and isn't possible on the web page. The API engine and free models don't look things up.
 
+**One person per computer.** The web page and the app talk to a small server that velocity runs on your computer. It only accepts connections from the same computer, and other websites open in your browser can't use it, but it has no password. On a computer shared by several user accounts, someone else logged in while velocity is running could read your sessions and progress through it. Use velocity on a computer where you're the only one logged in, or close it when you're done.
+
 ## How it works
 
 ```
