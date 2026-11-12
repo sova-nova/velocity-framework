@@ -46,21 +46,22 @@ An excerpt from a real session log, as it appears in Obsidian (math renders ther
 | `/next` | Suggests two or three things to do next (open threads, weak spots, the next section) without starting any |
 | `/end-session` | Recap, progress update, review schedule, a prompt to take notes |
 
-## Install the app (Linux, no terminal)
+## Install the app (Windows and Linux, no terminal)
 
-1. Download `velocity-<version>-x86_64.AppImage` from the [latest release](https://github.com/sova-nova/velocity-framework/releases/latest).
-2. Make it executable: in your file manager, right-click it → Properties → Permissions → "Is executable" (or `chmod +x` it).
-3. Open it. The first time, it asks for your notes folder and offers to add velocity to your app menu.
+Download from the [latest release](https://github.com/sova-nova/velocity-framework/releases/latest):
 
-Then pick how the tutor runs: your **Anthropic API key** (paste it in Settings; it's saved in your system keyring), a [free model](#free-models) (Settings → **Download model**, with [Ollama](https://ollama.com/download) installed), or Claude Code if you already use it. **Settings → Check for updates** tells you when a new version is out (velocity never checks on its own).
+- **Windows:** `velocity-<version>-windows-setup.exe`. Run it; it installs for you only (no administrator rights) and adds velocity to the Start menu. velocity isn't signed, so Windows warns once about an unknown publisher: click **More info**, then **Run anyway**. Prefer not to install? The **portable** zip (`velocity-<version>-windows-portable.zip`) works too: unzip it anywhere and open `velocity.exe`.
+- **Linux:** `velocity-<version>-x86_64.AppImage`. Make it executable (in your file manager: right-click → Properties → Permissions → "Is executable", or `chmod +x`) and open it. The first time, it offers to add velocity to your app menu. If it doesn't open, your system may need FUSE (`fuse` or `libfuse2` in your package manager).
 
-The app doesn't include OCR: PDFs with selectable text, EPUB, Markdown and HTML work, and the tutor can look at pages, but scanned or math-heavy PDFs need the full install below. If the AppImage doesn't open, your system may need FUSE (`fuse` or `libfuse2` in your package manager). macOS and Windows downloads are planned; on those, use the install below for now.
+The first time, velocity asks for your notes folder. Then pick how the tutor runs: your **Anthropic API key** (paste it in Settings; it's saved in your system's keyring or Credential Manager), a [free model](#free-models) (Settings → **Download model**, with [Ollama](https://ollama.com/download) installed), or Claude Code if you already use it (untested on Windows). **Settings → Check for updates** tells you when a new version is out (velocity never checks on its own). Uninstalling keeps your settings, sessions and keys.
 
-To build the AppImage yourself: `packaging/build_appimage.sh` (needs `uv`; it builds in `build/` and leaves your environment alone).
+The downloads don't include OCR: PDFs with selectable text, EPUB, Markdown and HTML work, and the tutor can look at pages, but scanned or math-heavy PDFs need the full install below. A macOS download is planned; on a Mac, use the install below for now.
+
+To build them yourself: `packaging/build_appimage.sh` on Linux, `packaging\build_windows.ps1` on Windows (needs [Inno Setup](https://jrsoftware.org/isinfo.php) too). Both need `uv`, build in `build/`, and leave your environment alone.
 
 ## Setup
 
-Requirements: Linux or macOS (Windows is best effort) and [uv](https://docs.astral.sh/uv/). To chat on your Claude plan you need [Claude Code](https://claude.com/claude-code) 2.1.314 or later; for the API engine (`velocity chat`, or API chats on the web page), an Anthropic API key. Without either, the web page can use a [free model](#free-models) (weaker).
+Requirements: Linux, Windows or macOS (the test suite runs on all three) and [uv](https://docs.astral.sh/uv/). To chat on your Claude plan you need [Claude Code](https://claude.com/claude-code) 2.1.314 or later; for the API engine (`velocity chat`, or API chats on the web page), an Anthropic API key. Without either, the web page can use a [free model](#free-models) (weaker).
 
 **[Obsidian](https://obsidian.md) (free) is strongly recommended.** velocity keeps its session logs and progress as markdown in a folder of your notes, and Obsidian is the best way to work with them. Without it velocity still works, with any folder: the web page shows your chats, logs (math included), books and progress. What you'd miss:
 
@@ -78,7 +79,7 @@ uv sync
 
 The easiest start is the web page: run `uv run velocity web`. On the first run it asks for your notes folder (suggesting the Obsidian vaults it finds), shows what this computer can do (Claude Code, an API key, OCR), and from there you create subjects, add books and chat. The same settings are under **Settings** later.
 
-To use velocity as an app in its own window instead of a browser tab, run `uv run velocity app` (Linux; macOS and Windows should work but are untested). On first run, setup offers to add velocity to your app menu, so after that you can open it without a terminal; **Settings → Add velocity to the app menu** (or `uv run velocity install-launcher`) does it later. Closing the window pauses any open chat. Started from the menu, the app doesn't see keys exported in a terminal, so add your API key in **Settings** (it's saved in your system keyring). For a ready-made download instead, see [Install the app](#install-the-app-linux-no-terminal).
+To use velocity as an app in its own window instead of a browser tab, run `uv run velocity app` (Linux and Windows; macOS should work but is untested). On first run, setup offers to add velocity to your app menu, so after that you can open it without a terminal; **Settings → Add velocity to the app menu** (or `uv run velocity install-launcher`) does it later. Closing the window pauses any open chat. Started from the menu, the app doesn't see keys exported in a terminal, so add your API key in **Settings** (it's saved in your system keyring). For a ready-made download instead, see [Install the app](#install-the-app-windows-and-linux-no-terminal).
 
 For the terminal only, create `~/.config/velocity/config.toml` yourself (the web page writes the same file):
 
