@@ -161,7 +161,8 @@ def slugify(name: str) -> str:
 
 
 def _note_folder(config: Config, folder: str, where: Path) -> Path:
-    if Path(folder).is_absolute():
+    # Any root counts: on Windows "/etc" has no drive, so it isn't is_absolute().
+    if Path(folder).is_absolute() or Path(folder).anchor:
         raise ConfigError(
             f"{where}: note folder {folder!r} must be relative to the vault"
         )

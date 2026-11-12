@@ -12,6 +12,7 @@ unprepared pages wait for the current batch (see PdfSource.prepare).
 
 import json
 import os
+import sys
 import time
 from collections.abc import Callable
 from pathlib import Path
@@ -159,6 +160,10 @@ def _write(path: Path, data: dict) -> None:
 def _alive(pid: int) -> bool:
     if pid <= 0:
         return False
+    if sys.platform == "win32":
+        # Not os.kill(pid, 0): on Windows signal 0 is CTRL_C_EVENT, which interrupts
+        # velocity itself (found 2026-11-11 by the Windows CI).
+        return _alive_on_windows(pid)
     try:
         os.kill(pid, 0)
     except ProcessLookupError:
@@ -166,6 +171,23 @@ def _alive(pid: int) -> bool:
     except PermissionError:
         return True
     return True
+
+
+def _alive_on_windows(pid: int) -> bool:
+    import ctypes
+
+    kernel32 = ctypes.windll.kernel32
+    handle = kernel32.OpenProcess(
+        0x1000, False, pid
+    )  # PROCESS_QUERY_LIMITED_INFORMATION
+    if not handle:
+        return False
+    try:
+        code = ctypes.c_ulong()
+        ok = kernel32.GetExitCodeProcess(handle, ctypes.byref(code))
+        return bool(ok) and code.value == 259  # STILL_ACTIVE
+    finally:
+        kernel32.CloseHandle(handle)
 
 
 def format_duration(seconds: float) -> str:

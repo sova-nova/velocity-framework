@@ -38,7 +38,7 @@ def config(tmp_path) -> Config:
 @pytest.fixture
 def books(tmp_path, config):
     stewart = tmp_path / "stewart.md"
-    stewart.write_text("# Limits\n")
+    stewart.write_bytes(b"# Limits\n")  # bytes: Windows would write \r\n in text mode
     notes = tmp_path / "notes.md"
     notes.write_text("# Agents\n")
     add_source(config, "calculus", stewart, "Stewart")
