@@ -442,7 +442,7 @@ pre { background: var(--panel); padding: 0.75rem; border-radius: 6px; overflow-x
 .icon-button:hover { background: var(--panel); color: var(--text); }
 #new-subject, #subject-settings, #archived-subjects { width: min(34rem, 92vw); }
 dialog .field { display: flex; flex-direction: column; gap: 0.3rem; margin: 0.75rem 0; }
-dialog input[type="text"], dialog input[type="number"], dialog textarea {
+dialog input[type="text"], dialog input[type="number"], dialog input[type="password"], dialog textarea {
   font: inherit;
   color: var(--text);
   background: var(--panel);

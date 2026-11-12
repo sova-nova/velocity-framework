@@ -341,7 +341,7 @@ def test_unavailable_until_set_up_and_with_the_key_variable(config, monkeypatch)
         openai_api_key_env="OPENROUTER_API_KEY",
     )
     monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
-    assert "OPENROUTER_API_KEY is not set" in unavailable_reason(keyed)
+    assert "No key for openrouter.ai" in unavailable_reason(keyed)
     monkeypatch.setenv("OPENROUTER_API_KEY", "k")
     assert unavailable_reason(keyed) is None
     assert openai_engine.api_key(keyed) == "k"

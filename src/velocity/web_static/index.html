@@ -180,6 +180,16 @@
       <span class="hint">Used by <code>velocity chat</code>, and for effort on the page's API
         chats (you pick the model when you start one).</span>
     </div>
+    <!-- Keys (decided 2026-11-11): saved in the system keyring, never in velocity's files. -->
+    <div class="field key-field" data-key="anthropic">
+      <span>Anthropic API key</span>
+      <div class="inline">
+        <input type="password" class="key-input" autocomplete="off" placeholder="Paste your key (sk-ant-…)" aria-label="Anthropic API key">
+        <button type="button" class="key-save">Save key</button>
+        <button type="button" class="key-remove" hidden>Remove</button>
+      </div>
+      <span class="hint key-status" role="status"></span>
+    </div>
     <!-- The free engine (decided 2026-11-11): any OpenAI-compatible server. -->
     <h3>Free / other model</h3>
     <p class="hint">A model on your computer (like Ollama) or a hosted free tier. It costs
@@ -198,11 +208,18 @@
     <label class="field">Model
       <input type="text" id="free-model" placeholder="e.g. qwen3:4b">
     </label>
-    <label class="field">Environment variable holding the key (empty for a model on your computer)
+    <div class="field key-field" data-key="openai">
+      <span>Key, for a hosted server (none needed for a model on your computer)</span>
+      <div class="inline">
+        <input type="password" class="key-input" autocomplete="off" placeholder="Paste the server's key" aria-label="Key for the free model's server">
+        <button type="button" class="key-save">Save key</button>
+        <button type="button" class="key-remove" hidden>Remove</button>
+      </div>
+      <span class="hint key-status" role="status"></span>
+    </div>
+    <label class="field">Or the environment variable holding the key (for terminal users)
       <input type="text" id="free-key-env" placeholder="e.g. OPENROUTER_API_KEY">
     </label>
-    <span class="hint">velocity never stores keys. Set the variable in the terminal that runs
-      <code>velocity web</code>, then restart it.</span>
     <label class="field">Context size (tokens)
       <input type="number" id="free-context" min="8192" step="1024">
     </label>
