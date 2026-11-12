@@ -842,6 +842,21 @@ dialog form { margin-top: 1rem; text-align: right; }
    destructive action (.left) at the bottom left. */
 .dialog-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 0.5rem; margin-top: 1.25rem; }
 .dialog-actions .left { margin-right: auto; }
+.settings-actions { flex-wrap: nowrap; align-items: center; }
+.settings-actions button { flex: none; }
+/* At most two lines (the buttons' height); the whole text is in its tooltip. */
+#app-settings-status {
+  flex: 1;
+  min-width: 0;
+  margin: 0 0.5rem 0 0;
+  font-size: 0.9rem;
+  line-height: 1.25;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+#app-settings-status[hidden] { display: block; visibility: hidden; }
 dialog form.dialog-actions { text-align: initial; }
 .help-lines { display: grid; grid-template-columns: max-content 1fr; gap: 0.45rem 1rem; margin: 0.75rem 0 0; }
 .help-lines dt, .help-lines dd { margin: 0; }

@@ -23,6 +23,7 @@ function setupStatus(id, text, isError = false) {
   const line = $(id);
   line.hidden = !text;
   line.textContent = text || "";
+  line.title = text || ""; // Settings shows at most two lines of it
   line.classList.toggle("status-error", isError);
 }
 
