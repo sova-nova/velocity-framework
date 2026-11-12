@@ -9,6 +9,7 @@ Keys: "anthropic" (ANTHROPIC_API_KEY, the API engine), and one per free-engine s
 """
 
 import os
+import re
 from dataclasses import dataclass
 
 SERVICE = "velocity"
@@ -23,6 +24,19 @@ def free_key_name(base_url: str | None) -> str | None:
 
     host = (urlparse(base_url or "").hostname or "").lower()
     return f"openai:{host}" if host else None
+
+
+def free_key_env_ok(name: str | None) -> bool:
+    """Whether `name` may name the free engine's key variable (security review M3,
+    2026-11-12). The page names both the variable and the server, so only a variable
+    meant for an API key is used, and never velocity's own Anthropic key: code in the
+    page can't send HOME, GITHUB_TOKEN or ANTHROPIC_API_KEY to a server of its own.
+    Case doesn't matter, as on Windows."""
+    return bool(
+        name
+        and re.fullmatch(r"[A-Za-z][A-Za-z0-9_]*_API_KEY", name, re.IGNORECASE)
+        and name.upper() != ANTHROPIC_ENV
+    )
 
 
 def _known(name: str | None) -> bool:

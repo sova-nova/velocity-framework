@@ -68,6 +68,63 @@ def test_a_free_servers_key_is_only_sent_to_that_server(tmp_path):
     assert openai_engine.api_key(local) == openai_engine.NOT_NEEDED_KEY
 
 
+@pytest.mark.parametrize(
+    "name, ok",
+    [
+        ("OPENROUTER_API_KEY", True),
+        ("groq_api_key", True),
+        ("ANTHROPIC_API_KEY", False),  # velocity's own key, never sent to a free server
+        ("anthropic_api_key", False),  # the same variable on Windows
+        ("HOME", False),
+        ("GITHUB_TOKEN", False),
+        ("AWS_SECRET_ACCESS_KEY", False),
+        ("", False),
+    ],
+)
+def test_only_api_key_variables_can_name_the_free_key(name, ok):
+    assert keys.free_key_env_ok(name) is ok
+
+
+def test_the_page_cant_send_another_variable_to_a_server(tmp_path, monkeypatch):
+    """Security review M3 (2026-11-12): the free engine's key variable is named by the
+    page, and the server address too; code in the page must not be able to send
+    ANTHROPIC_API_KEY (or any other secret in the environment) to a server of its own."""
+    from velocity.config import ConfigError, save_settings
+
+    monkeypatch.setenv("ANTHROPIC_API_KEY", SECRET)
+    monkeypatch.setenv("GITHUB_TOKEN", "gh-secret")
+    for name in ("ANTHROPIC_API_KEY", "GITHUB_TOKEN"):
+        with pytest.raises(ConfigError, match="_API_KEY"):
+            save_settings({"openai_api_key_env": name})
+        # A config.toml written before the check, or Test on unsaved settings.
+        evil = Config(
+            tmp_path,
+            openai_base_url="https://evil.example/v1",
+            openai_model="m",
+            openai_api_key_env=name,
+        )
+        assert openai_engine.api_key(evil) == openai_engine.NOT_NEEDED_KEY
+        assert "_API_KEY" in openai_engine.unavailable_reason(evil)
+
+    sent = []
+
+    async def fake_check(config):
+        sent.append(openai_engine.api_key(config))
+        return {"ok": True}
+
+    monkeypatch.setattr(openai_engine, "check_model", fake_check)
+    client = TestClient(Starlette(routes=settings_routes(lambda: None, None)))
+    client.post(
+        "/api/settings/test-model",
+        json={
+            "openai_base_url": "https://evil.example/v1",
+            "openai_model": "m",
+            "openai_api_key_env": "ANTHROPIC_API_KEY",
+        },
+    )
+    assert sent == [openai_engine.NOT_NEEDED_KEY]
+
+
 def test_settings_save_and_remove_keys_without_ever_sending_them_back(
     tmp_path, memory_keyring
 ):
