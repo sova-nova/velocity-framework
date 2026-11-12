@@ -107,3 +107,25 @@ def test_without_the_app_packages_it_says_how_to_get_them(monkeypatch, capsys):
     monkeypatch.setitem(sys.modules, "webview", None)  # import webview fails
     assert desktop.run_app() == 1
     assert "uv sync --group app" in capsys.readouterr().out
+
+
+def test_the_app_uses_the_same_port_each_time(monkeypatch):
+    """The page's storage belongs to its address, so a fixed port keeps the remembered
+    engine, model and reader place between launches (decided 2026-11-11)."""
+    taken = set()
+    monkeypatch.setattr(desktop, "port_is_free", lambda port: port not in taken)
+    assert desktop.app_port() == 8766
+    taken.add(8766)  # another program has it
+    assert desktop.app_port() == 8767
+    taken.update(desktop.APP_PORTS)
+    monkeypatch.setattr(desktop, "free_port", lambda: 50123)
+    assert desktop.app_port() == 50123
+
+
+def test_a_port_in_use_is_not_free():
+    import socket
+
+    with socket.socket() as busy:
+        busy.bind(("127.0.0.1", 0))
+        busy.listen()
+        assert not desktop.port_is_free(busy.getsockname()[1])
