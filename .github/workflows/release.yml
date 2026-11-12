@@ -10,14 +10,16 @@ on:
     tags: ["v*"]
   workflow_dispatch:
 
+# Read-only by default; only the job that publishes the release may write (security
+# review L1, 2026-11-12). Actions are pinned by commit, not by tag, which can be moved.
 permissions:
-  contents: write  # to create the release
+  contents: read
 
 jobs:
   check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
       - name: The tag matches the version
         if: github.ref_type == 'tag'
         run: |
@@ -32,8 +34,8 @@ jobs:
     # The oldest supported Ubuntu, so the app runs on older Linux systems too (glibc).
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10.3.3
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2  # v10.3.3
       - name: Libraries the bundled Qt needs at build time
         run: |
           sudo apt-get update
@@ -42,7 +44,7 @@ jobs:
             libgbm1 libasound2 file desktop-file-utils
       - name: Build the AppImage
         run: packaging/build_appimage.sh
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7
         with:
           name: velocity-linux
           path: build/velocity-*-x86_64.AppImage
@@ -52,13 +54,15 @@ jobs:
     needs: check
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10.3.3
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2  # v10.3.3
       - name: Inno Setup
-        run: choco install innosetup -y --no-progress
+        # A fixed version (the runner's own, 2026-11-12), so a newer one on the runner
+        # doesn't change what the installer is built with.
+        run: choco install innosetup --version 6.7.1 --allow-downgrade -y --no-progress
       - name: Build the installer and the portable zip
         run: powershell -ExecutionPolicy Bypass -File packaging\build_windows.ps1
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7
         with:
           name: velocity-windows
           path: |
@@ -70,11 +74,17 @@ jobs:
     if: github.ref_type == 'tag'
     needs: [linux, windows]
     runs-on: ubuntu-latest
+    permissions:
+      contents: write  # to create the release
     steps:
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # v8
         with:
           path: files
           merge-multiple: true
+      - name: Checksums
+        # The apps aren't signed, so testers can at least check that a download is the
+        # file built here (README, "Checking a download").
+        run: cd files && sha256sum velocity-* > SHA256SUMS && cat SHA256SUMS
       - name: Publish the release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -85,5 +95,7 @@ jobs:
             --notes "**Windows:** download \`velocity-*-windows-setup.exe\` and run it (Windows warns about an unknown publisher once: click **More info**, then **Run anyway**). Or the portable zip: unzip it anywhere and open \`velocity.exe\`.
 
           **Linux:** download \`velocity-*-x86_64.AppImage\`, make it executable, and open it.
+
+          **Checking a download:** \`SHA256SUMS\` lists each file's SHA-256 (see the README, \"Checking a download\").
 
           These downloads don't include OCR (scanned or math-heavy PDFs need the install from source). See the README."

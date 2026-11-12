@@ -12,6 +12,10 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 BUILD="$ROOT/build"
 APPIMAGETOOL_VERSION="1.9.0"
+# Its release publishes no checksum: this is the file's sha256 when it was first used
+# (2026-11-11, the same on 2026-11-12). A different file stops the build. When changing
+# the version, download it once and put its sha256 here.
+APPIMAGETOOL_SHA256="46fdd785094c7f6e545b61afcfb0f3d98d8eab243f644b4b17698c01d06083d1"
 APPIMAGETOOL="$BUILD/tools/appimagetool-$APPIMAGETOOL_VERSION-x86_64.AppImage"
 
 cd "$ROOT"
@@ -67,6 +71,11 @@ if [ ! -x "$APPIMAGETOOL" ]; then
     "https://github.com/AppImage/appimagetool/releases/download/$APPIMAGETOOL_VERSION/appimagetool-x86_64.AppImage"
   chmod +x "$APPIMAGETOOL"
 fi
+echo "$APPIMAGETOOL_SHA256  $APPIMAGETOOL" | sha256sum --check --quiet || {
+  echo "appimagetool's checksum doesn't match: not using it." >&2
+  rm -f "$APPIMAGETOOL"
+  exit 1
+}
 OUT="$BUILD/velocity-$VERSION-x86_64.AppImage"
 # Runs without FUSE (e.g. in CI containers).
 APPIMAGE_EXTRACT_AND_RUN=1 ARCH=x86_64 "$APPIMAGETOOL" --no-appstream "$APPDIR" "$OUT"
