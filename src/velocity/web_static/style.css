@@ -28,8 +28,10 @@
   color-scheme: light;
 }
 
+/* Dark: when the system is dark, unless Light is chosen in Settings; or when Dark is
+   chosen (the server puts data-theme on <html>). Keep the two blocks the same. */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --bg: #1b2622;
     --panel: #24332e;
     --text: #eef2ea;
@@ -53,6 +55,31 @@
     --partial: #ee9a5c;
     color-scheme: dark;
   }
+}
+
+:root[data-theme="dark"] {
+  --bg: #1b2622;
+  --panel: #24332e;
+  --text: #eef2ea;
+  --muted: #a7b5ad;
+  --accent: #8fd1bf;
+  --on-accent: #1b2622;
+  --border: #34463f;
+  --callout: #213a33;
+  --band: #26403a;
+  --band-ink: #eef2ea;
+  --band-muted: #a7b5ad;
+  --cite-bg: rgba(242, 201, 76, 0.18);
+  --cite-ink: #f6d36b;
+  --cite-line: #f2c94c;
+  --danger: #e5766d;
+  --warn: #e0b04a;
+  --ok: #7cc98a;
+  --found: rgba(110, 170, 230, 0.32);
+  --progress: #6fa8dc;
+  --done: #6cc489;
+  --partial: #ee9a5c;
+  color-scheme: dark;
 }
 
 * { box-sizing: border-box; }
@@ -535,7 +562,36 @@ button.danger:disabled { opacity: 0.45; }
 .checks .ok .mark { color: var(--ok); }
 .checks .missing .mark { color: var(--warn); }
 .checks .fix { display: block; margin-left: 1.2rem; color: var(--muted); font-size: 0.85rem; }
-#app-settings { width: min(36rem, 92vw); }
+/* Settings: larger, with tabs at the side (decided 2026-11-11); one fixed height, so the
+   dialog doesn't jump when the tab changes. On a narrow window the tabs go on top. */
+#app-settings { width: min(52rem, 94vw); max-width: none; }
+/* Only the tab area gives way when the window is short; the dialog itself never scrolls. */
+#app-settings[open] { display: flex; flex-direction: column; overflow: hidden; }
+#app-settings[open] > * { flex-shrink: 0; }
+#app-settings[open] > .settings-layout { flex-shrink: 1; min-height: 8rem; }
+.settings-layout { display: flex; gap: 1.5rem; height: 34rem; }
+.settings-tabs { display: flex; flex-direction: column; gap: 0.2rem; flex: none; width: 10rem; }
+.settings-tabs button {
+  text-align: left;
+  padding: 0.45rem 0.75rem;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+}
+.settings-tabs button:hover { color: var(--text); background: var(--panel); }
+.settings-tabs button[aria-selected="true"] { background: var(--panel); color: var(--text); font-weight: 600; box-shadow: inset 3px 0 0 var(--accent); }
+.settings-panes { flex: 1; min-width: 0; overflow-y: auto; padding-right: 0.5rem; scrollbar-color: var(--border) transparent; }
+.settings-pane > :first-child { margin-top: 0; }
+#app-theme { align-self: flex-start; }
+.settings-pane .checks { margin-bottom: 1.25rem; }
+.settings-pane > .inline { align-items: center; margin: 0.6rem 0; }
+@media (max-width: 640px) {
+  .settings-layout { flex-direction: column; gap: 0.75rem; }
+  .settings-tabs { flex-direction: row; flex-wrap: wrap; width: auto; }
+  .settings-tabs button[aria-selected="true"] { box-shadow: inset 0 -3px 0 var(--accent); }
+}
 #app-settings .inline select { flex: 1; min-width: 0; margin: 0; }
 body.in-setup header nav, body.in-setup #subject-menu, body.in-setup #book-button,
 body.in-setup #settings-button, body.in-setup #workspace { display: none; }

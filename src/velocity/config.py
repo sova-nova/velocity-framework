@@ -419,6 +419,32 @@ def save_settings(changes: dict, create_vault: bool = False) -> Config:
     return load_config()
 
 
+# The page's colors (decided 2026-11-11): follow the system, or always light or dark.
+# Kept in config.toml, not the page's own storage, so the browser page and the desktop
+# app (a new address each launch) share it; read fresh each time, so changing it needs
+# no restart and is allowed while a chat is open.
+THEMES = ("system", "light", "dark")
+
+
+def load_theme() -> str:
+    """ "light" or "dark" when chosen in Settings, else "system"."""
+    try:
+        theme = _read_toml(config_path()).get("theme")
+    except ConfigError:
+        return "system"
+    return theme if theme in THEMES else "system"
+
+
+def save_theme(theme: str) -> str:
+    if theme not in THEMES:
+        raise ConfigError(f"Unknown theme {theme!r}: use {', '.join(THEMES)}.")
+    path = config_path()
+    if not path.exists():
+        raise ConfigError("Choose your notes folder first.")
+    _set_top_level(path, "theme", None if theme == "system" else _toml_string(theme))
+    return load_theme()
+
+
 def _free_engine_lines(changes: dict) -> dict[str, tuple[str, str | None]]:
     """The [openai] settings among `changes` (keys openai_base_url, openai_model,
     openai_api_key_env, openai_context_size, openai_images), checked, as TOML values."""

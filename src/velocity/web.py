@@ -24,6 +24,7 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 from starlette.requests import Request
 from starlette.responses import (
     FileResponse,
+    HTMLResponse,
     JSONResponse,
     Response,
     StreamingResponse,
@@ -42,6 +43,7 @@ from velocity.config import (
     delete_subject,
     list_subjects,
     load_subject,
+    load_theme,
     remove_source,
     rename_source,
     set_archived,
@@ -131,6 +133,18 @@ class RevalidatePageMiddleware:
         await self.app(scope, receive, send_revalidating)
 
 
+def page() -> HTMLResponse:
+    """The page, with the theme chosen in Settings on <html> so it is drawn in the right
+    colors from the start; "system" leaves it to the system's light or dark setting."""
+    html = (STATIC / "index.html").read_text(encoding="utf-8")
+    theme = load_theme()
+    if theme != "system":
+        html = html.replace(
+            '<html lang="en">', f'<html lang="en" data-theme="{theme}">', 1
+        )
+    return HTMLResponse(html)
+
+
 MIDDLEWARE = [
     Middleware(TrustedHostMiddleware, allowed_hosts=ALLOWED_HOSTS),
     Middleware(SameOriginMiddleware),
@@ -153,7 +167,7 @@ def build_app(
             return None
 
     async def index(request: Request) -> Response:
-        return FileResponse(STATIC / "index.html")
+        return page()
 
     async def subjects(request: Request) -> Response:
         out = []
@@ -888,7 +902,7 @@ def build_setup_app(host: VelocityApp) -> Starlette:
     and the settings that create the config."""
 
     async def index(request: Request) -> Response:
-        return FileResponse(STATIC / "index.html")
+        return page()
 
     routes = [
         Route("/", index),

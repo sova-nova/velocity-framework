@@ -2,8 +2,8 @@
 //
 // Before velocity is set up (no config.toml), the page shows only the setup screen: pick
 // the notes folder (Obsidian vaults found in the home folder are suggested), see what
-// this computer can do, and Start. Later, Settings (top right) changes the notes folder,
-// the llama.cpp program and the API defaults. Saving rewrites config.toml; the server
+// this computer can do, and Start. Later, Settings (top right, in tabs) changes the notes
+// folder, the colors, the llama.cpp program, the API defaults and the free model. Saving rewrites config.toml; the server
 // then runs on the new settings, so the page reloads when the notes folder changes.
 // Uses $, getJSON and postJSON from app.js.
 
@@ -101,7 +101,39 @@ async function openAppSettings() {
   setupStatus("#app-settings-status", "");
   $("#update-status").textContent = `This is velocity ${s.version}.`;
   $("#update-link").hidden = true;
+  showTheme(s.theme);
+  showSettingsTab("general");
   $("#app-settings").showModal();
+}
+
+// -- Settings → tabs and colors (decided 2026-11-11) -------------------------------------
+// One part of the settings at a time; Save still saves the fields of every tab. The colors
+// change at once and are saved on their own (config.toml, so the browser page and the app
+// share them); the server puts the choice on <html> when it sends the page.
+
+function showSettingsTab(name) {
+  for (const tab of document.querySelectorAll(".settings-tabs [data-tab]")) {
+    tab.setAttribute("aria-selected", String(tab.dataset.tab === name));
+  }
+  for (const pane of document.querySelectorAll(".settings-pane")) pane.hidden = pane.dataset.pane !== name;
+  $(".settings-panes").scrollTop = 0;
+}
+
+function showTheme(theme) {
+  for (const b of $("#app-theme").children) b.setAttribute("aria-checked", String(b.dataset.theme === theme));
+  if (theme === "system") delete document.documentElement.dataset.theme;
+  else document.documentElement.dataset.theme = theme;
+}
+
+async function pickTheme(theme) {
+  const before = document.documentElement.dataset.theme || "system";
+  showTheme(theme);
+  try {
+    await postJSON("/api/settings/theme", { theme });
+  } catch (error) {
+    showTheme(before);
+    setupStatus("#app-settings-status", error.message, true);
+  }
 }
 
 async function saveAppSettings() {
@@ -492,4 +524,8 @@ function setUpSettings() {
   $("#free-url").addEventListener("change", refreshFreeKey);
   $("#ollama-go").addEventListener("click", ollamaGo);
   $("#ollama-cancel").addEventListener("click", cancelOllama);
+  for (const tab of document.querySelectorAll(".settings-tabs [data-tab]")) {
+    tab.addEventListener("click", () => showSettingsTab(tab.dataset.tab));
+  }
+  for (const b of $("#app-theme").children) b.addEventListener("click", () => pickTheme(b.dataset.theme));
 }

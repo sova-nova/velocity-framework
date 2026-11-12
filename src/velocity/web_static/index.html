@@ -163,100 +163,126 @@
   </dialog>
   <dialog id="app-settings">
     <h2>Settings</h2>
-    <label class="field">Notes folder
-      <input type="text" id="app-vault">
-    </label>
-    <span class="hint">Changing it shows the subjects in that folder instead. Nothing is
-      moved or deleted.</span>
-    <label class="field">llama.cpp program (llama-server), for reading PDFs without an NVIDIA GPU
-      <input type="text" id="app-llama" placeholder="optional, e.g. ~/llama.cpp/llama-server">
-    </label>
-    <div class="field">
-      <span>API engine defaults</span>
-      <div class="inline">
-        <select id="app-model" aria-label="Model"></select>
-        <select id="app-effort" aria-label="Effort"></select>
+    <!-- Tabs (decided 2026-11-11): one part at a time; Save saves every tab. -->
+    <div class="settings-layout">
+      <div class="settings-tabs" role="tablist" aria-label="Settings">
+        <button type="button" role="tab" data-tab="general">General</button>
+        <button type="button" role="tab" data-tab="claude">Claude</button>
+        <button type="button" role="tab" data-tab="free">Free model</button>
+        <button type="button" role="tab" data-tab="computer">This computer</button>
       </div>
-      <span class="hint">Used by <code>velocity chat</code>, and for effort on the page's API
-        chats (you pick the model when you start one).</span>
-    </div>
-    <!-- Keys (decided 2026-11-11): saved in the system keyring, never in velocity's files. -->
-    <div class="field key-field" data-key="anthropic">
-      <span>Anthropic API key</span>
-      <div class="inline">
-        <input type="password" class="key-input" autocomplete="off" placeholder="Paste your key (sk-ant-…)" aria-label="Anthropic API key">
-        <button type="button" class="key-save">Save key</button>
-        <button type="button" class="key-remove" hidden>Remove</button>
+      <div class="settings-panes">
+        <section class="settings-pane" data-pane="general" role="tabpanel">
+          <label class="field">Notes folder
+            <input type="text" id="app-vault">
+          </label>
+          <span class="hint">Changing it shows the subjects in that folder instead. Nothing is
+            moved or deleted.</span>
+          <div class="field">
+            <span>Colors</span>
+            <div id="app-theme" class="segmented" role="radiogroup" aria-label="Colors">
+              <button type="button" role="radio" data-theme="system">Like the system</button>
+              <button type="button" role="radio" data-theme="light">Light</button>
+              <button type="button" role="radio" data-theme="dark">Dark</button>
+            </div>
+            <span class="hint">Changes at once.</span>
+          </div>
+          <h3>Sessions</h3>
+          <div class="inline">
+            <button id="cleanup-open" title="Sessions with nothing in them, or only a wrap-up of nothing">Find empty sessions…</button>
+            <span class="hint">Empty sessions are removed when they end; this finds any left over.</span>
+          </div>
+        </section>
+        <section class="settings-pane" data-pane="claude" role="tabpanel">
+          <div class="field">
+            <span>API engine defaults</span>
+            <div class="inline">
+              <select id="app-model" aria-label="Model"></select>
+              <select id="app-effort" aria-label="Effort"></select>
+            </div>
+            <span class="hint">Used by <code>velocity chat</code>, and for effort on the page's API
+              chats (you pick the model when you start one).</span>
+          </div>
+          <!-- Keys (decided 2026-11-11): saved in the system keyring, never in velocity's files. -->
+          <div class="field key-field" data-key="anthropic">
+            <span>Anthropic API key</span>
+            <div class="inline">
+              <input type="password" class="key-input" autocomplete="off" placeholder="Paste your key (sk-ant-…)" aria-label="Anthropic API key">
+              <button type="button" class="key-save">Save key</button>
+              <button type="button" class="key-remove" hidden>Remove</button>
+            </div>
+            <span class="hint key-status" role="status"></span>
+          </div>
+        </section>
+        <section class="settings-pane" data-pane="free" role="tabpanel">
+          <!-- The free engine (decided 2026-11-11): any OpenAI-compatible server. -->
+          <p class="hint">A model on your computer (like Ollama) or a hosted free tier. It costs
+            nothing, but it is weaker than Claude: it makes more mistakes, including grading wrong
+            answers as right. These are suggestions, not endorsements; free tiers change often.</p>
+          <!-- Ollama on this computer, and Download model (desktop app PR 3, 2026-11-11). -->
+          <div id="ollama-box" class="ollama-box">
+            <p id="ollama-state"></p>
+            <div class="inline">
+              <button id="ollama-go" type="button" class="primary"></button>
+              <button id="ollama-cancel" type="button" hidden>Cancel</button>
+              <a id="ollama-get" target="_blank" rel="noopener" hidden>Get Ollama</a>
+            </div>
+            <progress id="ollama-progress" max="1" hidden></progress>
+          </div>
+          <div class="field">
+            <span>Or set it up yourself: start from</span>
+            <div class="inline">
+              <select id="free-preset" aria-label="Start from"></select>
+              <a id="free-link" target="_blank" rel="noopener" hidden>Get it</a>
+            </div>
+          </div>
+          <label class="field">Server address
+            <input type="text" id="free-url" placeholder="e.g. http://localhost:11434/v1">
+          </label>
+          <label class="field">Model
+            <input type="text" id="free-model" placeholder="e.g. qwen3:4b">
+          </label>
+          <div class="field key-field" data-key="openai">
+            <span>Key, for a hosted server (none needed for a model on your computer)</span>
+            <div class="inline">
+              <input type="password" class="key-input" autocomplete="off" placeholder="Paste the server's key" aria-label="Key for the free model's server">
+              <button type="button" class="key-save">Save key</button>
+              <button type="button" class="key-remove" hidden>Remove</button>
+            </div>
+            <span class="hint key-status" role="status"></span>
+          </div>
+          <label class="field">Or the environment variable holding the key (for terminal users)
+            <input type="text" id="free-key-env" placeholder="e.g. OPENROUTER_API_KEY">
+          </label>
+          <label class="field">Context size (tokens)
+            <input type="number" id="free-context" min="8192" step="1024">
+          </label>
+          <span class="hint">How much the model can keep in mind. Match your server's setting; for
+            Ollama, start it with <code>OLLAMA_CONTEXT_LENGTH</code> set to this number.</span>
+          <label class="check"><input type="checkbox" id="free-images"> This model can see images
+            (lets the tutor look at pages of a PDF)</label>
+          <div class="inline">
+            <button id="free-test" type="button">Test</button>
+            <span id="free-test-result" class="hint" role="status"></span>
+          </div>
+        </section>
+        <section class="settings-pane" data-pane="computer" role="tabpanel">
+          <ul id="app-checks" class="checks"></ul>
+          <div id="launcher-row" class="inline" hidden>
+            <button id="launcher-add" type="button"></button>
+            <span id="launcher-status" class="hint" role="status"></span>
+          </div>
+          <!-- Only when pressed: velocity never checks on its own (decided 2026-11-11). -->
+          <div class="inline update-row">
+            <button id="update-check" type="button">Check for updates</button>
+            <span id="update-status" class="hint" role="status"></span>
+            <a id="update-link" target="_blank" rel="noopener" hidden>Download it</a>
+          </div>
+          <label class="field">llama.cpp program (llama-server), for reading PDFs without an NVIDIA GPU
+            <input type="text" id="app-llama" placeholder="optional, e.g. ~/llama.cpp/llama-server">
+          </label>
+        </section>
       </div>
-      <span class="hint key-status" role="status"></span>
-    </div>
-    <!-- The free engine (decided 2026-11-11): any OpenAI-compatible server. -->
-    <h3>Free / other model</h3>
-    <p class="hint">A model on your computer (like Ollama) or a hosted free tier. It costs
-      nothing, but it is weaker than Claude: it makes more mistakes, including grading wrong
-      answers as right. These are suggestions, not endorsements; free tiers change often.</p>
-    <!-- Ollama on this computer, and Download model (desktop app PR 3, 2026-11-11). -->
-    <div id="ollama-box" class="ollama-box">
-      <p id="ollama-state"></p>
-      <div class="inline">
-        <button id="ollama-go" type="button" class="primary"></button>
-        <button id="ollama-cancel" type="button" hidden>Cancel</button>
-        <a id="ollama-get" target="_blank" rel="noopener" hidden>Get Ollama</a>
-      </div>
-      <progress id="ollama-progress" max="1" hidden></progress>
-    </div>
-    <div class="field">
-      <span>Or set it up yourself: start from</span>
-      <div class="inline">
-        <select id="free-preset" aria-label="Start from"></select>
-        <a id="free-link" target="_blank" rel="noopener" hidden>Get it</a>
-      </div>
-    </div>
-    <label class="field">Server address
-      <input type="text" id="free-url" placeholder="e.g. http://localhost:11434/v1">
-    </label>
-    <label class="field">Model
-      <input type="text" id="free-model" placeholder="e.g. qwen3:4b">
-    </label>
-    <div class="field key-field" data-key="openai">
-      <span>Key, for a hosted server (none needed for a model on your computer)</span>
-      <div class="inline">
-        <input type="password" class="key-input" autocomplete="off" placeholder="Paste the server's key" aria-label="Key for the free model's server">
-        <button type="button" class="key-save">Save key</button>
-        <button type="button" class="key-remove" hidden>Remove</button>
-      </div>
-      <span class="hint key-status" role="status"></span>
-    </div>
-    <label class="field">Or the environment variable holding the key (for terminal users)
-      <input type="text" id="free-key-env" placeholder="e.g. OPENROUTER_API_KEY">
-    </label>
-    <label class="field">Context size (tokens)
-      <input type="number" id="free-context" min="8192" step="1024">
-    </label>
-    <span class="hint">How much the model can keep in mind. Match your server's setting; for
-      Ollama, start it with <code>OLLAMA_CONTEXT_LENGTH</code> set to this number.</span>
-    <label class="check"><input type="checkbox" id="free-images"> This model can see images
-      (lets the tutor look at pages of a PDF)</label>
-    <div class="inline">
-      <button id="free-test" type="button">Test</button>
-      <span id="free-test-result" class="hint" role="status"></span>
-    </div>
-    <h3>On this computer</h3>
-    <ul id="app-checks" class="checks"></ul>
-    <div id="launcher-row" class="inline" hidden>
-      <button id="launcher-add" type="button"></button>
-      <span id="launcher-status" class="hint" role="status"></span>
-    </div>
-    <!-- Only when pressed: velocity never checks on its own (decided 2026-11-11). -->
-    <div class="inline update-row">
-      <button id="update-check" type="button">Check for updates</button>
-      <span id="update-status" class="hint" role="status"></span>
-      <a id="update-link" target="_blank" rel="noopener" hidden>Download it</a>
-    </div>
-    <h3>Sessions</h3>
-    <div class="inline">
-      <button id="cleanup-open" title="Sessions with nothing in them, or only a wrap-up of nothing">Find empty sessions…</button>
-      <span class="hint">Empty sessions are removed when they end; this finds any left over.</span>
     </div>
     <p id="app-settings-status" class="hint" hidden></p>
     <div class="dialog-actions">
