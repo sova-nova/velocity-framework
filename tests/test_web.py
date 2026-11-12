@@ -1,3 +1,4 @@
+import re
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -5,7 +6,7 @@ from starlette.testclient import TestClient
 
 from velocity.config import Config, create_subject, load_subject
 from velocity.session import ENDED_WITH_WRAP_UP, Session, record_dir, set_active
-from velocity.web import build_app
+from velocity.web import STATIC, build_app
 
 T0 = datetime(2026, 11, 4, 18, 0, tzinfo=UTC)
 
@@ -53,10 +54,9 @@ def session(config, day=0, learner=("What is a limit?",), end=None) -> Session:
 def test_page_and_static_files(client):
     page = client.get("/")
     assert page.status_code == 200 and "<title>velocity</title>" in page.text
-    assert "katex@0.16.11" in page.text  # pinned CDN versions
     assert client.get("/static/app.js").status_code == 200
     reader = client.get("/static/reader.js")
-    assert reader.status_code == 200 and "pdfjs-dist@6.4.299" in reader.text
+    assert reader.status_code == 200
     assert client.get("/static/style.css").status_code == 200
     # The browser checks for newer page files each time, so an update never mixes old
     # scripts with a new page; an unchanged file is a 304, not sent again.
@@ -67,6 +67,62 @@ def test_page_and_static_files(client):
     )
     assert again.status_code == 304
     assert "cache-control" not in client.get("/api/subjects").headers
+
+
+PAGE_FILES = ["index.html", "app.js", "reader.js", "subjects.js", "library.js",
+              "progress.js", "setup.js", "style.css"]  # fmt: skip
+
+
+def test_the_page_loads_nothing_from_other_sites():
+    """Security review (2026-11-12): every script, style and font the page uses is bundled
+    with velocity, so a changed file on a CDN can't run inside the page. (Links the
+    learner clicks, like obsidian.md, are fine.)"""
+    loads = re.compile(
+        r"""\bsrc\s*=\s*["'`]([^"'`]+)"""  # <script src>, <img src>, el.src = ...
+        r"""|<link\b[^>]*\bhref\s*=\s*["']([^"']+)"""  # stylesheets, icons
+        r"""|\bimport\(\s*["'`]([^"'`]+)"""  # modules
+        r"""|@import\s+(?:url\()?["']?([^"')\s]+)""",  # CSS imports
+    )
+    for name in PAGE_FILES:
+        text = (STATIC / name).read_text(encoding="utf-8")
+        for match in loads.findall(text):
+            target = next(m for m in match if m)
+            assert not re.match(r"(https?:)?//", target), f"{name} loads {target}"
+        assert "cdn.jsdelivr.net" not in text, name
+
+
+def test_the_bundled_libraries_are_served(client):
+    """The libraries the page names exist, at their pinned versions, and are served as
+    JavaScript (a module with another type doesn't run)."""
+    versions = {
+        p.parent.name: p.read_text(encoding="utf-8").strip()
+        for p in (STATIC / "vendor").glob("*/VERSION")
+    }
+    assert versions == {
+        "katex": "katex@0.16.11",
+        "marked": "marked@12.0.2",
+        "dompurify": "dompurify@3.1.6",
+        "pdfjs-dist": "pdfjs-dist@6.4.299",
+    }
+    page = client.get("/").text + client.get("/static/reader.js").text
+    paths = set(re.findall(r"/static/vendor/[\w./-]+", page))
+    paths |= {
+        f"/static/vendor/pdfjs-dist/legacy/{p}"
+        for p in ("build/pdf.min.mjs", "build/pdf.worker.min.mjs", "web/pdf_viewer.mjs")
+    }
+    for path in paths:
+        if path.endswith("/legacy"):
+            continue  # the reader's base folder; its files are listed above
+        response = client.get(path)
+        assert response.status_code == 200, path
+        if path.endswith((".js", ".mjs")):
+            assert response.headers["content-type"].startswith("text/javascript"), path
+    assert (
+        client.get(
+            "/static/vendor/katex/dist/fonts/KaTeX_Main-Regular.woff2"
+        ).status_code
+        == 200
+    )
 
 
 def test_subjects(client, config):
