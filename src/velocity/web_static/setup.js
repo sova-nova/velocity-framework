@@ -51,6 +51,8 @@ function showSetup(settings) {
   }
   $("#setup-vault").value = settings.suggestions[0] || `${settings.home}/velocity`;
   $("#setup-create").checked = !settings.suggestions.length;
+  // Offered once, here (desktop app, 2026-11-11); later it is in Settings.
+  $("#setup-launcher-choice").hidden = !settings.launcher.supported || settings.launcher.installed;
   drawChecks($("#setup-checks"), settings.checks);
   $("#setup-go").addEventListener("click", finishSetup);
 }
@@ -64,6 +66,10 @@ async function finishSetup() {
     });
   } catch (error) {
     return setupStatus("#setup-status", error.message, true);
+  }
+  if (!$("#setup-launcher-choice").hidden && $("#setup-launcher").checked) {
+    // Not worth stopping setup for: Settings offers it again.
+    await postJSON("/api/settings/launcher").catch(() => {});
   }
   location.reload(); // now the full app
 }
@@ -87,6 +93,7 @@ async function openAppSettings() {
   effort.value = s.api_effort;
   showFreeSettings(s);
   drawChecks($("#app-checks"), s.checks);
+  showLauncher(s.launcher);
   $("#app-config-path").textContent = s.config_path;
   setupStatus("#app-settings-status", "");
   $("#app-settings").showModal();
@@ -112,6 +119,28 @@ async function saveAppSettings() {
     setupStatus("#app-settings-status", "Saved.");
   } catch (error) {
     setupStatus("#app-settings-status", error.message, true);
+  }
+}
+
+// -- Settings → the app menu (desktop app, 2026-11-11) ---------------------------------
+
+function showLauncher(launcher) {
+  $("#launcher-row").hidden = !launcher.supported;
+  $("#launcher-add").textContent = launcher.installed
+    ? "Update velocity in the app menu"
+    : "Add velocity to the app menu";
+  $("#launcher-status").textContent = launcher.installed
+    ? "velocity is in your app menu."
+    : "Opens velocity in its own window, without a terminal.";
+}
+
+async function addLauncher() {
+  try {
+    await postJSON("/api/settings/launcher");
+    showLauncher({ supported: true, installed: true });
+    $("#launcher-status").textContent = "Done: look for velocity in your app menu.";
+  } catch (error) {
+    $("#launcher-status").textContent = error.message;
   }
 }
 
@@ -257,4 +286,5 @@ function setUpSettings() {
   $("#app-settings-close").addEventListener("click", () => $("#app-settings").close());
   $("#free-preset").addEventListener("change", pickFreePreset);
   $("#free-test").addEventListener("click", testFreeModel);
+  $("#launcher-add").addEventListener("click", addLauncher);
 }

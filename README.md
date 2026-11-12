@@ -66,6 +66,8 @@ uv sync
 
 The easiest start is the web page: run `uv run velocity web`. On the first run it asks for your notes folder (suggesting the Obsidian vaults it finds), shows what this computer can do (Claude Code, an API key, OCR), and from there you create subjects, add books and chat. The same settings are under **Settings** later.
 
+To use velocity as an app in its own window instead of a browser tab, run `uv run velocity app` (Linux; macOS and Windows should work but are untested). On first run, setup offers to add velocity to your app menu, so after that you can open it without a terminal; **Settings → Add velocity to the app menu** (or `uv run velocity install-launcher`) does it later. Closing the window pauses any open chat. A ready-made download for people who don't use a terminal is coming.
+
 For the terminal only, create `~/.config/velocity/config.toml` yourself (the web page writes the same file):
 
 ```toml

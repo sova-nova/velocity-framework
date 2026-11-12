@@ -12,7 +12,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v10.3.3
       - name: Install
-        run: uv sync --locked --no-group ocr
+        run: uv sync --locked --no-group ocr --no-group app
       - name: Lint
         run: uv run --no-sync ruff check .
       - name: Format

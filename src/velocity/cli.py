@@ -649,6 +649,16 @@ def main(argv: list[str] | None = None) -> int:
         "--no-browser", action="store_true", help="don't open a browser window"
     )
 
+    app = commands.add_parser(
+        "app", help="open velocity in its own window (the desktop app)"
+    )
+    app.add_argument("subject", nargs="?", help="subject to open first, e.g. calculus")
+    commands.add_parser(
+        "install-launcher",
+        help="add velocity to your desktop's app menu (Linux), to open it without a "
+        "terminal",
+    )
+
     new = commands.add_parser("new", help="create a subject")
     new.add_argument("name", help='subject name, e.g. "Network Security"')
 
@@ -757,6 +767,19 @@ def main(argv: list[str] | None = None) -> int:
             return _sessions(args.subject, args.search)
         if args.command == "web":
             return _web(args.subject, args.port, not args.no_browser)
+        if args.command == "app":
+            from velocity.desktop import run_app
+
+            return run_app(args.subject)
+        if args.command == "install-launcher":
+            from velocity.desktop import install_launcher
+
+            try:
+                path = install_launcher()
+            except OSError as e:
+                raise ConfigError(str(e)) from None
+            print(f"Added velocity to the app menu ({path}).")
+            return 0
         if args.command == "new":
             subject = create_subject(load_config(), args.name)
             print(
