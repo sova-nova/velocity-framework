@@ -6,6 +6,8 @@ Regenerated from the template on every launch. Notes protection, in layers:
 2. Deny rules: no Edit or Read anywhere in the vault (notes come only through velocity's tools,
    which honour `private: true`), and no Bash.
 3. A PreToolUse hook (`velocity hook guard`) refuses file edits that point into the vault.
+4. Since 2026-11-12, the tutor has no file or command tools at all (TUTOR_TOOLS); layers 1-3
+   stay, in case a Claude Code update or a changed launch brings them back.
 Session logs are written by velocity's hooks and MCP server, which run outside Claude Code's
 permission system, so the tutor itself never needs write access to the vault.
 """
@@ -26,6 +28,13 @@ MCP_SERVER_NAME = "velocity"
 # other site is asked for in the terminal and impossible on the web page (nothing can
 # answer there), because a fetched address can carry what the learner said anywhere.
 # Subagents get the same rules (checked live).
+# Claude Code's built-in tools the tutor gets at all (2026-11-12, after the security
+# review): skills, loading tools on demand (velocity's own come from its MCP server and
+# aren't affected), and the web lookups. No files, commands, helper agents, scheduled or
+# remote jobs, notifications or messages to other sessions: the tutor uses none of them,
+# and they were only denied or asked for before, not absent. Checked live.
+TUTOR_TOOLS = ["Skill", "ToolSearch", "WebSearch", "WebFetch"]
+
 ALLOWED_TOOLS = [
     f"mcp__{MCP_SERVER_NAME}",
     "WebSearch",
@@ -171,6 +180,8 @@ def claude_args(workspace: Path, resume: bool = False) -> list[str]:
     - Only velocity's MCP server: account connectors (e.g. claude.ai integrations) stay out.
     - velocity's tools are pre-approved on the command line, because project allow rules
       only apply after the workspace is trusted. Deny rules apply regardless.
+    - Only the built-in tools the tutor uses (TUTOR_TOOLS); the others don't exist in its
+      session at all.
     """
     args = [
         "--setting-sources",
@@ -178,6 +189,8 @@ def claude_args(workspace: Path, resume: bool = False) -> list[str]:
         "--strict-mcp-config",
         "--mcp-config",
         (workspace / ".mcp.json").as_posix(),
+        "--tools",
+        ",".join(TUTOR_TOOLS),
         "--allowedTools",
         *ALLOWED_TOOLS,
     ]
