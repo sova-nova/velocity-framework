@@ -195,8 +195,18 @@
     <p class="hint">A model on your computer (like Ollama) or a hosted free tier. It costs
       nothing, but it is weaker than Claude: it makes more mistakes, including grading wrong
       answers as right. These are suggestions, not endorsements; free tiers change often.</p>
+    <!-- Ollama on this computer, and Download model (desktop app PR 3, 2026-11-11). -->
+    <div id="ollama-box" class="ollama-box">
+      <p id="ollama-state"></p>
+      <div class="inline">
+        <button id="ollama-go" type="button" class="primary"></button>
+        <button id="ollama-cancel" type="button" hidden>Cancel</button>
+        <a id="ollama-get" target="_blank" rel="noopener" hidden>Get Ollama</a>
+      </div>
+      <progress id="ollama-progress" max="1" hidden></progress>
+    </div>
     <div class="field">
-      <span>Start from</span>
+      <span>Or set it up yourself: start from</span>
       <div class="inline">
         <select id="free-preset" aria-label="Start from"></select>
         <a id="free-link" target="_blank" rel="noopener" hidden>Get it</a>

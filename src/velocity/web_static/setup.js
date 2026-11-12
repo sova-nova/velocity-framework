@@ -93,6 +93,8 @@ async function openAppSettings() {
   effort.value = s.api_effort;
   showFreeSettings(s);
   showKeys(s.keys);
+  ollamaAction = null;
+  showOllama();
   drawChecks($("#app-checks"), s.checks);
   showLauncher(s.launcher);
   $("#app-config-path").textContent = s.config_path;
@@ -121,6 +123,115 @@ async function saveAppSettings() {
   } catch (error) {
     setupStatus("#app-settings-status", error.message, true);
   }
+}
+
+// -- Settings → Ollama and Download model (desktop app PR 3, 2026-11-11) -----------------
+// Finds Ollama on this computer; Download model pulls the suggested model and makes
+// velocity's copy with room for the tutor's instructions; Use it fills in the free model
+// settings and saves them. The download runs in the server; the page polls it.
+
+let ollamaPoll = null;
+let ollamaAction = null;
+let ollamaInfo = null;
+// Set when this page starts a download, so only that download is put to use when done.
+let ollamaStartedHere = false;
+
+const gb = (bytes) => (bytes / 1e9).toFixed(1);
+
+async function showOllama() {
+  clearTimeout(ollamaPoll);
+  let o;
+  try {
+    o = await getJSON("/api/ollama");
+  } catch {
+    return;
+  }
+  const state = $("#ollama-state");
+  const go = $("#ollama-go");
+  const job = o.download;
+  const busy = job && !["done", "failed", "cancelled"].includes(job.phase);
+  $("#ollama-get").hidden = o.running;
+  $("#ollama-get").href = o.download_page;
+  $("#ollama-cancel").hidden = !busy;
+  $("#ollama-progress").hidden = !busy;
+  go.hidden = busy;
+  if (busy) {
+    const p = $("#ollama-progress");
+    if (job.phase === "downloading" && job.total) {
+      p.value = job.completed / job.total;
+      state.textContent = `Downloading ${job.model}: ${gb(job.completed)} of ${gb(job.total)} GB…`;
+    } else {
+      p.removeAttribute("value"); // an indeterminate bar
+      state.textContent = job.phase === "preparing"
+        ? "Preparing velocity's copy of the model…"
+        : `Starting the download of ${job.model}…`;
+    }
+    if (!$("#app-settings").open) return; // stop polling once Settings is closed
+    ollamaPoll = setTimeout(showOllama, 1000);
+    return;
+  }
+  ollamaInfo = o;
+  if (job?.phase === "done" && ollamaStartedHere) {
+    ollamaStartedHere = false;
+    await useOllama(o); // just finished: use it right away
+    return;
+  }
+  if (!o.running) {
+    state.textContent =
+      "Ollama runs free models on your computer, privately. It isn't running here: install it " +
+      "(on Linux it may also be in your app store as “ollama”), start it, then check again.";
+    go.textContent = "Check again";
+    ollamaAction = "check";
+  } else if (o.ready) {
+    const inUse = $("#free-model").value === o.velocity_model && $("#free-url").value === o.base_url;
+    state.textContent = inUse
+      ? `Ollama ${o.version} is running, and velocity's copy of ${o.suggested} is set up.`
+      : `Ollama ${o.version} is running, and velocity's copy of ${o.suggested} is downloaded.`;
+    go.textContent = "Use it";
+    go.hidden = inUse;
+    ollamaAction = "use";
+  } else {
+    const failed = job?.phase === "failed" ? `The download failed: ${job.error} ` : "";
+    state.textContent =
+      `${failed}Ollama ${o.version} is running. Download ${o.suggested} (about 2.5 GB), the ` +
+      "suggested model, with room for the tutor's instructions built in.";
+    go.textContent = job?.phase === "failed" ? "Try again" : "Download model";
+    ollamaAction = "download";
+  }
+}
+
+async function ollamaGo() {
+  if (ollamaAction === "download") {
+    try {
+      await postJSON("/api/ollama/download");
+      ollamaStartedHere = true;
+    } catch (error) {
+      $("#ollama-state").textContent = error.message;
+      return;
+    }
+  } else if (ollamaAction === "use") {
+    await useOllama(ollamaInfo);
+    return;
+  }
+  showOllama();
+}
+
+// Fill in the free model settings for velocity's Ollama model, and save them.
+async function useOllama(o) {
+  $("#free-preset").value = "ollama";
+  showFreeLink();
+  $("#free-url").value = o.base_url;
+  $("#free-model").value = o.velocity_model;
+  $("#free-key-env").value = "";
+  $("#free-context").value = o.context;
+  await saveAppSettings();
+  refreshFreeKey();
+  showOllama();
+}
+
+async function cancelOllama() {
+  await postJSON("/api/ollama/cancel").catch(() => {});
+  showOllama();
 }
 
 // -- Settings → keys (decided 2026-11-11) -----------------------------------------------
@@ -352,4 +463,6 @@ function setUpSettings() {
     field.querySelector(".key-remove").addEventListener("click", () => saveKey(field, true));
   }
   $("#free-url").addEventListener("change", refreshFreeKey);
+  $("#ollama-go").addEventListener("click", ollamaGo);
+  $("#ollama-cancel").addEventListener("click", cancelOllama);
 }
