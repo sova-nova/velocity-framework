@@ -123,8 +123,7 @@ def engines(config: Config | None = None) -> dict:
             "label": "API (billed per token)",
             "models": api_engine.MODELS,
             "available": api_available(),
-            "reason": f"{api_engine.API_KEY_ENV} is not set in the terminal that runs "
-            "velocity web.",
+            "reason": api_engine.NO_KEY,
             "note": "Billed per token on your API key; the cost is shown as you go.",
             "reminder": ANTHROPIC_REMINDER,
         },

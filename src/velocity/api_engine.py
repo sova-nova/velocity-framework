@@ -18,6 +18,7 @@ import sys
 from collections.abc import AsyncIterator, Callable
 from contextlib import AbstractAsyncContextManager
 
+from velocity import keys
 from velocity.agent import (
     DEFAULT_EFFORT,
     StreamFactory,
@@ -41,8 +42,15 @@ API_KEY_ENV = "ANTHROPIC_API_KEY"
 Connector = Callable[[Subject], AbstractAsyncContextManager[tuple[ToolCaller, list]]]
 
 
+NO_KEY = (
+    "No API key: add one in Settings (it is saved in your system keyring), or set "
+    f"{API_KEY_ENV} in the terminal that starts velocity."
+)
+
+
 def api_available() -> bool:
-    return bool(os.environ.get(API_KEY_ENV))
+    """An Anthropic key is set: in the environment, or in the system keyring."""
+    return keys.anthropic_key() is not None
 
 
 @contextlib.asynccontextmanager
@@ -112,14 +120,12 @@ class ApiChat:
     def _prepare(self) -> None:
         """Check that the engine can run, and make its API client (unless given one)."""
         if self.stream is None:
-            if not api_available():
-                raise EngineError(
-                    f"{API_KEY_ENV} is not set. Export it in the terminal that runs "
-                    "velocity web, then restart it."
-                )
+            key = keys.anthropic_key()
+            if key is None:
+                raise EngineError(NO_KEY)
             import anthropic
 
-            self.stream = anthropic.AsyncAnthropic().beta.messages.stream
+            self.stream = anthropic.AsyncAnthropic(api_key=key).beta.messages.stream
 
     def _make_agent(self, call_tool: ToolCaller, tools: list) -> TutorAgent:
         return TutorAgent(

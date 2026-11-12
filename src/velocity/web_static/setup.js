@@ -92,6 +92,7 @@ async function openAppSettings() {
   for (const e of s.efforts) effort.append(new Option(`Effort: ${e}`, e));
   effort.value = s.api_effort;
   showFreeSettings(s);
+  showKeys(s.keys);
   drawChecks($("#app-checks"), s.checks);
   showLauncher(s.launcher);
   $("#app-config-path").textContent = s.config_path;
@@ -120,6 +121,64 @@ async function saveAppSettings() {
   } catch (error) {
     setupStatus("#app-settings-status", error.message, true);
   }
+}
+
+// -- Settings → keys (decided 2026-11-11) -----------------------------------------------
+// A key is sent once, to be saved in the system keyring; the page only ever hears back
+// where each key comes from. The free model's key belongs to the server in its address.
+
+let keyStatuses = null;
+
+function showKeys(statuses) {
+  keyStatuses = statuses;
+  for (const field of document.querySelectorAll(".key-field")) {
+    const which = field.dataset.key;
+    const s = statuses[which];
+    const status = field.querySelector(".key-status");
+    const save = field.querySelector(".key-save");
+    field.querySelector(".key-remove").hidden = !s.saved;
+    save.disabled = !statuses.keyring || (which === "openai" && !s.host);
+    if (which === "openai" && !s.host) {
+      status.textContent = "Fill in the server address first: the key is saved for that server.";
+    } else if (s.source === "env") {
+      status.textContent = `From ${s.env_var} in the environment, which wins over a saved key.`;
+    } else if (s.source === "keyring") {
+      status.textContent = `Saved in your system keyring${which === "openai" ? ` for ${s.host}` : ""}.`;
+    } else if (which === "openai" && /^(localhost|127\.|::1$|0\.0\.0\.0$)/.test(s.host)) {
+      status.textContent = "Not needed: this server is on your computer.";
+    } else if (!statuses.keyring) {
+      status.textContent =
+        "This computer has no system keyring velocity can use. Set the key in an environment variable instead.";
+    } else {
+      status.textContent =
+        "Not set. It's saved in your system keyring (your desktop may ask to unlock it), never in velocity's files.";
+    }
+  }
+}
+
+async function saveKey(field, remove = false) {
+  const input = field.querySelector(".key-input");
+  const status = field.querySelector(".key-status");
+  try {
+    const statuses = await postJSON("/api/settings/key", {
+      which: field.dataset.key,
+      key: input.value,
+      remove,
+      base_url: $("#free-url").value,
+    });
+    input.value = ""; // never kept on the page
+    showKeys(statuses);
+    engines = await getJSON("/api/engines"); // app.js: the API may be usable now
+    fillEngines($("#engine"), usableEngine($("#engine").value));
+    showStartChoice();
+  } catch (error) {
+    status.textContent = error.message;
+  }
+}
+
+async function refreshFreeKey() {
+  const url = encodeURIComponent($("#free-url").value);
+  showKeys(await getJSON(`/api/settings/keys?base_url=${url}`));
 }
 
 // -- Settings → the app menu (desktop app, 2026-11-11) ---------------------------------
@@ -182,6 +241,7 @@ function pickFreePreset() {
   $("#free-model").value = p.model;
   $("#free-model").placeholder = p.model_hint || "e.g. qwen3:4b";
   $("#free-test-result").textContent = "";
+  refreshFreeKey(); // the key belongs to this server
 }
 
 function freeSettings() {
@@ -287,4 +347,9 @@ function setUpSettings() {
   $("#free-preset").addEventListener("change", pickFreePreset);
   $("#free-test").addEventListener("click", testFreeModel);
   $("#launcher-add").addEventListener("click", addLauncher);
+  for (const field of document.querySelectorAll(".key-field")) {
+    field.querySelector(".key-save").addEventListener("click", () => saveKey(field));
+    field.querySelector(".key-remove").addEventListener("click", () => saveKey(field, true));
+  }
+  $("#free-url").addEventListener("change", refreshFreeKey);
 }

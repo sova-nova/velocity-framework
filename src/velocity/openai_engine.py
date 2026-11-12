@@ -22,14 +22,13 @@ import asyncio
 import contextlib
 import dataclasses
 import json
-import os
 import uuid
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 from urllib.parse import urlparse
 
-from velocity import hooks
+from velocity import hooks, keys
 from velocity.agent import ToolCaller, resume_recap, system_prompt, unknown_command
 from velocity.api_engine import ApiChat, Connector, connect_mcp
 from velocity.config import Config, Subject
@@ -99,14 +98,25 @@ def unavailable_reason(config: Config | None) -> str | None:
     if config is None or not config.openai_base_url or not config.openai_model:
         return "Set up a free model in Settings first (a server and a model)."
     name = config.openai_api_key_env
-    if name and not os.environ.get(name):
-        return f"{name} is not set in the terminal that runs velocity web."
+    if name and saved_key(config) is None:
+        host = urlparse(config.openai_base_url).hostname
+        return (
+            f"No key for {host}: add it in Settings (it is saved in your system "
+            f"keyring), or set {name} in the terminal that starts velocity."
+        )
     return None
 
 
+def saved_key(config: Config) -> str | None:
+    """The server's key: the named environment variable, else the one saved in Settings
+    for this server (the system keyring)."""
+    return keys.get_key(
+        keys.free_key_name(config.openai_base_url), config.openai_api_key_env
+    )
+
+
 def api_key(config: Config) -> str:
-    name = config.openai_api_key_env
-    return (os.environ.get(name) if name else None) or NOT_NEEDED_KEY
+    return saved_key(config) or NOT_NEEDED_KEY
 
 
 def is_local(url: str | None) -> bool:

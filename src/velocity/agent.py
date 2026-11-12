@@ -693,6 +693,7 @@ async def chat(
     import anthropic
     from mcp import Client, StdioServerParameters
 
+    from velocity import keys
     from velocity.skills import load_skills
 
     server = StdioServerParameters(
@@ -700,7 +701,8 @@ async def chat(
         args=["-m", "velocity.cli", "mcp", "--subject", subject.slug],
         env=dict(os.environ),  # all of it, as in api_engine.connect_mcp
     )
-    client = anthropic.AsyncAnthropic()
+    # The environment variable, else the key saved in Settings (the system keyring).
+    client = anthropic.AsyncAnthropic(api_key=keys.anthropic_key())
     async with Client(server) as mcp:
         skills = load_skills()
         agent = TutorAgent(

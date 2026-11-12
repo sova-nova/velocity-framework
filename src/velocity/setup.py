@@ -6,10 +6,12 @@ the settings (vault, OCR program, API defaults) can be changed later on the page
 writes config.toml (config.save_settings) and swaps the running app for one built on the
 new config, so no restart is needed (VelocityApp).
 
-API keys are never stored: the page says how to set ANTHROPIC_API_KEY in a terminal. The
-free engine's settings name the environment variable that holds its key, if it needs one.
+API keys are never stored in velocity's files (decided 2026-11-11): Settings saves them in
+the system keyring (keys.py), and an environment variable still wins. The page only
+learns where a key comes from, never the key.
 """
 
+import asyncio
 import contextlib
 import dataclasses
 import importlib.util
@@ -19,13 +21,14 @@ import subprocess
 import sys
 from collections.abc import Callable
 from pathlib import Path
+from urllib.parse import urlparse
 
 from starlette.applications import Starlette
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 from starlette.routing import Route
 
-from velocity import desktop, openai_engine
+from velocity import desktop, keys, openai_engine
 from velocity.config import (
     EFFORTS,
     MODEL_SHORT_NAMES,
@@ -69,14 +72,18 @@ def checks(config: Config | None) -> list[dict]:
             "https://claude.com/claude-code",
         }
     )
-    key = bool(os.environ.get("ANTHROPIC_API_KEY"))
+    key = keys.status(keys.ANTHROPIC, keys.ANTHROPIC_ENV)
     out.append(
         {
             "name": "API key",
-            "ok": key,
-            "detail": "ANTHROPIC_API_KEY is set" if key else "not set",
-            "fix": "For the API engine: run `export ANTHROPIC_API_KEY=...` in the "
-            "terminal, then start velocity web from it. velocity never stores keys.",
+            "ok": key.source is not None,
+            "detail": {
+                "env": "ANTHROPIC_API_KEY is set",
+                "keyring": "saved in your system keyring",
+            }.get(key.source, "not set"),
+            "fix": "For the API engine: add your key in Settings (it is saved in your "
+            "system keyring, never in velocity's files), or set ANTHROPIC_API_KEY in the "
+            "terminal that starts velocity.",
         }
     )
     marker = importlib.util.find_spec("marker") is not None
@@ -149,6 +156,8 @@ def settings_json(config: Config | None, suggest: bool = False) -> dict:
         ),
         "openai_images": bool(config and config.openai_images),
         "openai_presets": openai_engine.PRESETS,
+        # Where each key comes from (keys.py); never the keys themselves.
+        "keys": key_statuses(config),
         # The app menu entry (desktop app, 2026-11-11): Linux only for now.
         "launcher": {
             "supported": sys.platform == "linux",
@@ -159,6 +168,20 @@ def settings_json(config: Config | None, suggest: bool = False) -> dict:
         "checks": checks(config),
         "suggestions": vault_suggestions() if suggest else [],
         "home": Path.home().as_posix(),
+    }
+
+
+def key_statuses(config: Config | None, free_url: str | None = None) -> dict:
+    """The keys' statuses for Settings. The free engine's key is per server: the one in
+    the settings, or `free_url` (the address as typed, before Save)."""
+    url = free_url if free_url is not None else (config and config.openai_base_url)
+    return {
+        "keyring": keys.keyring_available(),
+        "anthropic": keys.status(keys.ANTHROPIC, keys.ANTHROPIC_ENV).as_json(),
+        "openai": keys.status(
+            keys.free_key_name(url), config.openai_api_key_env if config else None
+        ).as_json()
+        | {"host": urlparse(url or "").hostname},
     }
 
 
@@ -229,6 +252,40 @@ def settings_routes(
         )
         return JSONResponse(await openai_engine.check_model(trial))
 
+    async def key(request: Request) -> Response:
+        """Save a key in the system keyring, or remove it: {"which": "anthropic" or
+        "openai", "key": ..., "remove": bool, "base_url": the free server as typed}.
+        The answer says where the keys come from now; it never holds a key."""
+        try:
+            body = await request.json()
+        except ValueError:
+            body = {}
+        if not isinstance(body, dict):
+            body = {}
+        config = get_config()
+        url = str(body.get("base_url") or "").strip() or None
+        if body.get("which") == "anthropic":
+            name = keys.ANTHROPIC
+        elif body.get("which") == "openai":
+            name = keys.free_key_name(url)
+            if name is None:
+                return JSONResponse(
+                    {
+                        "error": "Fill in the server address first: the key is saved for it."
+                    },
+                    400,
+                )
+        else:
+            return JSONResponse({"error": "Which key?"}, 400)
+        try:
+            if body.get("remove"):
+                await asyncio.to_thread(keys.remove_key, name)
+            else:
+                await asyncio.to_thread(keys.save_key, name, str(body.get("key") or ""))
+        except keys.KeyStoreError as e:
+            return JSONResponse({"error": str(e)}, 400)
+        return JSONResponse(key_statuses(config, url))
+
     async def add_launcher(request: Request) -> Response:
         """Add velocity to the app menu (or update the entry)."""
         try:
@@ -242,6 +299,13 @@ def settings_routes(
         Route("/api/settings", post, methods=["POST"]),
         Route("/api/settings/test-model", test_model, methods=["POST"]),
         Route("/api/settings/launcher", add_launcher, methods=["POST"]),
+        Route("/api/settings/key", key, methods=["POST"]),
+        Route(
+            "/api/settings/keys",
+            lambda request: JSONResponse(
+                key_statuses(get_config(), request.query_params.get("base_url"))
+            ),
+        ),
     ]
 
 

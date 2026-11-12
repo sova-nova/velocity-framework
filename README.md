@@ -66,7 +66,7 @@ uv sync
 
 The easiest start is the web page: run `uv run velocity web`. On the first run it asks for your notes folder (suggesting the Obsidian vaults it finds), shows what this computer can do (Claude Code, an API key, OCR), and from there you create subjects, add books and chat. The same settings are under **Settings** later.
 
-To use velocity as an app in its own window instead of a browser tab, run `uv run velocity app` (Linux; macOS and Windows should work but are untested). On first run, setup offers to add velocity to your app menu, so after that you can open it without a terminal; **Settings → Add velocity to the app menu** (or `uv run velocity install-launcher`) does it later. Closing the window pauses any open chat. A ready-made download for people who don't use a terminal is coming.
+To use velocity as an app in its own window instead of a browser tab, run `uv run velocity app` (Linux; macOS and Windows should work but are untested). On first run, setup offers to add velocity to your app menu, so after that you can open it without a terminal; **Settings → Add velocity to the app menu** (or `uv run velocity install-launcher`) does it later. Closing the window pauses any open chat. Started from the menu, the app doesn't see keys exported in a terminal, so add your API key in **Settings** (it's saved in your system keyring). A ready-made download for people who don't use a terminal is coming.
 
 For the terminal only, create `~/.config/velocity/config.toml` yourself (the web page writes the same file):
 
@@ -106,7 +106,7 @@ This opens Claude Code in a tutor workspace that velocity regenerates on every l
 ### `velocity chat <subject>`: velocity's own agent loop
 
 ```bash
-export ANTHROPIC_API_KEY=...
+export ANTHROPIC_API_KEY=...    # or save the key once in the web page's Settings
 uv run velocity chat calculus --model sonnet
 uv run velocity chat calculus --resume    # resume the last paused session (or --resume <session>)
 uv run velocity chat calculus --engine openai    # a free model instead (see Free models)
@@ -139,7 +139,7 @@ OLLAMA_CONTEXT_LENGTH=32768 ollama serve
 
 The context length matters. Ollama's default (4,096 tokens) is smaller than the tutor's instructions alone (about 5,000), and Ollama cuts what doesn't fit without saying so. The Test button checks this. `qwen3:4b` needs about 8 GB of GPU memory with a 32K context; on a smaller GPU, use a 16K context and set the same number in Settings.
 
-**A hosted free tier, e.g. [OpenRouter](https://openrouter.ai/models?max_price=0).** Make an account and a key, then start velocity with the key in its environment (`export OPENROUTER_API_KEY=...`, then `uv run velocity web`), pick the OpenRouter preset, and enter a model id ending in `:free`. Free tiers have rate limits, their models and terms change often, and they may use your conversations for training.
+**A hosted free tier, e.g. [OpenRouter](https://openrouter.ai/models?max_price=0).** Make an account and a key, pick the OpenRouter preset, paste the key into **Save key** (or set `OPENROUTER_API_KEY` in the terminal that starts velocity), and enter a model id ending in `:free`. Free tiers have rate limits, their models and terms change often, and they may use your conversations for training.
 
 **How weak?** Measured with the eval cases (one tutor turn each, replayed from real sessions; code checks only), on an AMD RX 7700 XT (12 GB):
 
@@ -178,7 +178,9 @@ The OCR cache stays outside the vault, so copyrighted text never syncs or gets i
 
 ## Privacy
 
-Everything runs locally, but what you say, the source sections the tutor reads, and any notes it reads are sent to Anthropic's API (directly in `velocity chat`, through Claude Code in `velocity tutor`). The tutor reminds you of this at the start of every session. With a [free model](#free-models) on your own computer, nothing leaves it; with a hosted free tier, it all goes to that service instead, and free tiers may use conversations for training. The web page says which applies before you start.
+**Your keys.** An API key you add in Settings is saved in your system keyring (KWallet or GNOME Keyring on Linux, the Keychain on macOS, the Credential Manager on Windows), never in velocity's files, and the web page never gets it back. An environment variable (`ANTHROPIC_API_KEY`, or the one named for a free model's server) wins over a saved key. A free model's key is saved for its server and only ever sent there.
+
+**What you share.** Everything runs locally, but what you say, the source sections the tutor reads, and any notes it reads are sent to Anthropic's API (directly in `velocity chat`, through Claude Code in `velocity tutor`). The tutor reminds you of this at the start of every session. With a [free model](#free-models) on your own computer, nothing leaves it; with a hosted free tier, it all goes to that service instead, and free tiers may use conversations for training. The web page says which applies before you start.
 
 ## How it works
 
