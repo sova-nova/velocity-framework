@@ -108,7 +108,7 @@ def session_start(config: Config, subject: Subject, payload: dict) -> dict:
     mapping = _claude_map(subject) / claude_id if claude_id else None
     session = None
     if payload.get("source") in ("resume", "compact") and mapping and mapping.exists():
-        session = _session(subject, mapping.read_text().strip())
+        session = _session(subject, mapping.read_text(encoding="utf-8").strip())
         if session.wrapped_up:
             session = (
                 None  # wrapped up with /end-session: a resumed chat starts a new log
@@ -128,7 +128,7 @@ def session_start(config: Config, subject: Subject, payload: dict) -> dict:
         )
     if mapping:
         mapping.parent.mkdir(parents=True, exist_ok=True)
-        mapping.write_text(session.id)
+        mapping.write_text(session.id, encoding="utf-8")
     _pause_previous(subject, session.id)
     set_active(subject.slug, session.id)
 

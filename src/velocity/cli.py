@@ -524,7 +524,7 @@ def _recheck(
             r
             for report in reports
             if report.exists()
-            for r in json.loads(report.read_text())
+            for r in json.loads(report.read_text(encoding="utf-8"))
         ]
         fallback = sum(r["repaired_by"] == "text-layer" for r in regions)
         print(

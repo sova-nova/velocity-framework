@@ -262,7 +262,7 @@ class Session:
         if mappings.is_dir():
             for mapping in mappings.iterdir():
                 with contextlib.suppress(OSError):
-                    if mapping.read_text().strip() == self.id:
+                    if mapping.read_text(encoding="utf-8").strip() == self.id:
                         mapping.unlink()
         for path in (self.log_path, self._rendered_path, self.record_path):
             path.unlink(missing_ok=True)
@@ -416,12 +416,12 @@ class Session:
 
     def _rendered(self) -> int:
         try:
-            return int(self._rendered_path.read_text())
+            return int(self._rendered_path.read_text(encoding="utf-8"))
         except FileNotFoundError:
             return 0
 
     def _set_rendered(self, n: int) -> None:
-        self._rendered_path.write_text(str(n))
+        self._rendered_path.write_text(str(n), encoding="utf-8")
 
 
 def _separator(path: Path) -> str:
@@ -652,11 +652,13 @@ def set_active(subject_slug: str, session_id: str | None) -> None:
         pointer.unlink(missing_ok=True)
         return
     pointer.parent.mkdir(parents=True, exist_ok=True)
-    pointer.write_text(session_id)
+    pointer.write_text(session_id, encoding="utf-8")
 
 
 def active_session_id(subject_slug: str) -> str | None:
     try:
-        return (record_dir(subject_slug) / "ACTIVE").read_text().strip() or None
+        return (record_dir(subject_slug) / "ACTIVE").read_text(
+            encoding="utf-8"
+        ).strip() or None
     except FileNotFoundError:
         return None

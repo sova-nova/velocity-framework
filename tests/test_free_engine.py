@@ -87,7 +87,7 @@ def config(tmp_path, monkeypatch):
     (tmp_path / "vault").mkdir()
     (tmp_path / "cfg/velocity").mkdir(parents=True)
     (tmp_path / "cfg/velocity/config.toml").write_text(
-        f'vault_path = "{tmp_path / "vault"}"\n\n'
+        f"vault_path = '{tmp_path / 'vault'}'\n\n"
         '[openai]\nbase_url = "http://localhost:11434/v1"\nmodel = "qwen3:4b"\n'
     )
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "cfg"))

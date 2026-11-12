@@ -38,7 +38,7 @@ def vault(tmp_path) -> Path:
 @pytest.fixture
 def config(tmp_path, vault, monkeypatch):
     (tmp_path / "cfg/velocity").mkdir(parents=True)
-    (tmp_path / "cfg/velocity/config.toml").write_text(f'vault_path = "{vault}"\n')
+    (tmp_path / "cfg/velocity/config.toml").write_text(f"vault_path = '{vault}'\n")
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "cfg"))
     monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "data"))
     cfg = load_config()

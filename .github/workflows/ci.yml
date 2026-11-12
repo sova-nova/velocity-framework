@@ -25,4 +25,8 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         run: uv run --no-sync ruff format --check .
       - name: Test
+        # UTF-8 mode, so the tests' own file reads and writes match Linux and macOS on
+        # Windows; velocity's code names its encodings itself.
+        env:
+          PYTHONUTF8: "1"
         run: uv run --no-sync pytest

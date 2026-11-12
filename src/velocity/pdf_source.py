@@ -259,7 +259,7 @@ class PdfSource:
     def ocr_lock(self):
         """Only one OCR at a time per source, across processes (the GPU can't run two)."""
         self.cache_dir.mkdir(parents=True, exist_ok=True)
-        with open(self.cache_dir / "ocr.lock", "w") as handle:
+        with open(self.cache_dir / "ocr.lock", "w", encoding="utf-8") as handle:
             filelock.lock(handle)
             try:
                 yield

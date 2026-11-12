@@ -6,6 +6,8 @@
 #   Markdown and HTML, and looks at pages, but can't OCR scanned or math-heavy PDFs.
 # - Package metadata is kept where code reads it at run time (velocity's version for
 #   Check for updates; keyring's backends are found through entry points).
+import sys
+
 from PyInstaller.utils.hooks import collect_data_files, collect_submodules, copy_metadata
 
 hiddenimports = (
@@ -28,12 +30,37 @@ a = Analysis(
     excludes=excludes,
 )
 pyz = PYZ(a.pure)
-exe = EXE(
-    pyz,
-    a.scripts,
-    [],
-    exclude_binaries=True,
-    name="velocity",
-    console=True,
-)
-coll = COLLECT(exe, a.binaries, a.datas, name="velocity")
+
+if sys.platform == "win32":
+    # Windows (2026-11-11): velocity.exe is the app, windowed (no console window);
+    # velocity-cli.exe is the same program with a console, which velocity starts for its
+    # own subprocesses (the tool server, hooks, source jobs) since those talk over stdio.
+    app = EXE(
+        pyz,
+        a.scripts,
+        [],
+        exclude_binaries=True,
+        name="velocity",
+        console=False,
+        icon="velocity.ico",
+    )
+    cli = EXE(
+        pyz,
+        a.scripts,
+        [],
+        exclude_binaries=True,
+        name="velocity-cli",
+        console=True,
+        icon="velocity.ico",
+    )
+    coll = COLLECT(app, cli, a.binaries, a.datas, name="velocity")
+else:
+    exe = EXE(
+        pyz,
+        a.scripts,
+        [],
+        exclude_binaries=True,
+        name="velocity",
+        console=True,
+    )
+    coll = COLLECT(exe, a.binaries, a.datas, name="velocity")

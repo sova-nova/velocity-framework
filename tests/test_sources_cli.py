@@ -29,7 +29,7 @@ def config(tmp_path, monkeypatch):
     vault.mkdir()
     (tmp_path / "cfg/velocity").mkdir(parents=True)
     (tmp_path / "cfg/velocity/config.toml").write_text(
-        f'vault_path = "{vault}"\nllama_cpp_binary = "~/llama/llama-server"\n'
+        f"vault_path = '{vault}'\nllama_cpp_binary = \"~/llama/llama-server\"\n"
     )
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "cfg"))
     cfg = load_config()
