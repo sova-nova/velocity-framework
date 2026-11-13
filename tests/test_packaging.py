@@ -84,3 +84,18 @@ def test_check_for_updates(monkeypatch):
         latest_release(httpx.AsyncClient(transport=httpx.MockTransport(refuse)))
     )
     assert "Couldn't reach GitHub" in offline["error"]
+
+
+def test_system_programs_get_the_systems_libraries(monkeypatch):
+    bundled = {
+        "LD_LIBRARY_PATH": "/app/_internal",
+        "LD_LIBRARY_PATH_ORIG": "/opt/lib",
+        "A": "1",
+    }
+    assert runtime.system_env(bundled) == bundled  # unpackaged: nothing changes
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    assert runtime.system_env(bundled) == {"LD_LIBRARY_PATH": "/opt/lib", "A": "1"}
+    # No original: the bundled path is dropped, not kept.
+    assert runtime.system_env({"LD_LIBRARY_PATH": "/app/_internal", "A": "1"}) == {
+        "A": "1"
+    }

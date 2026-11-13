@@ -4,6 +4,7 @@ hooks, source jobs). Packaged, there is no `python -m velocity.cli`: the app's o
 takes the same arguments.
 """
 
+import os
 import sys
 from pathlib import Path
 
@@ -22,6 +23,22 @@ def self_command(*args: str) -> list[str]:
             return [str(Path(sys.executable).with_name("velocity-cli.exe")), *args]
         return [sys.executable, *args]
     return [sys.executable, "-m", "velocity.cli", *args]
+
+
+def system_env(environ: dict[str, str] | None = None) -> dict[str, str]:
+    """The environment for starting one of the system's own programs (the link opener).
+    The packaged app's loader puts its bundled libraries first in LD_LIBRARY_PATH, and
+    keeps the original in LD_LIBRARY_PATH_ORIG; a system program given the bundled Qt
+    crashes (KDE's kde-open did, so links did nothing). Unpackaged, nothing changes."""
+    env = dict(os.environ if environ is None else environ)
+    if not packaged():
+        return env
+    original = env.pop("LD_LIBRARY_PATH_ORIG", None)
+    if original:
+        env["LD_LIBRARY_PATH"] = original
+    else:
+        env.pop("LD_LIBRARY_PATH", None)
+    return env
 
 
 def no_window() -> int:

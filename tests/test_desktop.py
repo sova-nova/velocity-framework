@@ -129,3 +129,36 @@ def test_a_port_in_use_is_not_free():
         busy.bind(("127.0.0.1", 0))
         busy.listen()
         assert not desktop.port_is_free(busy.getsockname()[1])
+
+
+def test_outside_links_open_with_the_systems_libraries(monkeypatch):
+    started = []
+
+    def fake_popen(args, **kwargs):
+        started.append((args, kwargs["env"]))
+
+    monkeypatch.setattr(desktop.subprocess, "Popen", fake_popen)
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    monkeypatch.setenv("LD_LIBRARY_PATH", "/app/_internal")
+    monkeypatch.delenv("LD_LIBRARY_PATH_ORIG", raising=False)
+    opener = desktop.SystemOpener("velocity-system")
+    assert opener.open("https://ollama.com/download")
+    assert started[0][0] == ["xdg-open", "https://ollama.com/download"]
+    assert "LD_LIBRARY_PATH" not in started[0][1]
+    # Only web addresses.
+    assert not opener.open("file:///etc/passwd")
+    assert len(started) == 1
+
+
+def test_the_packaged_linux_app_uses_the_system_opener(monkeypatch):
+    registered = []
+    monkeypatch.setattr(
+        desktop.webbrowser, "register", lambda *a, **k: registered.append(k)
+    )
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    monkeypatch.setattr(sys, "platform", "win32")
+    desktop.use_system_opener()
+    assert registered == []
+    monkeypatch.setattr(sys, "platform", "linux")
+    desktop.use_system_opener()
+    assert registered == [{"preferred": True}]
