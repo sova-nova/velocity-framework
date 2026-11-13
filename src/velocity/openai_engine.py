@@ -28,7 +28,7 @@ from dataclasses import dataclass, field
 from typing import Any
 from urllib.parse import urlparse
 
-from velocity import hooks, keys
+from velocity import hooks, keys, openrouter
 from velocity.agent import ToolCaller, resume_recap, system_prompt, unknown_command
 from velocity.api_engine import ApiChat, Connector, connect_mcp
 from velocity.config import Config, Subject
@@ -65,7 +65,7 @@ PRESETS = [
     {
         "id": "openrouter",
         "label": "OpenRouter (hosted; models ending in :free)",
-        "base_url": "https://openrouter.ai/api/v1",
+        "base_url": openrouter.BASE_URL,
         "model": "",
         "model_hint": "a model id ending in :free, from the list behind Get it",
         "api_key_env": "OPENROUTER_API_KEY",
@@ -232,7 +232,17 @@ def api_error(error: BaseException, config: Config | None = None) -> str:
     if isinstance(error, openai.APIConnectionError):
         return f"Nothing answered at {where}. Is the server running?"
     if isinstance(error, openai.AuthenticationError):
-        return "The server refused the key. Check the key in your environment variable."
+        return (
+            "The server refused the key. Check the key saved in Settings (or in your "
+            "environment variable)."
+        )
+    if isinstance(error, openai.NotFoundError) and "data policy" in str(error).lower():
+        # OpenRouter's privacy settings can rule out every free model's provider.
+        return (
+            "OpenRouter's privacy settings block the free models. On "
+            f"{openrouter.PRIVACY_PAGE}, allow the providers of free models (they may "
+            "use what you send for training), then test again."
+        )
     if isinstance(error, openai.NotFoundError):
         model = config.openai_model if config else "the model"
         return f"The server doesn't know {model}, or the address is wrong."

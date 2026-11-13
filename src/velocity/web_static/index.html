@@ -213,56 +213,124 @@
           </div>
         </section>
         <section class="settings-pane" data-pane="free" role="tabpanel">
-          <!-- The free engine (decided 2026-11-11): any OpenAI-compatible server. -->
-          <p class="hint">A model on your computer (like Ollama) or a hosted free tier. It costs
-            nothing, but it is weaker than Claude: it makes more mistakes, including grading wrong
-            answers as right. These are suggestions, not endorsements; free tiers change often.</p>
+          <!-- The free engine (decided 2026-11-11): any OpenAI-compatible server. A guided
+               start for newcomers (decided 2026-11-12): two paths, a few numbered steps
+               each; the raw settings under Advanced. -->
+          <p class="hint">Try velocity for free. Free models are weaker than Claude: they make
+            more mistakes, including grading wrong answers as right.</p>
+          <div class="option-cards free-paths" role="radiogroup" aria-label="Where the free model runs">
+            <label class="option-card"><input type="radio" name="free-path" value="online">
+              <span class="card-title">Online: OpenRouter</span>
+              <span class="card-meta hint">No download, works on any computer. Needs a free
+                account, and allows only so many messages a day.</span></label>
+            <label class="option-card"><input type="radio" name="free-path" value="ollama">
+              <span class="card-title">On this computer: Ollama</span>
+              <span class="card-meta hint">Private, no account, no daily limit. A 2.5 GB
+                download; best with a recent graphics card.</span></label>
+          </div>
+          <ol id="free-online" class="steps" hidden>
+            <li data-step="key">
+              <strong>Get a key.</strong> Sign up at OpenRouter (free), then on its Keys page
+              press <em>Create</em>, give it any name, and copy the key.
+              <div class="inline"><a id="or-keys" class="button-link" target="_blank" rel="noopener">Open OpenRouter's Keys page</a></div>
+            </li>
+            <li data-step="paste">
+              <strong>Paste the key here.</strong>
+              <div class="field key-field" data-key="openai">
+                <div class="inline">
+                  <input type="password" class="key-input" autocomplete="off" placeholder="sk-or-…" aria-label="OpenRouter key">
+                  <button type="button" class="key-save">Save key</button>
+                  <button type="button" class="key-remove" hidden>Remove</button>
+                </div>
+                <span class="hint key-status" role="status"></span>
+              </div>
+            </li>
+            <li data-step="model">
+              <strong>Pick a model.</strong> The first choice is the simplest: OpenRouter picks
+              a free model each time.
+              <div class="inline">
+                <select id="or-model" aria-label="Free model on OpenRouter"></select>
+                <button id="or-refresh" type="button">Refresh</button>
+              </div>
+              <span id="or-model-status" class="hint" role="status"></span>
+            </li>
+            <li data-step="use">
+              <strong>Use it.</strong> velocity saves these settings and sends the model a
+              short test.
+              <div class="inline">
+                <button id="or-use" type="button" class="primary">Use it</button>
+                <span id="or-use-status" class="hint" role="status"></span>
+              </div>
+            </li>
+          </ol>
           <!-- Ollama on this computer, and Download model (desktop app PR 3, 2026-11-11). -->
-          <div id="ollama-box" class="ollama-box">
-            <p id="ollama-state"></p>
-            <div class="inline">
-              <button id="ollama-go" type="button" class="primary"></button>
-              <button id="ollama-cancel" type="button" hidden>Cancel</button>
-              <a id="ollama-get" target="_blank" rel="noopener" hidden>Get Ollama</a>
+          <ol id="free-ollama" class="steps" hidden>
+            <li data-step="install">
+              <strong>Install Ollama and open it.</strong> On Linux it may also be in your app
+              store as “ollama”.
+              <div class="inline">
+                <a id="ollama-get" class="button-link" target="_blank" rel="noopener">Get Ollama</a>
+                <button id="ollama-check" type="button">Check again</button>
+              </div>
+            </li>
+            <li data-step="download">
+              <strong>Download the model.</strong> <span id="ollama-model-text"></span>
+              <div class="inline">
+                <button id="ollama-download" type="button" class="primary">Download model</button>
+                <button id="ollama-cancel" type="button" hidden>Cancel</button>
+              </div>
+              <progress id="ollama-progress" max="1" hidden></progress>
+            </li>
+            <li data-step="use">
+              <strong>Use it.</strong> velocity saves these settings and sends the model a
+              short test (it can take a minute to load the first time).
+              <div class="inline">
+                <button id="ollama-use" type="button" class="primary">Use it</button>
+                <span id="ollama-use-status" class="hint" role="status"></span>
+              </div>
+            </li>
+          </ol>
+          <p id="ollama-state" class="hint" role="status" hidden></p>
+          <p id="free-in-use" class="free-in-use" role="status" hidden></p>
+          <details id="free-advanced" class="free-advanced">
+            <summary>Advanced: another server, or change the settings</summary>
+            <div class="field">
+              <span>Start from</span>
+              <div class="inline">
+                <select id="free-preset" aria-label="Start from"></select>
+                <a id="free-link" target="_blank" rel="noopener" hidden>Get it</a>
+              </div>
             </div>
-            <progress id="ollama-progress" max="1" hidden></progress>
-          </div>
-          <div class="field">
-            <span>Or set it up yourself: start from</span>
-            <div class="inline">
-              <select id="free-preset" aria-label="Start from"></select>
-              <a id="free-link" target="_blank" rel="noopener" hidden>Get it</a>
+            <label class="field">Server address
+              <input type="text" id="free-url" placeholder="e.g. http://localhost:11434/v1">
+            </label>
+            <label class="field">Model
+              <input type="text" id="free-model" placeholder="e.g. qwen3:4b">
+            </label>
+            <div class="field key-field" data-key="openai">
+              <span>Key, for a hosted server (none needed for a model on your computer)</span>
+              <div class="inline">
+                <input type="password" class="key-input" autocomplete="off" placeholder="Paste the server's key" aria-label="Key for the free model's server">
+                <button type="button" class="key-save">Save key</button>
+                <button type="button" class="key-remove" hidden>Remove</button>
+              </div>
+              <span class="hint key-status" role="status"></span>
             </div>
-          </div>
-          <label class="field">Server address
-            <input type="text" id="free-url" placeholder="e.g. http://localhost:11434/v1">
-          </label>
-          <label class="field">Model
-            <input type="text" id="free-model" placeholder="e.g. qwen3:4b">
-          </label>
-          <div class="field key-field" data-key="openai">
-            <span>Key, for a hosted server (none needed for a model on your computer)</span>
+            <label class="field">Or the environment variable holding the key (for terminal users)
+              <input type="text" id="free-key-env" placeholder="e.g. OPENROUTER_API_KEY">
+            </label>
+            <label class="field">Context size (tokens)
+              <input type="number" id="free-context" min="8192" step="1024">
+            </label>
+            <span class="hint">How much the model can keep in mind. Match your server's setting; for
+              Ollama, start it with <code>OLLAMA_CONTEXT_LENGTH</code> set to this number.</span>
+            <label class="check"><input type="checkbox" id="free-images"> This model can see images
+              (lets the tutor look at pages of a PDF)</label>
             <div class="inline">
-              <input type="password" class="key-input" autocomplete="off" placeholder="Paste the server's key" aria-label="Key for the free model's server">
-              <button type="button" class="key-save">Save key</button>
-              <button type="button" class="key-remove" hidden>Remove</button>
+              <button id="free-test" type="button">Test</button>
+              <span id="free-test-result" class="hint" role="status"></span>
             </div>
-            <span class="hint key-status" role="status"></span>
-          </div>
-          <label class="field">Or the environment variable holding the key (for terminal users)
-            <input type="text" id="free-key-env" placeholder="e.g. OPENROUTER_API_KEY">
-          </label>
-          <label class="field">Context size (tokens)
-            <input type="number" id="free-context" min="8192" step="1024">
-          </label>
-          <span class="hint">How much the model can keep in mind. Match your server's setting; for
-            Ollama, start it with <code>OLLAMA_CONTEXT_LENGTH</code> set to this number.</span>
-          <label class="check"><input type="checkbox" id="free-images"> This model can see images
-            (lets the tutor look at pages of a PDF)</label>
-          <div class="inline">
-            <button id="free-test" type="button">Test</button>
-            <span id="free-test-result" class="hint" role="status"></span>
-          </div>
+          </details>
         </section>
         <section class="settings-pane" data-pane="computer" role="tabpanel">
           <ul id="app-checks" class="checks"></ul>

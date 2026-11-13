@@ -144,9 +144,11 @@ With `--engine openai`, the chat runs on the [free model](#free-models) set up i
 
 ### Free models
 
-On the web page (and in the terminal with `velocity chat <subject> --engine openai`), the **Free model (weaker)** engine runs the same tutor on any server that speaks the OpenAI chat API: a model on your own computer, or a hosted free tier. It costs nothing, but it is **noticeably weaker** than Claude. Small models follow the tutor's instructions less reliably, often forget to record your progress, and can grade a wrong answer as right, so double-check anything important. Set it up under **Settings → Free / other model** (pick a preset, then press **Test**).
+On the web page (and in the terminal with `velocity chat <subject> --engine openai`), the **Free model (weaker)** engine runs the same tutor on any server that speaks the OpenAI chat API: a model on your own computer, or a hosted free tier. It costs nothing, but it is **noticeably weaker** than Claude. Small models follow the tutor's instructions less reliably, often forget to record your progress, and can grade a wrong answer as right, so double-check anything important. Set it up under **Settings → Free model**: pick **Online (OpenRouter)** or **On this computer (Ollama)** and follow the numbered steps. Your own server or settings are under **Advanced** there (pick a preset, then press **Test**).
 
-**On your computer, with [Ollama](https://ollama.com/download).** Free and private: nothing leaves your computer. Install and start Ollama (on Linux it may also be in your distribution's app store), then in **Settings → Free / other model** press **Download model**. velocity downloads `qwen3:4b` (about 2.5 GB) with progress, makes its own copy of it with room for the tutor's instructions built in, and sets it up; no terminal needed.
+**Online, with [OpenRouter](https://openrouter.ai/models?max_price=0)** (the easiest start: no download, any computer). Make a free account and a key on OpenRouter's Keys page, paste the key into step 2, pick a model, and press **Use it**. velocity lists OpenRouter's current free models that can use tools (asking OpenRouter only when you open that step); the first, `openrouter/free`, lets OpenRouter pick one each time. The key is saved in your system keyring (or set `OPENROUTER_API_KEY` in the terminal that starts velocity). Free tiers allow only so many requests a day, their models and terms change often, and they may use your conversations for training. If the test says OpenRouter's privacy settings block free models, allow their providers on OpenRouter's privacy page.
+
+**On your computer, with [Ollama](https://ollama.com/download).** Free and private: nothing leaves your computer. Install and start Ollama (on Linux it may also be in your distribution's app store), then in **Settings → Free model → On this computer** press **Download model**, then **Use it**. velocity downloads `qwen3:4b` (about 2.5 GB) with progress, makes its own copy of it with room for the tutor's instructions built in, and sets it up; no terminal needed.
 
 The room matters: Ollama's default context (4,096 tokens) is smaller than the tutor's instructions alone (about 5,000), and Ollama cuts what doesn't fit without saying so. velocity's copy (`velocity-qwen3-4b`) has a 32K context built in. `qwen3:4b` needs about 8 GB of GPU memory with it. To use another Ollama model yourself, start Ollama with a larger context and set the same number in Settings (the Test button checks it):
 
@@ -156,8 +158,6 @@ OLLAMA_CONTEXT_LENGTH=32768 ollama serve
 # If Ollama runs as a system service instead:
 #   sudo systemctl edit ollama   ->  [Service] Environment="OLLAMA_CONTEXT_LENGTH=32768"
 ```
-
-**A hosted free tier, e.g. [OpenRouter](https://openrouter.ai/models?max_price=0).** Make an account and a key, pick the OpenRouter preset, paste the key into **Save key** (or set `OPENROUTER_API_KEY` in the terminal that starts velocity), and enter a model id ending in `:free`. Free tiers have rate limits, their models and terms change often, and they may use your conversations for training.
 
 **How weak?** Measured with the eval cases (one tutor turn each, replayed from real sessions; code checks only), on an AMD RX 7700 XT (12 GB):
 
