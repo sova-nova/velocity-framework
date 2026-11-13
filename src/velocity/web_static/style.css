@@ -533,6 +533,7 @@ button.danger:disabled { opacity: 0.45; }
 .setup h3, #app-settings h3 { font-size: 0.95rem; margin: 1.5rem 0 0.5rem; }
 .check { display: flex; gap: 0.4rem; align-items: center; font-size: 0.9rem; }
 .suggestions { display: flex; flex-direction: column; gap: 0.35rem; margin-top: 0.75rem; }
+.suggestions:empty { display: none; }
 .suggestions button {
   text-align: left;
   padding: 0.4rem 0.7rem;

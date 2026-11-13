@@ -53,15 +53,13 @@
   <section id="setup" class="setup" hidden>
     <h2>Welcome to velocity</h2>
     <p>One thing before you start: <strong>where should velocity keep its files?</strong>
-      Pick your notes folder (an Obsidian vault works well), or any folder. velocity only
-      writes inside a <code>Tutor</code> folder there, and never changes your own notes.</p>
+      Any folder works. velocity only writes inside a <code>Tutor</code> folder there, and
+      never changes anything else in it.</p>
     <div id="setup-suggestions" class="suggestions"></div>
-    <p id="setup-no-obsidian" class="reminder" hidden>No Obsidian vault found. velocity works
-      with any folder, but <a href="https://obsidian.md" target="_blank" rel="noopener">Obsidian</a>
-      (free) is strongly recommended: with it you can write your own thoughts into your
-      session logs for the tutor to answer, and keep notes it can read. You can install it
-      later and open this same folder in it.</p>
-    <label class="field">Notes folder
+    <!-- Obsidian is optional (decided 2026-11-12): one quiet line, no recommendation box. -->
+    <p class="hint">Your session logs are plain Markdown files, so you can also open this
+      folder in a notes app such as Obsidian, if you use one.</p>
+    <label class="field">Folder
       <input type="text" id="setup-vault" placeholder="/home/you/Documents/Notes">
     </label>
     <label class="check"><input type="checkbox" id="setup-create"> Create this folder if it doesn't exist</label>
