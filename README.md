@@ -1,6 +1,6 @@
 # velocity
 
-A local subject tutor built on Claude. You pick a subject; the tutor teaches, asks before it tells, quizzes you, and tracks what you know. It can ground its teaching in your own sources (a textbook PDF), citing them by section. Every session is written to a log you read and annotate in [Obsidian](https://obsidian.md), and your own notes stay yours: the tutor can read and critique them, but never write them.
+A local subject tutor built on Claude. You pick a subject; the tutor teaches, asks before it tells, quizzes you, and tracks what you know. It can ground its teaching in your own sources (a textbook PDF), citing them by section. Every session is written to a plain Markdown log you can read on the page or annotate in a notes app like [Obsidian](https://obsidian.md), and your own notes stay yours: the tutor can read and critique them, but never write them.
 
 It is built around one **MCP server** with two front ends:
 
@@ -68,10 +68,10 @@ To build them yourself: `packaging/build_appimage.sh` on Linux, `packaging\build
 
 Requirements: Linux, Windows or macOS (the test suite runs on all three) and [uv](https://docs.astral.sh/uv/). To chat on your Claude plan you need [Claude Code](https://claude.com/claude-code) 2.1.314 or later; for the API engine (`velocity chat`, or API chats on the web page), an Anthropic API key. Without either, the web page can use a [free model](#free-models) (weaker).
 
-**[Obsidian](https://obsidian.md) (free) is strongly recommended.** velocity keeps its session logs and progress as markdown in a folder of your notes, and Obsidian is the best way to work with them. Without it velocity still works, with any folder: the web page shows your chats, logs (math included), books and progress. What you'd miss:
+**A notes app is optional.** velocity keeps its session logs and progress as plain Markdown in a folder you choose, and the web page shows your chats, logs (math included), books and progress. If you use a Markdown notes app such as [Obsidian](https://obsidian.md), open that folder in it for a few extras:
 
 - **Annotating your logs.** Write your own thoughts between the lines of a session log; the tutor reads them next session and responds.
-- **Your own notes.** The tutor can read (never change) the notes you keep, and critique them with `/review-notes`. Without a notes app there's nowhere convenient to write them.
+- **Your own notes.** The tutor can read (never change) the notes you keep, and critique them with `/review-notes`.
 - **Browsing everything as linked notes**, outside velocity: logs, `progress.md`, and your notes side by side.
 
 ```bash
@@ -82,7 +82,7 @@ uv sync
 
 `uv sync` also installs the OCR dependencies (marker and CPU-only PyTorch, a few GB). Without textbook sources you can skip them: run `uv sync --no-group ocr` and use `uv run --no-sync velocity ...` instead of `uv run velocity ...`.
 
-The easiest start is the web page: run `uv run velocity web`. On the first run it asks for your notes folder (suggesting the Obsidian vaults it finds), shows what this computer can do (Claude Code, an API key, OCR), and from there you create subjects, add books and chat. The same settings are under **Settings** later.
+The easiest start is the web page: run `uv run velocity web`. On the first run it asks for a folder for velocity's files (suggesting any Obsidian vaults it finds), shows what this computer can do (Claude Code, an API key, OCR), and from there you create subjects, add books and chat. The same settings are under **Settings** later.
 
 To use velocity as an app in its own window instead of a browser tab, run `uv run velocity app` (Linux and Windows; macOS should work but is untested). On first run, setup offers to add velocity to your app menu, so after that you can open it without a terminal; **Settings → Add velocity to the app menu** (or `uv run velocity install-launcher`) does it later. Closing the window pauses any open chat. Started from the menu, the app doesn't see keys exported in a terminal, so add your API key in **Settings** (it's saved in your system keyring). For a ready-made download instead, see [Install the app](#install-the-app-windows-and-linux-no-terminal).
 

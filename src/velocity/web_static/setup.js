@@ -37,8 +37,6 @@ function showSetup(settings) {
   if (settings.suggestions.length) {
     box.append(Object.assign(document.createElement("span"), { className: "hint", textContent: "Obsidian vaults found:" }));
   }
-  // Recommended, not required: shown only to people who don't seem to use it yet.
-  $("#setup-no-obsidian").hidden = settings.suggestions.length > 0;
   for (const vault of settings.suggestions) {
     const pick = Object.assign(document.createElement("button"), {
       textContent: vault.replace(settings.home, "~"),
