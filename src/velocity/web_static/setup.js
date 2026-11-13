@@ -92,7 +92,7 @@ async function openAppSettings() {
   effort.value = s.api_effort;
   showFreeSettings(s);
   showKeys(s.keys);
-  ollamaAction = null;
+  ollamaStatus("Looking for Ollama…");
   showOllama();
   drawChecks($("#app-checks"), s.checks);
   showLauncher(s.launcher);
@@ -135,6 +135,7 @@ async function pickTheme(theme) {
   }
 }
 
+// Returns whether the settings were saved (the reason shows in the buttons' row if not).
 async function saveAppSettings() {
   try {
     const saved = await postJSON("/api/settings", {
@@ -149,27 +150,36 @@ async function saveAppSettings() {
     showStartChoice();
     if (saved.reload) {
       location.reload(); // another notes folder: other subjects
-      return;
+      return true;
     }
+    savedFree = { url: saved.openai_base_url, model: saved.openai_model };
+    showInUse();
+    markOnline();
+    if (ollamaInfo) markSteps($("#free-ollama"), [ollamaInfo.running, ollamaInfo.ready, ollamaInUse(ollamaInfo)]);
     drawChecks($("#app-checks"), saved.checks);
     setupStatus("#app-settings-status", "Saved.");
+    return true;
   } catch (error) {
     setupStatus("#app-settings-status", error.message, true);
+    return false;
   }
 }
 
-// -- Settings → Ollama and Download model (desktop app PR 3, 2026-11-11) -----------------
-// Finds Ollama on this computer; Download model pulls the suggested model and makes
-// velocity's copy with room for the tutor's instructions; Use it fills in the free model
-// settings and saves them. The download runs in the server; the page polls it.
+// -- Settings → Free model: Ollama, in steps (desktop app PR 3, 2026-11-11; steps 2026-11-12)
+// Install Ollama, Download model (the suggested model, and velocity's copy with room for
+// the tutor's instructions), Use it (fills in the settings, saves them, and tests). The
+// download runs in the server; the page polls it.
 
 let ollamaPoll = null;
-let ollamaAction = null;
 let ollamaInfo = null;
 // Set when this page starts a download, so only that download is put to use when done.
 let ollamaStartedHere = false;
 
 const gb = (bytes) => (bytes / 1e9).toFixed(1);
+
+function ollamaInUse(o) {
+  return Boolean(o) && savedFree.url === o.base_url && savedFree.model === o.velocity_model;
+}
 
 async function showOllama() {
   clearTimeout(ollamaPoll);
@@ -179,77 +189,67 @@ async function showOllama() {
   } catch {
     return;
   }
-  const state = $("#ollama-state");
-  const go = $("#ollama-go");
+  ollamaInfo = o;
   const job = o.download;
   const busy = job && !["done", "failed", "cancelled"].includes(job.phase);
-  $("#ollama-get").hidden = o.running;
+  const failed = job?.phase === "failed";
   $("#ollama-get").href = o.download_page;
+  $("#ollama-check").hidden = o.running;
+  $("#ollama-model-text").textContent =
+    `${o.suggested}, about 2.5 GB, made ready for the tutor's instructions.`;
+  const download = $("#ollama-download");
+  download.hidden = busy;
+  download.disabled = !o.running || o.ready;
+  download.textContent = o.ready ? "Downloaded" : failed ? "Try again" : "Download model";
   $("#ollama-cancel").hidden = !busy;
-  $("#ollama-progress").hidden = !busy;
-  go.hidden = busy;
+  $("#ollama-use").disabled = !o.ready;
+  const progress = $("#ollama-progress");
+  progress.hidden = !busy;
+  let state = o.running
+    ? `Ollama ${o.version} is running.`
+    : "Ollama isn't running on this computer yet.";
+  if (busy && job.phase === "downloading" && job.total) {
+    progress.value = job.completed / job.total;
+    state = `Downloading ${job.model}: ${gb(job.completed)} of ${gb(job.total)} GB…`;
+  } else if (busy) {
+    progress.removeAttribute("value"); // an indeterminate bar
+    state = job.phase === "preparing"
+      ? "Preparing velocity's copy of the model…"
+      : `Starting the download of ${job.model}…`;
+  } else if (failed) {
+    state = `The download failed: ${job.error}`;
+  }
+  ollamaStatus(state, failed);
+  markSteps($("#free-ollama"), [o.running, o.ready, ollamaInUse(o)]);
   if (busy) {
-    const p = $("#ollama-progress");
-    if (job.phase === "downloading" && job.total) {
-      p.value = job.completed / job.total;
-      state.textContent = `Downloading ${job.model}: ${gb(job.completed)} of ${gb(job.total)} GB…`;
-    } else {
-      p.removeAttribute("value"); // an indeterminate bar
-      state.textContent = job.phase === "preparing"
-        ? "Preparing velocity's copy of the model…"
-        : `Starting the download of ${job.model}…`;
-    }
-    if (!$("#app-settings").open) return; // stop polling once Settings is closed
-    ollamaPoll = setTimeout(showOllama, 1000);
+    if ($("#app-settings").open) ollamaPoll = setTimeout(showOllama, 1000); // stop once closed
     return;
   }
-  ollamaInfo = o;
   if (job?.phase === "done" && ollamaStartedHere) {
     ollamaStartedHere = false;
     await useOllama(o); // just finished: use it right away
-    return;
-  }
-  if (!o.running) {
-    state.textContent =
-      "Ollama runs free models on your computer, privately. It isn't running here: install it " +
-      "(on Linux it may also be in your app store as “ollama”), start it, then check again.";
-    go.textContent = "Check again";
-    ollamaAction = "check";
-  } else if (o.ready) {
-    const inUse = $("#free-model").value === o.velocity_model && $("#free-url").value === o.base_url;
-    state.textContent = inUse
-      ? `Ollama ${o.version} is running, and velocity's copy of ${o.suggested} is set up.`
-      : `Ollama ${o.version} is running, and velocity's copy of ${o.suggested} is downloaded.`;
-    go.textContent = "Use it";
-    go.hidden = inUse;
-    ollamaAction = "use";
-  } else {
-    const failed = job?.phase === "failed" ? `The download failed: ${job.error} ` : "";
-    state.textContent =
-      `${failed}Ollama ${o.version} is running. Download ${o.suggested} (about 2.5 GB), the ` +
-      "suggested model, with room for the tutor's instructions built in.";
-    go.textContent = job?.phase === "failed" ? "Try again" : "Download model";
-    ollamaAction = "download";
   }
 }
 
-async function ollamaGo() {
-  if (ollamaAction === "download") {
-    try {
-      await postJSON("/api/ollama/download");
-      ollamaStartedHere = true;
-    } catch (error) {
-      $("#ollama-state").textContent = error.message;
-      return;
-    }
-  } else if (ollamaAction === "use") {
-    await useOllama(ollamaInfo);
+function ollamaStatus(text, isError = false) {
+  const line = $("#ollama-state");
+  line.hidden = !text || $("#free-ollama").hidden; // only beside the Ollama steps
+  line.textContent = text || "";
+  line.classList.toggle("status-error", isError);
+}
+
+async function downloadOllama() {
+  try {
+    await postJSON("/api/ollama/download");
+    ollamaStartedHere = true;
+  } catch (error) {
+    ollamaStatus(error.message, true);
     return;
   }
   showOllama();
 }
 
-// Fill in the free model settings for velocity's Ollama model, and save them.
+// Fill in the free model settings for velocity's Ollama model, save them, and test.
 async function useOllama(o) {
   $("#free-preset").value = "ollama";
   showFreeLink();
@@ -257,9 +257,14 @@ async function useOllama(o) {
   $("#free-model").value = o.velocity_model;
   $("#free-key-env").value = "";
   $("#free-context").value = o.context;
-  await saveAppSettings();
+  $("#free-images").checked = false;
+  if (!(await saveAppSettings())) {
+    $("#ollama-use-status").textContent = "Not saved: see below.";
+    return;
+  }
   refreshFreeKey();
   showOllama();
+  await testFreeModel($("#ollama-use-status"), $("#ollama-use"));
 }
 
 async function cancelOllama() {
@@ -273,30 +278,38 @@ async function cancelOllama() {
 
 let keyStatuses = null;
 
+// The step "Paste the key here" (Free model → Online) is always OpenRouter's key; the
+// other free key field belongs to the server typed under Advanced.
+const isOnlineStep = (field) => Boolean(field.closest("#free-online"));
+
 function showKeys(statuses) {
   keyStatuses = statuses;
   for (const field of document.querySelectorAll(".key-field")) {
-    const which = field.dataset.key;
-    const s = statuses[which];
-    const status = field.querySelector(".key-status");
-    const save = field.querySelector(".key-save");
-    field.querySelector(".key-remove").hidden = !s.saved;
-    save.disabled = !statuses.keyring || (which === "openai" && !s.host);
-    if (which === "openai" && !s.host) {
-      status.textContent = "Fill in the server address first: the key is saved for that server.";
-    } else if (s.source === "env") {
-      status.textContent = `From ${s.env_var} in the environment, which wins over a saved key.`;
-    } else if (s.source === "keyring") {
-      status.textContent = `Saved in your system keyring${which === "openai" ? ` for ${s.host}` : ""}.`;
-    } else if (which === "openai" && /^(localhost|127\.|::1$|0\.0\.0\.0$)/.test(s.host)) {
-      status.textContent = "Not needed: this server is on your computer.";
-    } else if (!statuses.keyring) {
-      status.textContent =
-        "This computer has no system keyring velocity can use. Set the key in an environment variable instead.";
-    } else {
-      status.textContent =
-        "Not set. It's saved in your system keyring (your desktop may ask to unlock it), never in velocity's files.";
-    }
+    if (!isOnlineStep(field)) showKeyField(field, statuses);
+  }
+}
+
+function showKeyField(field, statuses) {
+  const which = field.dataset.key;
+  const s = statuses[which];
+  const status = field.querySelector(".key-status");
+  const save = field.querySelector(".key-save");
+  field.querySelector(".key-remove").hidden = !s.saved;
+  save.disabled = !statuses.keyring || (which === "openai" && !s.host);
+  if (which === "openai" && !s.host) {
+    status.textContent = "Fill in the server address first: the key is saved for that server.";
+  } else if (s.source === "env") {
+    status.textContent = `From ${s.env_var} in the environment, which wins over a saved key.`;
+  } else if (s.source === "keyring") {
+    status.textContent = `Saved in your system keyring${which === "openai" ? ` for ${s.host}` : ""}.`;
+  } else if (which === "openai" && /^(localhost|127\.|::1$|0\.0\.0\.0$)/.test(s.host)) {
+    status.textContent = "Not needed: this server is on your computer.";
+  } else if (!statuses.keyring) {
+    status.textContent =
+      "This computer has no system keyring velocity can use. Set the key in an environment variable instead.";
+  } else {
+    status.textContent =
+      "Not set. It's saved in your system keyring (your desktop may ask to unlock it), never in velocity's files.";
   }
 }
 
@@ -304,14 +317,15 @@ async function saveKey(field, remove = false) {
   const input = field.querySelector(".key-input");
   const status = field.querySelector(".key-status");
   try {
-    const statuses = await postJSON("/api/settings/key", {
+    await postJSON("/api/settings/key", {
       which: field.dataset.key,
       key: input.value,
       remove,
-      base_url: $("#free-url").value,
+      base_url: isOnlineStep(field) ? orInfo.base_url : $("#free-url").value,
     });
     input.value = ""; // never kept on the page
-    showKeys(statuses);
+    showKeys(await getJSON(`/api/settings/keys?base_url=${encodeURIComponent($("#free-url").value)}`));
+    await refreshOrKey(); // both free key fields may name the same server
     engines = await getJSON("/api/engines"); // app.js: the API may be usable now
     fillEngines($("#engine"), usableEngine($("#engine").value));
     showStartChoice();
@@ -371,14 +385,24 @@ async function addLauncher() {
   }
 }
 
-// -- Settings → Free / other model (decided 2026-11-11) ---------------------------------
-// Presets fill in the server (and the key's variable); Test tries the settings as typed,
-// before they are saved: does the server answer, and can the model use a tool?
+// -- Settings → Free model (decided 2026-11-11; guided steps 2026-11-12) ----------------
+// Two paths for newcomers, each a few numbered steps: Online (OpenRouter's free models)
+// and On this computer (Ollama, above). Advanced holds the settings themselves: presets
+// fill in the server (and the key's variable); Test tries them as typed, before saving.
 
 let freePresets = [];
+let orInfo = null; // OpenRouter's addresses, from the settings
+let orModels = null; // its free models, once asked for
+let orKey = null; // where the OpenRouter key comes from (never the key)
+// The free model settings as saved, to tell which path is in use.
+let savedFree = { url: "", model: "" };
+// Whether the last "Use it" test passed (null: not tested here); a failed one isn't done.
+let orTested = null;
 
 function showFreeSettings(s) {
   freePresets = s.openai_presets || [];
+  orInfo = s.openrouter;
+  savedFree = { url: s.openai_base_url, model: s.openai_model };
   const preset = $("#free-preset");
   preset.innerHTML = "";
   preset.append(new Option("Your own settings", ""));
@@ -391,6 +415,125 @@ function showFreeSettings(s) {
   preset.value = freePresets.find((p) => p.base_url === s.openai_base_url)?.id || "";
   showFreeLink();
   $("#free-test-result").textContent = "";
+  $("#or-use-status").textContent = "";
+  orTested = null;
+  $("#ollama-use-status").textContent = "";
+  $("#or-keys").href = orInfo.keys_page;
+  // The path in use, else Online: the easiest start (no download, any computer).
+  const onComputer = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?/.test(s.openai_base_url);
+  const path = onComputer && preset.value === "ollama" ? "ollama" : "online";
+  for (const r of document.querySelectorAll('[name="free-path"]')) r.checked = r.value === path;
+  // Settings that neither path made (another server): show them.
+  $("#free-advanced").open = Boolean(s.openai_base_url) &&
+    s.openai_base_url !== orInfo.base_url && preset.value !== "ollama";
+  showFreePath();
+  showInUse();
+  refreshOrKey();
+}
+
+function showFreePath() {
+  const path = document.querySelector('[name="free-path"]:checked')?.value;
+  $("#free-online").hidden = path !== "online";
+  $("#free-ollama").hidden = path !== "ollama";
+  $("#ollama-state").hidden = path !== "ollama" || !$("#ollama-state").textContent;
+  if (path === "online") loadOrModels();
+}
+
+function showInUse() {
+  const line = $("#free-in-use");
+  line.hidden = !savedFree.url || !savedFree.model;
+  let host = savedFree.url;
+  try {
+    host = new URL(savedFree.url).host;
+  } catch {}
+  line.textContent = `✓ In use: ${savedFree.model} on ${host}.`;
+}
+
+// Mark each step done or not, and the first one not done as the one to do next.
+function markSteps(list, done) {
+  const steps = list.querySelectorAll(":scope > li");
+  const next = done.indexOf(false);
+  steps.forEach((step, i) => {
+    step.classList.toggle("done", Boolean(done[i]));
+    step.classList.toggle("next", i === next);
+  });
+}
+
+function markOnline() {
+  const haveKey = Boolean(orKey && orKey.source);
+  const model = $("#or-model").value;
+  const inUse = savedFree.url === orInfo?.base_url && Boolean(model) && savedFree.model === model &&
+    orTested !== false;
+  // A model is always picked (the router), so it counts once there is a key: in order.
+  markSteps($("#free-online"), [haveKey, haveKey, haveKey && Boolean(model), inUse]);
+}
+
+async function refreshOrKey() {
+  if (!orInfo) return;
+  try {
+    const statuses = await getJSON(`/api/settings/keys?base_url=${encodeURIComponent(orInfo.base_url)}`);
+    orKey = statuses.openai;
+    showKeyField($("#free-online .key-field"), statuses);
+  } catch {}
+  markOnline();
+}
+
+async function loadOrModels(again = false) {
+  if (orModels && !again) return;
+  const select = $("#or-model");
+  const status = $("#or-model-status");
+  status.classList.remove("status-error");
+  status.textContent = "Asking OpenRouter for its free models…";
+  let answer;
+  try {
+    answer = await postJSON("/api/settings/free-models");
+  } catch (error) {
+    answer = { models: [], error: error.message };
+  }
+  // Even without the list, OpenRouter's own router is a good choice.
+  orModels = answer.models.length
+    ? answer.models
+    : [{ id: orInfo.router, name: orInfo.router, context: 131072, images: false }];
+  status.textContent = answer.error || "";
+  status.classList.toggle("status-error", Boolean(answer.error));
+  select.innerHTML = "";
+  for (const m of orModels) {
+    const label = m.id === orInfo.router ? "Any free model (OpenRouter picks)" : m.name;
+    select.append(new Option(label, m.id));
+  }
+  const saved = savedFree.url === orInfo.base_url ? savedFree.model : "";
+  if (saved && !orModels.some((m) => m.id === saved)) {
+    orModels.push({ id: saved, name: saved, context: Number($("#free-context").value), images: $("#free-images").checked });
+    select.append(new Option(`${saved} (in use)`, saved));
+  }
+  select.value = saved || orModels[0].id;
+  markOnline();
+}
+
+// Fill in the free model settings for the chosen OpenRouter model, save them, and test.
+async function useOpenRouter() {
+  const status = $("#or-use-status");
+  if (!orKey?.source) {
+    status.textContent = "Save your key first (step 2).";
+    return;
+  }
+  const m = orModels?.find((x) => x.id === $("#or-model").value);
+  if (!m) return;
+  const p = freePresets.find((x) => x.id === "openrouter");
+  $("#free-preset").value = "openrouter";
+  showFreeLink();
+  $("#free-url").value = orInfo.base_url;
+  $("#free-model").value = m.id;
+  $("#free-key-env").value = p?.api_key_env || "";
+  $("#free-context").value = m.context;
+  $("#free-images").checked = m.images;
+  if (!(await saveAppSettings())) {
+    status.textContent = "Not saved: see below.";
+    return;
+  }
+  refreshFreeKey();
+  orTested = await testFreeModel(status, $("#or-use"));
+  markOnline();
 }
 
 function showFreeLink() {
@@ -422,9 +565,7 @@ function freeSettings() {
   };
 }
 
-async function testFreeModel() {
-  const result = $("#free-test-result");
-  const button = $("#free-test");
+async function testFreeModel(result = $("#free-test-result"), button = $("#free-test")) {
   button.disabled = true;
   result.classList.remove("status-error");
   result.textContent = "Testing… a model on your computer can take a minute to load.";
@@ -432,9 +573,11 @@ async function testFreeModel() {
     const r = await postJSON("/api/settings/test-model", freeSettings());
     result.textContent = (r.ok && r.tools ? "✓ " : "! ") + r.message;
     result.classList.toggle("status-error", !r.ok);
+    return r.ok;
   } catch (error) {
     result.textContent = error.message;
     result.classList.add("status-error");
+    return false;
   } finally {
     button.disabled = false;
   }
@@ -510,10 +653,10 @@ function setUpSettings() {
   $("#cleanup-no").addEventListener("click", () => ($("#cleanup-confirm").hidden = true));
   $("#cleanup-yes").addEventListener("click", removeCleanup);
   $("#settings-button").addEventListener("click", openAppSettings);
-  $("#app-settings-save").addEventListener("click", saveAppSettings);
+  $("#app-settings-save").addEventListener("click", () => saveAppSettings());
   $("#app-settings-close").addEventListener("click", () => $("#app-settings").close());
   $("#free-preset").addEventListener("change", pickFreePreset);
-  $("#free-test").addEventListener("click", testFreeModel);
+  $("#free-test").addEventListener("click", () => testFreeModel());
   $("#launcher-add").addEventListener("click", addLauncher);
   $("#update-check").addEventListener("click", checkUpdate);
   for (const field of document.querySelectorAll(".key-field")) {
@@ -521,8 +664,17 @@ function setUpSettings() {
     field.querySelector(".key-remove").addEventListener("click", () => saveKey(field, true));
   }
   $("#free-url").addEventListener("change", refreshFreeKey);
-  $("#ollama-go").addEventListener("click", ollamaGo);
+  $("#ollama-check").addEventListener("click", () => {
+    ollamaStatus("Looking for Ollama…");
+    showOllama();
+  });
+  $("#ollama-download").addEventListener("click", downloadOllama);
+  $("#ollama-use").addEventListener("click", () => ollamaInfo && useOllama(ollamaInfo));
   $("#ollama-cancel").addEventListener("click", cancelOllama);
+  for (const r of document.querySelectorAll('[name="free-path"]')) r.addEventListener("change", showFreePath);
+  $("#or-model").addEventListener("change", markOnline);
+  $("#or-refresh").addEventListener("click", () => loadOrModels(true));
+  $("#or-use").addEventListener("click", useOpenRouter);
   for (const tab of document.querySelectorAll(".settings-tabs [data-tab]")) {
     tab.addEventListener("click", () => showSettingsTab(tab.dataset.tab));
   }

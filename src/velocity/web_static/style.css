@@ -545,17 +545,57 @@ button.danger:disabled { opacity: 0.45; }
 }
 .suggestions button:hover { border-color: var(--accent); }
 /* Ollama and Download model, in Settings (2026-11-11). */
-.ollama-box {
+/* Settings → Free model: numbered steps (decided 2026-11-12). The next step to do is
+   marked with the accent; a done step shows a check instead of its number. */
+.free-paths { grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); margin: 0.75rem 0; }
+.steps { list-style: none; counter-reset: step; margin: 0.5rem 0; padding: 0; display: flex; flex-direction: column; gap: 0.5rem; }
+.steps > li {
+  counter-increment: step;
+  position: relative;
+  padding: 0.55rem 0.8rem 0.6rem 2.6rem;
   border: 1px solid var(--border);
-  border-left: 4px solid var(--accent);
-  border-radius: 0 8px 8px 0;
-  padding: 0.6rem 0.8rem;
-  margin: 0.75rem 0;
-  background: var(--panel);
+  border-radius: 8px;
 }
-.ollama-box p { margin: 0 0 0.5rem; }
-.ollama-box .inline { align-items: center; }
-.ollama-box progress { width: 100%; margin-top: 0.5rem; accent-color: var(--accent); }
+.steps > li::before {
+  content: counter(step);
+  position: absolute;
+  left: 0.75rem;
+  top: 0.55rem;
+  width: 1.3rem;
+  height: 1.3rem;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--muted);
+  border: 1px solid var(--border);
+}
+.steps > li.next { border-color: var(--accent); box-shadow: inset 3px 0 0 var(--accent); }
+.steps > li.next::before { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.steps > li.done::before { content: "✓"; color: var(--ok); border-color: var(--ok); }
+.steps > li.done { color: var(--muted); }
+.steps .inline { align-items: center; margin-top: 0.45rem; }
+.steps .inline > button, .steps .inline > a { flex: none; white-space: nowrap; }
+.steps .field { margin: 0.45rem 0 0; }
+.steps progress { width: 100%; margin-top: 0.5rem; accent-color: var(--accent); }
+#or-model { flex: 1; min-width: 0; }
+/* A link that looks like a button (the opposite of .link-button). */
+a.button-link {
+  font-size: 1rem;
+  padding: 0.35rem 0.8rem;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--text);
+  text-decoration: none;
+}
+a.button-link:hover { border-color: var(--accent); }
+.free-in-use { color: var(--ok); font-weight: 600; margin: 0.6rem 0; }
+.free-advanced { margin-top: 1rem; border-top: 1px solid var(--border); padding-top: 0.6rem; }
+.free-advanced > summary { cursor: pointer; color: var(--muted); }
+.free-advanced[open] > summary { margin-bottom: 0.5rem; }
+.free-advanced > .inline { align-items: center; margin: 0.6rem 0; }
 
 .checks { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.4rem; }
 .checks li { font-size: 0.9rem; }

@@ -28,7 +28,15 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 from starlette.routing import Route
 
-from velocity import __version__, desktop, keys, ollama, openai_engine, runtime
+from velocity import (
+    __version__,
+    desktop,
+    keys,
+    ollama,
+    openai_engine,
+    openrouter,
+    runtime,
+)
 from velocity.config import (
     EFFORTS,
     MODEL_SHORT_NAMES,
@@ -169,6 +177,14 @@ def settings_json(config: Config | None, suggest: bool = False) -> dict:
         ),
         "openai_images": bool(config and config.openai_images),
         "openai_presets": openai_engine.PRESETS,
+        # The Free model tab's "Online" steps (2026-11-12).
+        "openrouter": {
+            "base_url": openrouter.BASE_URL,
+            "router": openrouter.ROUTER,
+            "sign_up_page": openrouter.SIGN_UP_PAGE,
+            "keys_page": openrouter.KEYS_PAGE,
+            "privacy_page": openrouter.PRIVACY_PAGE,
+        },
         "version": __version__,
         "packaged": runtime.packaged(),
         # Where each key comes from (keys.py); never the keys themselves.
@@ -383,6 +399,11 @@ def settings_routes(
         never on its own. Asks GitHub for the latest release."""
         return JSONResponse(await latest_release())
 
+    async def free_models(request: Request) -> Response:
+        """OpenRouter's free models that can use tools (2026-11-12): asked only when the
+        learner reaches that step. A POST, like Check for updates, as it goes online."""
+        return JSONResponse(await openrouter.free_models())
+
     async def theme(request: Request) -> Response:
         """The page's colors: {"theme": "system" | "light" | "dark"}. Applied at once and
         saved on its own, since it rebuilds nothing (so also while a chat is open)."""
@@ -413,6 +434,7 @@ def settings_routes(
         Route("/api/settings/theme", theme, methods=["POST"]),
         Route("/api/settings/key", key, methods=["POST"]),
         Route("/api/settings/update", check_update, methods=["POST"]),
+        Route("/api/settings/free-models", free_models, methods=["POST"]),
         Route("/api/ollama", ollama_status),
         Route("/api/ollama/download", ollama_download, methods=["POST"]),
         Route("/api/ollama/cancel", ollama_cancel, methods=["POST"]),
