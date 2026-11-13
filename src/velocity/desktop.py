@@ -23,12 +23,13 @@ import sys
 import threading
 import time
 import urllib.request
+import webbrowser
 from importlib.resources import files
 from pathlib import Path
 
 from velocity import filelock
 from velocity.config import data_dir
-from velocity.runtime import self_command
+from velocity.runtime import packaged, self_command, system_env
 
 APP_ID = "velocity"
 TITLE = "velocity"
@@ -166,6 +167,39 @@ def _qt_application() -> None:
     app.setWindowIcon(QIcon(str(icon_png())))
 
 
+class SystemOpener(webbrowser.BaseBrowser):
+    """Opens the page's outside links (Get Ollama, Download it…) in the learner's browser.
+    pywebview hands links with target=_blank to `webbrowser`, whose xdg-open would run
+    with the packaged app's libraries; this one runs it with the system's (system_env).
+    Only web addresses: the page has no reason to open anything else."""
+
+    def open(self, url: str, new: int = 0, autoraise: bool = True) -> bool:
+        if not url.startswith(("https://", "http://")):
+            return False
+        try:
+            subprocess.Popen(
+                ["xdg-open", url],
+                env=system_env(),
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                start_new_session=True,
+            )
+        except OSError:
+            return False
+        return True
+
+
+def use_system_opener() -> None:
+    """In the packaged Linux app, open links with SystemOpener. Elsewhere `webbrowser`
+    already works: Windows opens links through the shell, and an unpackaged velocity
+    has no bundled libraries."""
+    if packaged() and sys.platform.startswith("linux"):
+        webbrowser.register(
+            "velocity-system", None, SystemOpener("velocity-system"), preferred=True
+        )
+
+
 def run_app(subject_slug: str | None = None) -> int:
     """Open velocity in its own window; return when the window is closed."""
     try:
@@ -220,6 +254,7 @@ def run_app(subject_slug: str | None = None) -> int:
             f"?subject={subject_slug}" if subject_slug else ""
         )
         _qt_application()
+        use_system_opener()
         window = webview.create_window(
             TITLE, url, width=1280, height=860, min_size=(720, 560)
         )
